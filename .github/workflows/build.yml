@@ -57,6 +57,20 @@ jobs:
           npm run make 2>&1 | tee ci/make.log
           exit ${PIPESTATUS[0]}
 
+      # Dymový test: aplikácia musí naštartovať a 25 s bežať bez pádu (Linux, virtuálny displej).
+      - name: Dymový test spustenia
+        if: matrix.label == 'linux'
+        run: |
+          sudo apt-get install -y -q xvfb >/dev/null
+          set +e
+          xvfb-run -a timeout 25 ./out/MailKlient-linux-x64/MailKlient --no-sandbox --enable-logging=stderr > ci/smoke.log 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" | tee -a ci/smoke.log
+          grep -iE "error|uncaught|cannot find module" ci/smoke.log | grep -viE "dbus|gpu|vaapi|libva|gles|egl|viz|sandbox|fontconfig|atk|bus.cc" | head -20 || true
+          # 124 = timeout ukončil bežiacu aplikáciu, teda nespadla
+          [ "$code" = "124" ]
+
       - name: Zoznam výstupov
         if: always()
         run: (find out/make -type f 2>/dev/null || echo "out/make neexistuje") | tee ci/outputs.log
