@@ -21,8 +21,7 @@ jobs:
         include:
           - os: windows-latest
             label: windows
-          - os: macos-latest
-            label: macos
+          # macOS sa pridá neskôr (poradie vydania: Windows, macOS, Linux).
           - os: ubuntu-latest
             label: linux
     runs-on: ${{ matrix.os }}
