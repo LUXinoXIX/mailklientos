@@ -61,15 +61,15 @@ jobs:
       - name: Dymový test spustenia
         if: matrix.label == 'linux'
         run: |
-          sudo apt-get install -y -q xvfb >/dev/null
-          set +e
-          xvfb-run -a timeout 25 ./out/MailKlient-linux-x64/MailKlient --no-sandbox --enable-logging=stderr > ci/smoke.log 2>&1
-          code=$?
-          set -e
-          echo "exit=$code" | tee -a ci/smoke.log
-          grep -iE "error|uncaught|cannot find module" ci/smoke.log | grep -viE "dbus|gpu|vaapi|libva|gles|egl|viz|sandbox|fontconfig|atk|bus.cc" | head -20 || true
-          # 124 = timeout ukončil bežiacu aplikáciu, teda nespadla
-          [ "$code" = "124" ]
+          sudo apt-get install -y -q xvfb imagemagick >/dev/null
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
+          sleep 2
+          ./out/MailKlient-linux-x64/MailKlient --no-sandbox --enable-logging=stderr > ci/smoke.log 2>&1 &
+          pid=$!
+          sleep 20
+          import -window root ci/screenshot.png || true
+          if kill -0 $pid 2>/dev/null; then echo "beží" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA" | tee -a ci/smoke.log; exit 1; fi
 
       - name: Zoznam výstupov
         if: always()
@@ -92,7 +92,7 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           dir="$RUNNER_TEMP/logs"; mkdir -p "$dir"
-          cp ci/*.log "$dir"/ 2>/dev/null || true
+          cp ci/*.log ci/*.png "$dir"/ 2>/dev/null || true
           cp package-lock.json "$dir"/ 2>/dev/null || true
           echo "commit=${GITHUB_SHA} run=${GITHUB_RUN_ID} job=${{ job.status }}" > "$dir/status.txt"
           cd "$dir"
