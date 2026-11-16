@@ -1,0 +1,42 @@
+{
+  "name": "mailklient",
+  "productName": "MailKlient",
+  "version": "0.2.0",
+  "description": "Rich e-mailový klient (IMAP/SMTP, voliteľne MS365)",
+  "main": ".vite/build/main.js",
+  "private": true,
+  "license": "MIT",
+  "author": "LUXinoXIX",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron-forge/plugin-vite": "^7.8.1",
+    "@electron/fuses": "^1.8.0",
+    "@fluentui/react-components": "^9.54.0",
+    "@fluentui/react-icons": "^2.0.245",
+    "@types/node": "^22.15.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "dompurify": "^3.1.6",
+    "electron": "^37.0.0",
+    "imapflow": "^1.0.160",
+    "mailparser": "^3.7.1",
+    "nodemailer": "^6.9.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "~5.8.3",
+    "vite": "^5.4.19"
+  }
+}
