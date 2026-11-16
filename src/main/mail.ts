@@ -148,7 +148,7 @@ export async function getMessage(acc: AccountConfig, folder: string, uid: number
       const msg = await c.fetchOne(String(uid), { source: true, flags: true }, { uid: true });
       if (!msg?.source) throw new UserError('Správa sa nenašla (mohla byť presunutá alebo zmazaná).');
       const p = await simpleParser(msg.source);
-      await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch(() => undefined);
+      await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch((): void => undefined);
       const f = p.from?.value?.[0];
       return {
         accountId: acc.id,

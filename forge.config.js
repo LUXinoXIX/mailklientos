@@ -18,7 +18,11 @@ module.exports = {
     },
     // macOS a Linux: zatiaľ prenosný ZIP (podpis pre macOS príde neskôr).
     { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux'] },
-    { name: '@electron-forge/maker-deb', platforms: ['linux'], config: {} },
+    {
+      name: '@electron-forge/maker-deb',
+      platforms: ['linux'],
+      config: { options: { name: 'mailklient', bin: 'MailKlient', productName: 'MailKlient' } },
+    },
   ],
   plugins: [
     {
