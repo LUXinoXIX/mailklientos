@@ -1,0 +1,115 @@
+name: Zostavenie inštalátorov
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Zostavenie (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows
+          - os: macos-latest
+            label: macos
+          - os: ubuntu-latest
+            label: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Linux nástroje pre .deb
+        if: matrix.label == 'linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q fakeroot dpkg
+
+      - name: Inštalácia závislostí
+        run: |
+          mkdir -p ci
+          if [ -f package-lock.json ]; then cmd="npm ci"; else cmd="npm install"; fi
+          $cmd --no-audit --no-fund 2>&1 | tee ci/install.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Kontrola typov
+        continue-on-error: true
+        run: |
+          npm run typecheck 2>&1 | tee ci/typecheck.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Zostavenie inštalátora
+        run: |
+          npm run make 2>&1 | tee ci/make.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Zoznam výstupov
+        if: always()
+        run: (find out/make -type f 2>/dev/null || echo "out/make neexistuje") | tee ci/outputs.log
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: mailklient-${{ matrix.label }}
+          path: |
+            out/make/**/*.exe
+            out/make/**/*.zip
+            out/make/**/*.deb
+          if-no-files-found: warn
+
+      # Logy a vygenerovaný package-lock.json do vetvy ci-logs-<os> (na diagnostiku chýb).
+      - name: Uloženie logov
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dir="$RUNNER_TEMP/logs"; mkdir -p "$dir"
+          cp ci/*.log "$dir"/ 2>/dev/null || true
+          cp package-lock.json "$dir"/ 2>/dev/null || true
+          echo "commit=${GITHUB_SHA} run=${GITHUB_RUN_ID} job=${{ job.status }}" > "$dir/status.txt"
+          cd "$dir"
+          git init -q
+          git checkout -q -b "ci-logs-${{ matrix.label }}"
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
+
+  release:
+    name: Zverejnenie (latest-build)
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Release latest-build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p files
+          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' \) -exec cp {} files/ \;
+          ls -la files
+          if [ -z "$(ls -A files)" ]; then echo "Žiadne inštalátory, release preskakujem."; exit 0; fi
+          gh release delete latest-build --cleanup-tag -y || true
+          gh release create latest-build files/* \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Najnovšie zostavenie" \
+            --notes "Automaticky zostavené z commitu ${GITHUB_SHA::7}. Windows: stiahni MailKlient-Setup.exe a spusti ho."
