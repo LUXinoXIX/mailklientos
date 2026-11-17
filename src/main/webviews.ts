@@ -3,6 +3,7 @@
 // Renderer posiela, kde má web ležať (obdĺžnik v px okna); viditeľných môže byť viac naraz.
 import { BrowserWindow, session, shell, WebContentsView, type Session } from 'electron';
 import type { WebEvent } from '../core/api';
+import { log } from './diagnostics';
 
 export interface Bounds {
   x: number;
@@ -148,7 +149,9 @@ export function show(key: string, url: string, partition: string, bounds: Bounds
   if (!e.attached) {
     win.contentView.addChildView(e.view);
     e.attached = true;
+    log(`web ${key}: pripojený`);
   }
+  if (!e.view.getVisible()) log(`web ${key}: zobrazený`);
   e.view.setBounds(clamp(bounds));
   e.view.setVisible(true);
 }
@@ -160,7 +163,10 @@ export function setBounds(key: string, bounds: Bounds) {
 /** Skryje web (relácia a stav stránky zostanú, aby sa pri návrate nenačítaval znova). */
 export function hide(key: string) {
   const e = views.get(key);
-  if (e) e.view.setVisible(false);
+  if (e && e.view.getVisible()) {
+    e.view.setVisible(false);
+    log(`web ${key}: skrytý`);
+  }
 }
 
 export function hideAll() {

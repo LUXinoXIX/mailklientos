@@ -117,6 +117,8 @@ export function App() {
       void api.logError(`klik: ${label}`);
     };
     window.addEventListener('click', onClick, true);
+    const onVis = () => void api.logError(`viditeľnosť stránky: ${document.visibilityState}`);
+    document.addEventListener('visibilitychange', onVis);
     const onErr = (e: ErrorEvent) => void api.logError(`${e.message} @ ${e.filename}:${e.lineno}`);
     const onRej = (e: PromiseRejectionEvent) => void api.logError(`promise: ${String(e.reason)}`);
     window.addEventListener('error', onErr);
@@ -136,6 +138,7 @@ export function App() {
       window.removeEventListener('error', onErr);
       window.removeEventListener('unhandledrejection', onRej);
       window.removeEventListener('click', onClick, true);
+      document.removeEventListener('visibilitychange', onVis);
       po?.disconnect();
       off();
     };
