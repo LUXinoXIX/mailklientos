@@ -12,6 +12,7 @@ import {
   type Protocol,
 } from '../core/tls';
 import { getPassword } from './accounts';
+import * as cache from './cache';
 
 export class UserError extends Error {
   constructor(message: string, public hint?: string, public needsTrust?: boolean) {
@@ -230,17 +231,25 @@ export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const addr = (a: any) => ({ name: a?.name || a?.address || '', address: a?.address || '' });
 
+const SYSTEM_FLAGS = new Set(['\\Seen', '\\Flagged', '\\Answered', '\\Deleted', '\\Draft', '\\Recent']);
+
 export async function listMessages(acc: AccountConfig, folder: string, limit = 50): Promise<MessageSummary[]> {
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
     try {
+      cache.checkUidValidity(acc.id, folder, c.mailbox?.uidValidity);
       const total: number = c.mailbox?.exists ?? 0;
-      if (!total) return [];
+      if (!total) {
+        cache.removeFolder(acc.id, folder);
+        return [];
+      }
       const from = Math.max(1, total - limit + 1);
       const out: MessageSummary[] = [];
+      const recipients = new Map<number, string>();
       for await (const m of c.fetch(`${from}:*`, { uid: true, envelope: true, flags: true, internalDate: true })) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
+        const flags: Set<string> = m.flags ?? new Set();
         out.push({
           accountId: acc.id,
           folder,
@@ -249,51 +258,108 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           fromName: f.name,
           fromAddress: f.address,
           date: d ? new Date(d).toISOString() : null,
-          seen: !!m.flags?.has('\\Seen'),
-          flagged: !!m.flags?.has('\\Flagged'),
+          seen: flags.has('\\Seen'),
+          flagged: flags.has('\\Flagged'),
+          answered: flags.has('\\Answered'),
+          messageId: m.envelope?.messageId || undefined,
+          inReplyTo: m.envelope?.inReplyTo || undefined,
+          keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
         });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rc = [...(m.envelope?.to ?? []), ...(m.envelope?.cc ?? [])].map((x: any) => `${x.name ?? ''} ${x.address ?? ''}`).join(' ');
+        recipients.set(m.uid, rc);
       }
-      return out.reverse();
+      out.reverse();
+      cache.storeList(acc.id, folder, out, recipients);
+      return out;
     } finally {
       lock.release();
     }
   });
 }
 
+/** Hľadanie na serveri (IMAP SEARCH): predmet, odosielateľ, príjemca, text. Pre správy, ktoré ešte nie sú v cache. */
+export async function searchServer(acc: AccountConfig, folder: string, q: string, limit = 100): Promise<MessageSummary[]> {
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const uids: number[] = (await c.search({ or: [{ subject: q }, { from: q }, { to: q }, { body: q }] }, { uid: true })) || [];
+      const pick = uids.sort((a, b) => b - a).slice(0, limit);
+      if (!pick.length) return [];
+      const out: MessageSummary[] = [];
+      for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true }, { uid: true })) {
+        const f = addr(m.envelope?.from?.[0]);
+        const d: Date | undefined = m.envelope?.date ?? m.internalDate;
+        const flags: Set<string> = m.flags ?? new Set();
+        out.push({
+          accountId: acc.id, folder, uid: m.uid, subject: m.envelope?.subject || '(bez predmetu)',
+          fromName: f.name, fromAddress: f.address, date: d ? new Date(d).toISOString() : null,
+          seen: flags.has('\\Seen'), flagged: flags.has('\\Flagged'), answered: flags.has('\\Answered'),
+          messageId: m.envelope?.messageId || undefined, inReplyTo: m.envelope?.inReplyTo || undefined,
+          keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
+        });
+      }
+      return out.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Zoznam z lokálnej cache (okamžite, aj bez siete). */
+export function listCached(accountId: string, folder: string, limit = 50) {
+  return cache.cachedList(accountId, folder, limit);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const addrText = (x: any): string => (Array.isArray(x) ? x.map((y) => y.text).join(', ') : x?.text ?? '');
 
+async function parseFull(acc: AccountConfig, folder: string, uid: number, source: Buffer, flagged: boolean): Promise<MessageFull> {
+  const p = await simpleParser(source);
+  const f = p.from?.value?.[0];
+  return {
+    accountId: acc.id,
+    folder,
+    uid,
+    subject: p.subject || '(bez predmetu)',
+    fromName: f?.name || f?.address || '',
+    fromAddress: f?.address || '',
+    date: p.date ? p.date.toISOString() : null,
+    seen: true,
+    flagged,
+    messageId: p.messageId || undefined,
+    inReplyTo: p.inReplyTo || undefined,
+    to: addrText(p.to),
+    cc: addrText(p.cc),
+    html: typeof p.html === 'string' ? p.html : null,
+    text: p.text ?? '',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    attachments: (p.attachments ?? []).map((a: any) => ({
+      filename: a.filename || 'príloha',
+      size: a.size ?? 0,
+      contentType: a.contentType,
+    })),
+  };
+}
+
 export async function getMessage(acc: AccountConfig, folder: string, uid: number): Promise<MessageFull> {
+  // otvorená už predtým: z cache (okamžite aj offline); prečítané sa na serveri označí na pozadí
+  const cached = cache.cachedSource(acc.id, folder, uid);
+  if (cached) {
+    const row = cache.cachedSummary(acc.id, folder, uid);
+    void setFlags(acc, folder, [uid], { seen: true }).catch(() => undefined);
+    return parseFull(acc, folder, uid, cached, !!row?.flagged);
+  }
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
     try {
       const msg = await c.fetchOne(String(uid), { source: true, flags: true }, { uid: true });
       if (!msg?.source) throw new UserError('Správa sa nenašla (mohla byť presunutá alebo zmazaná).');
-      const p = await simpleParser(msg.source);
       await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch((): void => undefined);
-      const f = p.from?.value?.[0];
-      return {
-        accountId: acc.id,
-        folder,
-        uid,
-        subject: p.subject || '(bez predmetu)',
-        fromName: f?.name || f?.address || '',
-        fromAddress: f?.address || '',
-        date: p.date ? p.date.toISOString() : null,
-        seen: true,
-        flagged: !!msg.flags?.has('\\Flagged'),
-        messageId: p.messageId || undefined,
-        to: addrText(p.to),
-        cc: addrText(p.cc),
-        html: typeof p.html === 'string' ? p.html : null,
-        text: p.text ?? '',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        attachments: (p.attachments ?? []).map((a: any) => ({
-          filename: a.filename || 'príloha',
-          size: a.size ?? 0,
-          contentType: a.contentType,
-        })),
-      };
+      const full = await parseFull(acc, folder, uid, msg.source, !!msg.flags?.has('\\Flagged'));
+      cache.updateFlags(acc.id, folder, [uid], { seen: true });
+      cache.storeBody(acc.id, folder, uid, msg.source, `${full.text}`, `${full.to} ${full.cc}`);
+      return full;
     } finally {
       lock.release();
     }
@@ -447,6 +513,7 @@ export async function setFlags(acc: AccountConfig, folder: string, uids: number[
       if (flags.seen === false) await c.messageFlagsRemove(set, ['\\Seen'], { uid: true });
       if (flags.flagged === true) await c.messageFlagsAdd(set, ['\\Flagged'], { uid: true });
       if (flags.flagged === false) await c.messageFlagsRemove(set, ['\\Flagged'], { uid: true });
+      cache.updateFlags(acc.id, folder, uids, flags);
       return true;
     } finally {
       lock.release();
@@ -466,6 +533,7 @@ export async function deleteMessages(acc: AccountConfig, folder: string, uids: n
     const trash = await findSpecial(c, '\\Trash', /^(trash|deleted|odstr|kôš|kos|inbox[./]trash)/i);
     const lock = await c.getMailboxLock(folder);
     try {
+      cache.removeMessages(acc.id, folder, uids);
       if (trash && trash !== folder) {
         await c.messageMove(uidSet(uids), trash, { uid: true });
         return { movedTo: trash as string | null };
@@ -485,6 +553,7 @@ export async function moveMessages(acc: AccountConfig, folder: string, uids: num
     const lock = await c.getMailboxLock(folder);
     try {
       await c.messageMove(uidSet(uids), dest, { uid: true });
+      cache.removeMessages(acc.id, folder, uids);
       return true;
     } finally {
       lock.release();
@@ -504,6 +573,7 @@ export async function archiveMessages(acc: AccountConfig, folder: string, uids: 
     const lock = await c.getMailboxLock(folder);
     try {
       await c.messageMove(uidSet(uids), archive, { uid: true });
+      cache.removeMessages(acc.id, folder, uids);
       return { movedTo: archive };
     } finally {
       lock.release();
@@ -513,6 +583,12 @@ export async function archiveMessages(acc: AccountConfig, folder: string, uids: 
 
 /** Obsah prílohy podľa poradia v správe. */
 export async function getAttachment(acc: AccountConfig, folder: string, uid: number, index: number) {
+  const cached = cache.cachedSource(acc.id, folder, uid);
+  if (cached) {
+    const p = await simpleParser(cached);
+    const a = p.attachments?.[index];
+    if (a) return { filename: (a.filename as string) || `priloha-${index + 1}`, content: a.content as Buffer };
+  }
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
     try {

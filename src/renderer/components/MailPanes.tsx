@@ -101,6 +101,7 @@ export function MessageList(props: {
   colorOf: (accountId: string) => string;
   onOpen: (m: MessageSummary) => void;
   onDeleteKey?: () => void;
+  headerExtra?: React.ReactNode;
 }) {
   const [tab, setTab] = useState<'all' | 'unread'>('all');
   const list = tab === 'unread' ? props.messages.filter((m) => !m.seen) : props.messages;
@@ -108,6 +109,7 @@ export function MessageList(props: {
     <section className="list">
       <div className="list-head">
         <div className="list-title">{props.title}</div>
+        {props.headerExtra}
         <TabList size="small" selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as 'all' | 'unread')}>
           <Tab value="all">Všetky</Tab>
           <Tab value="unread">Neprečítané</Tab>

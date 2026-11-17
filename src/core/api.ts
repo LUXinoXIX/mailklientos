@@ -24,6 +24,12 @@ export interface MessageSummary {
   date: string | null;
   seen: boolean;
   flagged: boolean;
+  /** odpovedané (\\Answered) */
+  answered?: boolean;
+  messageId?: string;
+  inReplyTo?: string;
+  /** IMAP kľúčové slová (kategórie, $Pin …) */
+  keywords?: string[];
 }
 
 export interface MessageFull extends MessageSummary {
@@ -116,6 +122,12 @@ export interface MailApi {
   listFolders(accountId: string): Promise<Result<FolderInfo[]>>;
   listMessages(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
+  /** posledné správy z lokálnej cache (okamžite, offline) */
+  listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
+  /** fulltext v lokálnej cache */
+  searchLocal(q: string, accountId?: string, folder?: string): Promise<Result<MessageSummary[]>>;
+  /** hľadanie na serveri (IMAP SEARCH) */
+  searchServer(accountId: string, folder: string, q: string): Promise<Result<MessageSummary[]>>;
   send(accountId: string, msg: SendInput): Promise<Result<{ messageId: string; savedToSent: boolean }>>;
   setFlags(accountId: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }): Promise<Result<true>>;
   deleteMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string | null }>>;
