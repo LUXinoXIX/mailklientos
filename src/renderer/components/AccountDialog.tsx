@@ -207,9 +207,37 @@ export function AccountDialog(props: {
   }
 
   async function runAutodetect() {
-    if (!api || !acc.imap.host) return;
+    if (!api || (!acc.imap.host && !acc.email.includes('@'))) return;
     setBusy('Zisťujem nastavenia servera…');
     setError(null);
+    // 1) Autoconfig / databáza Thunderbirdu (ISPDB) podľa domény e-mailu
+    const ac = acc.email.includes('@') ? await api.autoconfig(acc.email) : null;
+    if (ac?.ok && ac.data && (ac.data.imap || ac.data.smtp)) {
+      const d = ac.data;
+      const local = acc.email.split('@')[0] ?? acc.email;
+      const user = d.imap?.username === 'local' ? local : acc.email;
+      const next: AccountConfig = {
+        ...acc,
+        username: !acc.username || acc.username === acc.email || acc.username === local ? user : acc.username,
+        imap: d.imap ? { ...acc.imap, host: d.imap.host, port: d.imap.port, security: d.imap.security } : acc.imap,
+        smtp: d.smtp ? { ...acc.smtp, host: d.smtp.host, port: d.smtp.port, security: d.smtp.security } : acc.smtp,
+      };
+      setAcc(next);
+      setLog([
+        `Nastavenie nájdené: ${d.source}${d.name ? ` (${d.name})` : ''}`,
+        d.imap ? `IMAP: ${d.imap.host}:${d.imap.port} ${d.imap.security.toUpperCase()}` : 'IMAP: nenájdené',
+        d.smtp ? `SMTP: ${d.smtp.host}:${d.smtp.port} ${d.smtp.security.toUpperCase()}` : 'SMTP: nenájdené',
+      ]);
+      setBusy(null);
+      await runTest(next);
+      return;
+    }
+    if (!acc.imap.host) {
+      setBusy(null);
+      setError('Nastavenie sa nenašlo. Doplň server IMAP (napr. mail.firma.sk) a skús znova.');
+      return;
+    }
+    // 2) skúšanie portov a šifrovania na zadanom serveri
     const [im, sm] = await Promise.all([api.autodetect(acc.imap.host, 'imap'), api.autodetect(acc.smtp.host || acc.imap.host, 'smtp')]);
     const lines: string[] = [];
     const next = { ...acc };
@@ -299,7 +327,7 @@ export function AccountDialog(props: {
             {props.edit && <Button appearance="subtle" onClick={remove}>Odstrániť konto</Button>}
             <div className="grow" />
             {busy && <Spinner size="tiny" label={busy} />}
-            <Button disabled={!!busy || !acc.imap.host} onClick={runAutodetect}>Zistiť automaticky</Button>
+            <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>
             <Button disabled={!!busy} onClick={() => runTest()}>Otestovať</Button>
             <Button appearance="primary" disabled={!!busy} onClick={save}>Uložiť</Button>
             <Button disabled={!!busy} onClick={props.onClose}>Zrušiť</Button>

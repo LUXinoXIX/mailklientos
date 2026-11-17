@@ -64,6 +64,22 @@ export type WebEvent =
   | { type: 'tab-opened'; group: string; key: string; url: string }
   | { type: 'title'; key: string; title: string };
 
+/** Nastavenie servera z Autoconfig / ISPDB (Thunderbird). */
+export interface AutoServer {
+  host: string;
+  port: number;
+  security: import('./account').Security;
+  /** email = celý e-mail, local = časť pred @ */
+  username: 'email' | 'local' | 'other';
+}
+
+export interface AutoConfigResult {
+  source: string;
+  name?: string;
+  imap?: AutoServer;
+  smtp?: AutoServer;
+}
+
 export interface PickedFile {
   path: string;
   filename: string;
@@ -80,6 +96,7 @@ export interface MailApi {
   probe(cfg: ServerConfig, proto: Protocol): Promise<Result<ProbeResult>>;
   autodetect(host: string, proto: Protocol): Promise<Result<{ config?: ServerConfig; result: ProbeResult; tried: string[] }>>;
   testAccount(acc: AccountConfig, password?: string): Promise<Result<AccountTestResult>>;
+  autoconfig(email: string): Promise<Result<AutoConfigResult | null>>;
   // pošta (IMAP)
   listFolders(accountId: string): Promise<Result<FolderInfo[]>>;
   listMessages(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;

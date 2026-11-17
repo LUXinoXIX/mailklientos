@@ -12,7 +12,15 @@ import {
 } from '../icons';
 import { THEMES, type ThemeKey } from '../theme';
 
-export function TopBar(props: { title: string; subtitle: string; color: string; search?: string; onSearch?: (v: string) => void }) {
+export function TopBar(props: {
+  title: string;
+  subtitle: string;
+  color: string;
+  search?: string;
+  onSearch?: (v: string) => void;
+  rightOpen: boolean;
+  onToggleRight: () => void;
+}) {
   return (
     <header className="topbar" style={{ background: props.color }}>
       <div className="topbar-title">
@@ -30,7 +38,13 @@ export function TopBar(props: { title: string; subtitle: string; color: string; 
       ) : (
         <div />
       )}
-      <div />
+      <div className="topbar-tools">
+        <Tooltip content={props.rightOpen ? 'Skryť pravý panel' : 'Pravý panel: weby a programy'} relationship="label">
+          <button className={`topbar-btn ${props.rightOpen ? 'on' : ''}`} onClick={props.onToggleRight} aria-pressed={props.rightOpen}>
+            <PanelIcon /> <span>Pravý panel</span>
+          </button>
+        </Tooltip>
+      </div>
     </header>
   );
 }
@@ -81,7 +95,7 @@ export function Ribbon(props: {
             <ToolbarButton icon={<ForwardIcon />} disabled={!p.hasMessage} onClick={p.onForward}>Preposlať</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<DeleteIcon />} disabled={!p.hasMessage} onClick={p.onDelete}>Odstrániť</ToolbarButton>
-            <ToolbarButton icon={<ArchiveIcon />} disabled={!p.hasMessage} onClick={p.onArchive}>Archivovať</ToolbarButton>
+            <ToolbarButton icon={<ArchiveIcon />} disabled={!p.hasMessage} onClick={p.onArchive}>Archív</ToolbarButton>
             <Menu>
               <MenuTrigger disableButtonEnhancement>
                 <ToolbarButton icon={<MoveIcon />} disabled={!p.hasMessage || !p.canMove}>Presunúť</ToolbarButton>
@@ -105,7 +119,6 @@ export function Ribbon(props: {
             </ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
-            <ToolbarButton icon={<PanelIcon />} onClick={p.onToggleRight} aria-pressed={p.rightOpen}>Pravý panel</ToolbarButton>
             {p.onEditAccount && (
               <ToolbarButton icon={<SettingsIcon />} onClick={p.onEditAccount}>Nastavenia konta</ToolbarButton>
             )}

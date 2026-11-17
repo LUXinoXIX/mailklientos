@@ -12,6 +12,7 @@ const api: MailApi = {
   probe: (cfg, proto) => inv('server:probe', cfg, proto),
   autodetect: (host, proto) => inv('server:autodetect', host, proto),
   testAccount: (acc, password) => inv('account:test', acc, password),
+  autoconfig: (email) => inv('server:autoconfig', email),
   listFolders: (id) => inv('mail:folders', id),
   listMessages: (id, folder, limit) => inv('mail:list', id, folder, limit),
   getMessage: (id, folder, uid) => inv('mail:get', id, folder, uid),

@@ -432,7 +432,15 @@ export function App() {
           onSettings={() => (activeAcc ? editAccount(activeAcc) : openDialog({ kind: 'chooser' }))}
         />
         <div className="workspace">
-          <TopBar title={topTitle} subtitle={topSub} color={topColor} search={search} onSearch={activeM365 ? undefined : setSearch} />
+          <TopBar
+            title={topTitle}
+            subtitle={topSub}
+            color={topColor}
+            search={search}
+            onSearch={activeM365 ? undefined : setSearch}
+            rightOpen={rightOpen}
+            onToggleRight={() => setRightOpen(!rightOpen)}
+          />
           {!activeM365 && (
             <Ribbon
               tab={ribbonTab}
