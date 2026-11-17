@@ -52,6 +52,8 @@ export interface SendInput {
   readReceipt?: boolean;
   /** Koncept, ktorý sa po odoslaní zmaže. */
   draft?: DraftRef;
+  /** Preposlanie: prílohy pôvodnej správy sa pripoja. */
+  forward?: { folder: string; uid: number };
 }
 
 export interface DraftRef {

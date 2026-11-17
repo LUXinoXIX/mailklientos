@@ -6,11 +6,13 @@ import {
 import type { ReactNode } from 'react';
 import type { FolderInfo } from '../../core/api';
 import {
-  ArchiveIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
+  ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
   TasksIcon, TeamsIcon, WordIcon,
 } from '../icons';
 import { THEMES, type ThemeKey } from '../theme';
+import type { Signature } from '../../core/settings';
+import type { ComposerHandle, ComposerState } from './Composer';
 
 export function TopBar(props: {
   title: string;
@@ -49,7 +51,13 @@ export function TopBar(props: {
   );
 }
 
-export type RibbonTab = 'home' | 'view';
+export type RibbonTab = 'home' | 'message' | 'insert' | 'view';
+
+export interface RibbonComposer {
+  state: ComposerState;
+  signatures: Signature[];
+  run: (fn: (h: ComposerHandle) => void) => void;
+}
 
 export function Ribbon(props: {
   tab: RibbonTab;
@@ -80,17 +88,57 @@ export function Ribbon(props: {
   gpuOff: boolean;
   onToggleGpu: () => void;
   onOpenLog: () => void;
+  composer?: RibbonComposer;
 }) {
   const p = props;
+  const c = p.composer;
   const sz = p.compact ? 'small' : 'medium';
   return (
     <div className={`ribbon ${p.compact ? 'ribbon-compact' : ''}`}>
       <TabList size="small" selectedValue={p.tab} onTabSelect={(_, d) => p.onTab(d.value as RibbonTab)}>
         <Tab value="home">Domov</Tab>
+        {c && <Tab value="message">Správa</Tab>}
+        {c && <Tab value="insert">Vložiť</Tab>}
         <Tab value="view">Zobrazenie</Tab>
       </TabList>
       <Toolbar size={sz} className="ribbon-bar">
-        {p.tab === 'home' ? (
+        {c && p.tab === 'message' ? (
+          <>
+            <ToolbarButton appearance="primary" disabled={c.state.sending} onClick={() => c.run((h) => h.send())}>Odoslať</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.discard())}>Zahodiť</ToolbarButton>
+            <ToolbarDivider />
+            <ToolbarButton icon={<AttachIcon />} onClick={() => c.run((h) => h.attach())}>Priložiť súbor</ToolbarButton>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<SignatureIcon />}>Podpis</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {c.signatures.map((s) => (
+                    <MenuItem key={s.id} onClick={() => c.run((h) => h.setSignature(s.id))}>{s.name}</MenuItem>
+                  ))}
+                  <MenuItem onClick={() => c.run((h) => h.setSignature(null))}>(bez podpisu)</MenuItem>
+                  <MenuItem onClick={p.onSignatures}>Upraviť podpisy…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            <ToolbarDivider />
+            <ToolbarButton onClick={() => c.run((h) => h.toggleImportance())} aria-pressed={c.state.importance}>
+              {c.state.importance ? '✓ ' : ''}Vysoká dôležitosť
+            </ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.toggleReceipt())} aria-pressed={c.state.receipt}>
+              {c.state.receipt ? '✓ ' : ''}Potvrdenie o prečítaní
+            </ToolbarButton>
+          </>
+        ) : c && p.tab === 'insert' ? (
+          <>
+            <ToolbarButton icon={<AttachIcon />} onClick={() => c.run((h) => h.attach())}>Súbor</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.insertImage())}>Obrázok</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.insertTable())}>Tabuľka</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.insertHr())}>Vodorovná čiara</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.insertDate())}>Dátum a čas</ToolbarButton>
+          </>
+        ) : p.tab === 'home' || (!c && (p.tab === 'message' || p.tab === 'insert')) ? (
           <>
             <ToolbarButton appearance="primary" icon={<ComposeIcon />} onClick={p.onCompose}>Nová správa</ToolbarButton>
             <ToolbarDivider />
