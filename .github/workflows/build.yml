@@ -173,7 +173,7 @@ jobs:
           echo "inštalátor: $f"
           cp "$f" tauri-out/MailKlient-Tauri-Test-Setup.exe
           m=$(find tauri/src-tauri/target/release/bundle/msi -name '*.msi' | head -1)
-          [ -n "$m" ] && cp "$m" tauri-out/MailKlient-Tauri-Test.msi
+          if [ -n "$m" ]; then cp "$m" tauri-out/MailKlient-Tauri-Test.msi; fi
           # prenosná verzia bez inštalácie (potrebuje WebView2, ktorý má každý Windows 11)
           mkdir -p portable/MailKlient-Tauri
           cp tauri/src-tauri/target/release/mailklient-tauri.exe portable/MailKlient-Tauri/MailKlient.exe
