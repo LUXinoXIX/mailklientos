@@ -32,7 +32,7 @@ export function TopBar(props: {
       {props.onSearch ? (
         <SearchBox
           className="topbar-search"
-          placeholder="Hľadať v načítaných správach"
+          placeholder="Hľadať v pošte (predmet, odosielateľ, text)"
           value={props.search ?? ''}
           onChange={(_, d) => props.onSearch!(d.value)}
           appearance="filled-lighter"

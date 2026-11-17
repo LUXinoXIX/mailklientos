@@ -299,14 +299,21 @@ export function App() {
         setMessages([]);
         return;
       }
+      const byDate = (a: MessageSummary, b: MessageSummary) => (b.date ?? '').localeCompare(a.date ?? '');
+      // 1) okamžite z lokálnej cache (aj offline)
+      const cached = await Promise.all(targets.map((t) => api.listCached(t.id, t.folder, 50)));
+      if (cancelled) return;
+      const fromCache = cached.flatMap((r) => (r.ok ? r.data : [])).sort(byDate);
+      if (fromCache.length && !mailTick) setMessages(fromCache);
       if (!mailTick || !messages.length) setListState({ loading: true });
+      // 2) aktuálny stav zo servera (uloží sa aj do cache)
       const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50)));
       if (cancelled) return;
       const errors = results.flatMap((r, i) => (r.ok ? [] : [`${accounts.find((a) => a.id === targets[i]!.id)?.name}: ${r.error}`]));
-      const all = results.flatMap((r) => (r.ok ? r.data : []));
-      all.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+      const all = results.flatMap((r, i) => (r.ok ? r.data : cached[i]?.ok ? cached[i].data : [])).sort(byDate);
       setMessages(all);
-      setListState({ loading: false, error: errors.length ? errors.join(' · ') : undefined });
+      const offline = errors.length && all.length;
+      setListState({ loading: false, error: errors.length ? (offline ? `Offline – zobrazené uložené správy. ${errors.join(' · ')}` : errors.join(' · ')) : undefined });
     })();
     return () => {
       cancelled = true;
@@ -475,11 +482,42 @@ export function App() {
     return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
   }, [messages, composeView]);
 
+  // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
+  const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
+  const searchScope = selection.accountId === ALL ? undefined : selection.accountId;
+  useEffect(() => {
+    const q = search.trim();
+    if (!api || demo || q.length < 2) {
+      setFound(null);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void api.searchLocal(q, searchScope).then((r) => r.ok && setFound({ q, list: r.data }));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [search, searchScope, api, demo, mailTick]);
+
+  async function searchOnServer() {
+    if (!api || !found) return;
+    const q = found.q;
+    setFound({ ...found, server: 'loading' });
+    const targets = searchScope ? [{ id: searchScope, folder: selection.folder }] : accounts.filter(isImap).map((a) => ({ id: a.id, folder: 'INBOX' }));
+    const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, q)));
+    setFound((f) => {
+      if (!f || f.q !== q) return f;
+      const key = (m: MessageSummary) => `${m.accountId}|${m.folder}|${m.uid}`;
+      const map = new Map(f.list.map((m) => [key(m), m]));
+      for (const r of rs) if (r.ok) for (const m of r.data) map.set(key(m), m);
+      return { q, list: [...map.values()].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')), server: 'done' };
+    });
+  }
+
   const filtered = useMemo(() => {
+    if (found) return found.list;
     const q = search.trim().toLowerCase();
     if (!q) return messages;
     return messages.filter((m) => `${m.subject} ${m.fromName} ${m.fromAddress}`.toLowerCase().includes(q));
-  }, [messages, search]);
+  }, [messages, search, found]);
 
   const folderList = activeImap && Array.isArray(folders[activeImap.id]) ? (folders[activeImap.id] as FolderInfo[]) : [];
   const listTitle = useMemo(() => {
@@ -671,7 +709,14 @@ export function App() {
                     }}
                   />
                   <MessageList
-                    title={listTitle}
+                    title={found ? `Hľadanie: ${found.q}` : listTitle}
+                    headerExtra={
+                      found ? (
+                        <button className="link small" disabled={found.server === 'loading'} onClick={() => void searchOnServer()}>
+                          {found.server === 'loading' ? 'Hľadám na serveri…' : found.server === 'done' ? 'Prehľadané aj na serveri' : `Nájdené v uložených: ${found.list.length} · hľadať aj na serveri`}
+                        </button>
+                      ) : undefined
+                    }
                     messages={filtered}
                     loading={listState.loading}
                     error={listState.error}

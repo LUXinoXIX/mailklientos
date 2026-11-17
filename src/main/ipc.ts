@@ -13,6 +13,7 @@ import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
 import { syncWatchers } from './watch';
+import * as cache from './cache';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -54,6 +55,7 @@ export function registerIpc() {
     const acc = store.loadAccounts().find((a) => a.id === id);
     mail.closeAllConnections(id);
     store.deleteAccount(id);
+    cache.removeFolder(id);
     syncWatchers();
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
@@ -70,6 +72,9 @@ export function registerIpc() {
   // pošta
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));
   handle('mail:list', (id: string, folder: string, limit?: number) => mail.listMessages(store.getImap(id), folder, limit));
+  handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
+  handle('mail:search', (q: string, accountId?: string, folder?: string) => cache.search(q, { account: accountId, folder }));
+  handle('mail:searchServer', (id: string, folder: string, q: string) => mail.searchServer(store.getImap(id), folder, q));
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));
   handle('mail:send', (id: string, msg: SendInput) => mail.sendMail(store.getImap(id), msg));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
