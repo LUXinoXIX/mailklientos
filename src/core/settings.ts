@@ -58,6 +58,12 @@ export interface AppSettings {
   vacation?: Vacation;
   tasks?: Task[];
   customThemes?: ThemeDef[];
+  /** po zatvorení okna bežať ďalej pri hodinách (predvolene áno) */
+  runInBackground?: boolean;
+  /** hustota zoznamu správ */
+  density?: 'comfortable' | 'compact';
+  /** riadok s náhľadom textu v zozname */
+  previewLine?: boolean;
 }
 
 export interface ThemeDef {

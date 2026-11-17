@@ -3,7 +3,7 @@
 import { Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import { useState } from 'react';
 import type { AccountPublic } from '../../core/account';
-import { AddIcon, AllInboxIcon, SettingsIcon } from '../icons';
+import { AddIcon, AllInboxIcon, InfoIcon, SettingsIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export const ALL = 'all';
@@ -33,6 +33,10 @@ export function AccountRail(props: {
   onToggleGpu: () => void;
   notifications: boolean;
   onCrypto: () => void;
+  onAbout: () => void;
+  /** krátke označenie typu konta na ikone (Z, IMAP, 365) */
+  kindOf?: (a: AccountPublic) => string;
+  onTestNotification: () => void;
   onZimbra?: () => void;
   onToggleNotifications: () => void;
   gpuForced: boolean;
@@ -97,6 +101,7 @@ export function AccountRail(props: {
                 }}
               >
                 {initials(a.name)}
+                {props.kindOf && <span className="acc-kind">{props.kindOf(a)}</span>}
               </span>
               {n > 0 && <span className="acc-badge">{n > 999 ? '999+' : n}</span>}
               <span className="acc-label">{shortName(a)}</span>
@@ -110,6 +115,11 @@ export function AccountRail(props: {
         </button>
       </Tooltip>
       <div className="grow" />
+      <Tooltip content="O programe" relationship="label" positioning="after">
+        <button className="acc-tool" aria-label="O programe" onClick={props.onAbout}>
+          <InfoIcon />
+        </button>
+      </Tooltip>
       <Menu positioning="after-bottom" onOpenChange={(_, d) => props.onMenuOpen(d.open)}>
         <MenuTrigger disableButtonEnhancement>
           <Tooltip content="Nastavenia" relationship="label" positioning="after">
@@ -125,6 +135,7 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onSignatures}>Podpisy…</MenuItem>
             <MenuItem onClick={props.onCrypto}>Šifrovanie (PGP, S/MIME)…</MenuItem>
             {props.onZimbra && <MenuItem onClick={props.onZimbra}>Zimbra: neprítomnosť, filtre, zdieľania, heslo…</MenuItem>}
+            <MenuItem onClick={props.onTestNotification}>Otestovať upozornenie</MenuItem>
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>

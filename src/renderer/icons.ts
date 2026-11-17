@@ -1,6 +1,14 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  Info24Regular as InfoIcon,
+  ArrowRepeatAll24Regular as LoopIcon,
+  Sparkle24Regular as CopilotIcon,
+  Board24Regular as PlannerIcon,
+  Notebook24Regular as OneNoteIcon,
+  Organization24Regular as SharePointIcon,
+  Form24Regular as FormsIcon,
+  Server24Regular as ServerIcon,
   LockClosed24Regular as LockIcon,
   LockClosed16Regular as LockSmallIcon,
   DocumentArrowRight24Regular as FileIcon,

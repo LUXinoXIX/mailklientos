@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
 import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
 import type { AppSettings, LauncherItem, RuleAction, Task } from '../core/settings';
@@ -12,7 +12,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
-import { syncWatchers } from './watch';
+import { syncWatchers, testNotification } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
@@ -22,6 +22,7 @@ import * as io from './importexport';
 import * as cstore from './cryptostore';
 import * as zimbra from './zimbra';
 import * as tasksync from './tasksync';
+import * as extras from './extras';
 import * as cal from './calendar';
 import * as dav from './dav';
 import type { CalEvent, Contact } from '../core/ical';
@@ -90,7 +91,7 @@ export function registerIpc() {
 
   // pošta
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));
-  handle('mail:list', (id: string, folder: string, limit?: number) => mail.listMessages(store.getImap(id), folder, limit));
+  handle('mail:list', (id: string, folder: string, limit?: number, preview?: boolean) => mail.listMessages(store.getImap(id), folder, limit, preview));
   handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
   handle('mail:search', (q: string, accountId?: string, folder?: string) => cache.search(q, { account: accountId, folder }));
   handle('mail:searchServer', (id: string, folder: string, q: string) => mail.searchServer(store.getImap(id), folder, q));
@@ -201,6 +202,23 @@ export function registerIpc() {
   handle('zimbra:block', (id: string, email: string) => zimbra.blockSender(zacc(id), email));
   handle('tasks:sync', (tasks: Task[]) => tasksync.syncTasks(tasks));
   handle('tasks:delete', (t: Task) => tasksync.deleteRemote(t));
+  handle('app:info', () => ({ version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node, platform: `${process.platform} ${process.arch}` }));
+  handle('mail:print', (id: string, folder: string, uid: number, pdf: boolean) => extras.printMessage(store.getImap(id), folder, uid, pdf));
+  handle('mail:preview', (id: string, folder: string, uid: number, index: number) => extras.previewAttachment(store.getImap(id), folder, uid, index));
+  handle('mail:unsubscribe', (id: string, u: { url?: string; mailto?: string; oneClick?: boolean }) => extras.unsubscribe(store.getImap(id), u));
+  handle('backup:export', () => extras.backupExport());
+  handle('backup:import', () => extras.backupImport());
+  handle('app:unread', (total: number, badge?: string) => {
+    extras.setUnread(total, badge);
+    return true as const;
+  });
+  handle('web:openOffice', async (url: string) => {
+    if (!/^https:\/\//i.test(url)) throw new mail.UserError('Neplatná adresa dokumentu.');
+    const app = /\.xlsx?(\b|$)|excel|:x:/i.test(url) ? 'ms-excel' : /\.pptx?(\b|$)|powerpoint|:p:/i.test(url) ? 'ms-powerpoint' : 'ms-word';
+    await shell.openExternal(`${app}:ofe|u|${url}`);
+    return true as const;
+  });
+  handle('diag:testNotification', () => testNotification());
   handle('update:check', () => updater.check());
   handle('update:install', () => {
     updater.installNow();

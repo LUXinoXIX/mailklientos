@@ -7,6 +7,16 @@ module.exports = {
   packagerConfig: {
     asar: true,
     appBundleId: 'io.github.luxinoxix.mailklient',
+    // ikona aplikácie (Windows .ico, Linux/macOS .png); zobrazovaný názov „Universum eMail“.
+    // productName ostáva „MailKlient“ – podľa neho sa volá priečinok s nastaveniami a .exe (aktualizácie).
+    icon: 'assets/icon',
+    // ikona pre oznamovaciu oblasť (tray) – mimo asar, v priečinku resources
+    extraResource: ['assets/tray.png'],
+    win32metadata: {
+      ProductName: 'Universum eMail',
+      FileDescription: 'Universum eMail',
+      CompanyName: 'Universum',
+    },
   },
   rebuildConfig: {},
   makers: [
@@ -14,14 +24,20 @@ module.exports = {
     {
       name: '@electron-forge/maker-squirrel',
       platforms: ['win32'],
-      config: { name: 'mailklient', setupExe: 'MailKlient-Setup.exe' },
+      config: {
+        name: 'mailklient',
+        title: 'Universum eMail',
+        setupExe: 'MailKlient-Setup.exe',
+        setupIcon: 'assets/icon.ico',
+        iconUrl: 'https://raw.githubusercontent.com/LUXinoXIX/mailklientos/main/assets/icon.ico',
+      },
     },
     // macOS a Linux: zatiaľ prenosný ZIP (podpis pre macOS príde neskôr).
     { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux'] },
     {
       name: '@electron-forge/maker-deb',
       platforms: ['linux'],
-      config: { options: { name: 'mailklient', bin: 'MailKlient', productName: 'MailKlient' } },
+      config: { options: { name: 'mailklient', bin: 'MailKlient', productName: 'Universum eMail', icon: 'assets/icon.png' } },
     },
   ],
   plugins: [
