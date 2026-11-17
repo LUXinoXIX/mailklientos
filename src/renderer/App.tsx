@@ -1,6 +1,6 @@
 // Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
 import { FluentProvider } from '@fluentui/react-components';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary } from '../core/api';
 import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
@@ -98,6 +98,8 @@ export function App() {
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
   const [menuOverlay, setMenuOverlay] = useState(false);
+  const msgCache = useRef(new Map<string, MessageFull>());
+  const openKey = useRef('');
   const [gpuOff, setGpuOff] = useState(false);
   const [gpuCrash, setGpuCrash] = useState(0);
 
@@ -110,9 +112,20 @@ export function App() {
     window.addEventListener('error', onErr);
     window.addEventListener('unhandledrejection', onRej);
     const off = api.onAppEvent((ev) => ev.type === 'gpu-crash' && setGpuCrash(ev.count));
+    // dlhé zaseknutia rozhrania (> 300 ms) do záznamu, aby sa dalo dohľadať blikanie
+    let po: PerformanceObserver | undefined;
+    try {
+      po = new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) if (e.duration > 300) void api.logError(`zaseknutie rozhrania ${Math.round(e.duration)} ms`);
+      });
+      po.observe({ type: 'longtask', buffered: false });
+    } catch {
+      /* nepodporované */
+    }
     return () => {
       window.removeEventListener('error', onErr);
       window.removeEventListener('unhandledrejection', onRej);
+      po?.disconnect();
       off();
     };
   }, [api]);
@@ -275,6 +288,9 @@ export function App() {
     setMessages((list) => list.map((x) => (same(x) ? { ...x, ...patch } : x)));
     setCurrent((c) => (c && same(c) ? { ...c, ...patch } : c));
     setFull((f) => (f.msg && same(f.msg) ? { ...f, msg: { ...f.msg, ...patch } } : f));
+    const ck = `${m.accountId}|${m.folder}|${m.uid}`;
+    const c = msgCache.current.get(ck);
+    if (c) msgCache.current.set(ck, { ...c, ...patch });
   };
 
   async function open(m: MessageSummary) {
@@ -283,9 +299,20 @@ export function App() {
       setFull({ loading: false, msg: demoMessages.find((x) => x.uid === m.uid) });
       return;
     }
-    setFull({ loading: true });
-    const r = await api!.getMessage(m.accountId, m.folder, m.uid);
-    setFull(r.ok ? { loading: false, msg: r.data } : { loading: false, error: `${r.error}${r.hint ? ` ${r.hint}` : ''}` });
+    const ck = `${m.accountId}|${m.folder}|${m.uid}`;
+    openKey.current = ck;
+    const cached = msgCache.current.get(ck);
+    if (cached) {
+      setFull({ loading: false, msg: cached });
+      if (m.seen) return;
+    } else setFull((f) => ({ loading: true, msg: f.msg })); // predchádzajúca správa ostáva viditeľná
+    const r = cached ? ({ ok: true, data: cached } as const) : await api!.getMessage(m.accountId, m.folder, m.uid);
+    if (r.ok) {
+      msgCache.current.set(ck, r.data);
+      if (msgCache.current.size > 200) msgCache.current.delete(msgCache.current.keys().next().value!);
+    }
+    if (openKey.current !== ck) return; // medzitým klikol na inú správu
+    setFull(r.ok ? { loading: false, msg: r.data } : { loading: false, error: `${r.error}${'hint' in r && r.hint ? ` ${r.hint}` : ''}` });
     if (r.ok && !m.seen) {
       patchMsg(m, { seen: true });
       setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 1) - 1) }));

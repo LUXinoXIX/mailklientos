@@ -43,9 +43,13 @@ const safeName = (n: string) => n.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').sli
 export function registerIpc() {
   // kontá
   handle('accounts:list', () => ({ accounts: store.publicAccounts(), canStoreSecrets: store.canStoreSecrets() }));
-  handle('accounts:save', (acc: AnyAccount, password?: string) => store.saveAccount(acc, password));
+  handle('accounts:save', (acc: AnyAccount, password?: string) => {
+    mail.closeAllConnections(acc.id);
+    return store.saveAccount(acc, password);
+  });
   handle('accounts:delete', async (id: string) => {
     const acc = store.loadAccounts().find((a) => a.id === id);
+    mail.closeAllConnections(id);
     store.deleteAccount(id);
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
