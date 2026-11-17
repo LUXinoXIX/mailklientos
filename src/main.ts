@@ -39,13 +39,6 @@ const createWindow = () => {
   });
   win.once('ready-to-show', () => win.show());
   attachWindow(win);
-  if (SMOKE)
-    win.webContents.once('did-finish-load', () => {
-      // počkať, kým React zapíše svoje predvoľby, potom prepísať a načítať znova
-      setTimeout(() => void win.webContents.executeJavaScript(
-        "localStorage.setItem('rightOpen','true');localStorage.setItem('activeAccount',JSON.stringify('smoke'));location.reload();",
-      ), 3000);
-    });
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -59,9 +52,9 @@ const createWindow = () => {
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL + (SMOKE ? '?smoke=1' : ''));
   } else {
-    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), SMOKE ? { query: { smoke: '1' } } : undefined);
   }
 };
 

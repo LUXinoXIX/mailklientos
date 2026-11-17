@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { PickedFile, SendInput } from '../../core/api';
 import { AttachIcon, CloseSmallIcon } from '../icons';
+import { SIG_SEPARATOR, signatureText, type AppSettings } from '../../core/settings';
 
 export interface ComposeInit {
   accountId?: string;
@@ -15,21 +16,40 @@ export interface ComposeInit {
   text?: string;
   replyMessageId?: string;
   title?: string;
+  /** Typ správy pre výber predvoleného podpisu. */
+  kind?: 'new' | 'reply';
 }
+
+const sigBlock = (sig: string) => (sig ? `\n${SIG_SEPARATOR}${sig}` : '');
 
 export function ComposeDialog(props: {
   open: boolean;
   init: ComposeInit;
   accounts: ImapAccountPublic[];
+  settings: AppSettings;
   onClose: () => void;
   onSent: (info: string) => void;
 }) {
+  const kind = props.init.kind ?? 'new';
   const [accountId, setAccountId] = useState(props.init.accountId ?? props.accounts[0]?.id ?? '');
+  const [sig, setSig] = useState(() => signatureText(props.settings, props.init.accountId ?? props.accounts[0]?.id, kind));
   const [to, setTo] = useState(props.init.to ?? '');
   const [cc, setCc] = useState(props.init.cc ?? '');
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [subject, setSubject] = useState(props.init.subject ?? '');
-  const [text, setText] = useState(props.init.text ?? '');
+  const [text, setText] = useState(() => `\n${sigBlock(sig)}${props.init.text ?? ''}`);
+
+  /** Zmena odosielateľa: vymeniť podpis za podpis nového konta. */
+  function changeAccount(id: string) {
+    const next = signatureText(props.settings, id, kind);
+    setAccountId(id);
+    setText((t) => {
+      const old = sigBlock(sig);
+      if (old && t.includes(old)) return t.replace(old, sigBlock(next));
+      return next ? `\n${sigBlock(next)}${t}` : t;
+    });
+    setSig(next);
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +83,7 @@ export function ComposeDialog(props: {
             ) : (
               <>
                 <Field label="Od">
-                  <Select value={accountId} onChange={(_, d) => setAccountId(d.value)}>
+                  <Select value={accountId} onChange={(_, d) => changeAccount(d.value)}>
                     {props.accounts.map((a) => (
                       <option key={a.id} value={a.id}>{a.name} &lt;{a.email}&gt;</option>
                     ))}

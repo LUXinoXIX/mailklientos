@@ -38,4 +38,5 @@ export {
   Attach20Regular as AttachIcon,
   Flag16Filled as FlagFilledIcon,
   MailInbox24Regular as AllInboxIcon,
+  Signature24Regular as SignatureIcon,
 } from '@fluentui/react-icons';

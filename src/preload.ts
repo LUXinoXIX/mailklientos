@@ -28,6 +28,7 @@ const api: MailApi = {
   openExternal: (url) => inv('app:openExternal', url),
   getSettings: () => inv('settings:get'),
   saveSettings: (s) => inv('settings:save', s),
+  outlookSignatures: () => inv('signatures:outlook'),
   pickProgram: () => inv('launcher:pick'),
   runLauncher: (item) => inv('launcher:run', item),
   programIcon: (target) => inv('launcher:icon', target),
