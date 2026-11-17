@@ -42,6 +42,15 @@ const api: MailApi = {
   webClose: (key) => inv('web:close', key),
   webOpenOutside: (key, fallbackUrl) => inv('web:openOutside', key, fallbackUrl),
   webClear: (partition) => inv('web:clear', partition),
+  gpuDisabled: () => inv('diag:gpuDisabled'),
+  setGpuDisabled: (off) => inv('diag:setGpuDisabled', off),
+  openLog: () => inv('diag:openLog'),
+  logError: (msg) => inv('diag:log', msg),
+  onAppEvent: (cb) => {
+    const listener = (_e: IpcRendererEvent, ev: { type: 'gpu-crash'; count: number }) => cb(ev);
+    ipcRenderer.on('app:event', listener);
+    return () => ipcRenderer.removeListener('app:event', listener);
+  },
   onWebEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, ev: WebEvent) => cb(ev);
     ipcRenderer.on('web:event', listener);

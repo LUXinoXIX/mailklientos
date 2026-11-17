@@ -88,7 +88,7 @@ function prepareSession(partition: string) {
 function create(key: string, url: string, partition: string, group = key): Entry {
   prepareSession(partition);
   const view = new WebContentsView({
-    webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   view.setBackgroundColor('#ffffff');
   const wc = view.webContents;

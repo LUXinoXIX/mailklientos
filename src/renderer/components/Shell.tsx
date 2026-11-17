@@ -77,6 +77,9 @@ export function Ribbon(props: {
   onToggleRight: () => void;
   compact: boolean;
   onCompact: (v: boolean) => void;
+  gpuOff: boolean;
+  onToggleGpu: () => void;
+  onOpenLog: () => void;
 }) {
   const p = props;
   const sz = p.compact ? 'small' : 'medium';
@@ -138,6 +141,9 @@ export function Ribbon(props: {
               {p.rightOpen ? 'Skryť pravý panel' : 'Zobraziť pravý panel'}
             </ToolbarButton>
             <ToolbarButton onClick={() => p.onCompact(!p.compact)}>{p.compact ? 'Plný ribbon' : 'Kompaktný ribbon'}</ToolbarButton>
+            <ToolbarDivider />
+            <ToolbarButton onClick={p.onToggleGpu}>{p.gpuOff ? 'Zapnúť hardvérovú akceleráciu' : 'Vypnúť hardvérovú akceleráciu'}</ToolbarButton>
+            <ToolbarButton onClick={p.onOpenLog}>Záznam chýb</ToolbarButton>
           </>
         )}
       </Toolbar>

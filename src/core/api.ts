@@ -130,6 +130,13 @@ export interface MailApi {
   /** Zavrie kartu (zničí web). */
   webClose(key: string): Promise<void>;
   onWebEvent(cb: (ev: WebEvent) => void): () => void;
+  // stabilita vykresľovania
+  gpuDisabled(): Promise<Result<boolean>>;
+  /** Uloží nastavenie a reštartuje aplikáciu. */
+  setGpuDisabled(off: boolean): Promise<void>;
+  openLog(): Promise<void>;
+  logError(msg: string): Promise<void>;
+  onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
   /** Otvorí aktuálnu stránku webu v Edge (Windows) alebo v predvolenom prehliadači. */
   webOpenOutside(key: string, fallbackUrl: string): Promise<void>;
   /** Vymaže prihlásenie webovej relácie (odhlásiť konto M365 / web). */
