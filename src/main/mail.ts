@@ -6,7 +6,7 @@ import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import type { AccountConfig, ServerConfig } from '../core/account';
-import type { AccountTestResult, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
+import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
 import {
   explainError, explainVerify, imapflowConnection, nodemailerConnection, probeServer, verifySocket,
   type Protocol,
@@ -282,19 +282,67 @@ export async function getMessage(acc: AccountConfig, folder: string, uid: number
   });
 }
 
-export async function sendMail(acc: AccountConfig, input: SendInput) {
-  const pass = passwordFor(acc);
-  await ensureTrusted(acc.smtp, 'smtp');
-  const mail = {
-    from: { name: acc.name, address: acc.email },
-    to: input.to,
+/** Správa pre nodemailer (odoslanie aj koncept). Obrázky vložené v texte (data:) sa prevedú na prílohy cid. */
+function buildMail(acc: AccountConfig, input: SendInput) {
+  const fromName = acc.name;
+  return {
+    from: { name: fromName, address: acc.email },
+    to: input.to || undefined,
     cc: input.cc || undefined,
+    bcc: input.bcc || undefined,
     subject: input.subject,
     text: input.text,
+    html: input.html || undefined,
+    attachDataUrls: true,
     attachments: input.attachments?.map((a) => ({ path: a.path, filename: a.filename })),
     inReplyTo: input.replyMessageId || undefined,
     references: input.replyMessageId || undefined,
+    priority: input.priority ?? 'normal',
+    headers: input.readReceipt ? { 'Disposition-Notification-To': acc.email } : undefined,
   };
+}
+
+async function findFolder(c: Client, use: string, names: RegExp): Promise<string | undefined> {
+  const list: Array<{ path: string; specialUse?: string }> = await c.list();
+  return (list.find((m) => m.specialUse === use) ?? list.find((m) => names.test(m.path)))?.path;
+}
+
+/** Uloží koncept do Konceptov (IMAP APPEND) a zmaže predchádzajúcu verziu. */
+export async function saveDraft(acc: AccountConfig, input: SendInput, prev?: DraftRef): Promise<DraftRef | null> {
+  // MailComposer vie data: obrázky previesť len pri odosielaní, preto ich tu nechávame v HTML
+  const raw: Buffer = await new MailComposer({ ...buildMail(acc, input), attachDataUrls: true, date: new Date() }).compile().build();
+  return withImap(acc, async (c) => {
+    let folder = await findFolder(c, '\\Drafts', /^(drafts|koncept|draft|inbox[./]drafts)/i);
+    if (!folder) {
+      await c.mailboxCreate('Drafts').catch((): void => undefined);
+      folder = 'Drafts';
+    }
+    const res = await c.append(folder, raw, ['\\Seen', '\\Draft']);
+    if (prev) await deleteDraftIn(c, prev);
+    return res?.uid ? { folder, uid: Number(res.uid) } : null;
+  });
+}
+
+async function deleteDraftIn(c: Client, d: DraftRef) {
+  const lock = await c.getMailboxLock(d.folder);
+  try {
+    await c.messageDelete(String(d.uid), { uid: true });
+  } catch {
+    /* koncept už neexistuje */
+  } finally {
+    lock.release();
+  }
+}
+
+export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
+  await withImap(acc, (c) => deleteDraftIn(c, d));
+  return true as const;
+}
+
+export async function sendMail(acc: AccountConfig, input: SendInput) {
+  const pass = passwordFor(acc);
+  await ensureTrusted(acc.smtp, 'smtp');
+  const mail = buildMail(acc, input);
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),
     auth: { user: acc.username, pass },
@@ -324,6 +372,7 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   } catch {
     /* odoslanie prebehlo, uloženie kópie je len doplnok */
   }
+  if (input.draft) await deleteDraft(acc, input.draft).catch((): void => undefined);
   return { messageId: String(info.messageId ?? ''), savedToSent };
 }
 

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
-import type { PickedFile, Result, SendInput, WebBounds } from '../core/api';
+import type { DraftRef, PickedFile, Result, SendInput, WebBounds } from '../core/api';
 import type { AppSettings, LauncherItem } from '../core/settings';
 import { autodetect, probeServer, type Protocol } from '../core/tls';
 import * as store from './accounts';
@@ -77,6 +77,8 @@ export function registerIpc() {
     await mail.moveMessages(store.getImap(id), folder, uids, dest);
     return true as const;
   });
+  handle('mail:saveDraft', (id: string, msg: SendInput, prev?: DraftRef) => mail.saveDraft(store.getImap(id), msg, prev));
+  handle('mail:deleteDraft', (id: string, d: DraftRef) => mail.deleteDraft(store.getImap(id), d));
   handle('mail:unread', (id: string) => mail.unreadCount(store.getImap(id)));
   handle('mail:archive', (id: string, folder: string, uids: number[]) => mail.archiveMessages(store.getImap(id), folder, uids));
   handle('mail:attachment-open', async (id: string, folder: string, uid: number, index: number) => {

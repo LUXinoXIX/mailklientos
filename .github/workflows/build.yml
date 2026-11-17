@@ -43,6 +43,7 @@ jobs:
         run: |
           mkdir -p ci
           # npm ci so zámkom; ak zámok nesedí s package.json (nové balíky), npm install ho aktualizuje
+          set +e +o pipefail
           if [ -f package-lock.json ]; then
             npm ci --no-audit --no-fund 2>&1 | tee ci/install.log
             if [ ${PIPESTATUS[0]} -eq 0 ]; then exit 0; fi
