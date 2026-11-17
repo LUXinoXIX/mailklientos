@@ -43,6 +43,16 @@ export interface MessageFull extends MessageSummary {
   messageId?: string;
   /** pozvánka na udalosť (iMIP, text/calendar v správe) */
   invite?: { method: string; event: CalEvent; ics: string };
+  /** šifrovanie / podpis (PGP, S/MIME) */
+  security?: {
+    encrypted?: 'pgp' | 'smime';
+    decryptError?: string;
+    signed?: 'pgp' | 'smime';
+    signatureValid?: boolean;
+    signer?: string;
+    trusted?: boolean;
+    signatureNote?: string;
+  };
   /** overenie odosielateľa podľa servera (Authentication-Results) a varovania pred phishingom */
   auth?: { spf?: string; dkim?: string; dmarc?: string; verified: boolean; warnings: string[] };
 }
@@ -72,6 +82,8 @@ export interface SendInput {
   autoReply?: boolean;
   /** pozvánka / odpoveď na pozvánku (text/calendar) */
   ical?: { method: string; content: string };
+  /** podpísať / zašifrovať (PGP alebo S/MIME) */
+  security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
 }
 
 /** Správa čakajúca na odoslanie (odložené odoslanie alebo 10 s na späťvzatie). */
@@ -156,6 +168,15 @@ export interface MailApi {
   composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
   updateCheck(): Promise<Result<boolean>>;
+  cryptoSummary(): Promise<Result<CryptoSummary>>;
+  pgpGenerate(name: string, email: string, pass: string): Promise<Result<string>>;
+  cryptoPick(kind: 'pgp' | 'p12' | 'cert'): Promise<Result<string>>;
+  pgpImportFile(file: string, pass?: string): Promise<Result<{ own: number; pub: number }>>;
+  pgpImportText(text: string, pass?: string): Promise<Result<{ own: number; pub: number }>>;
+  smimeImportFile(file: string, pass: string): Promise<Result<CertSummary>>;
+  certImportFile(file: string): Promise<Result<CertSummary>>;
+  pgpExport(fingerprint: string): Promise<Result<string>>;
+  cryptoRemove(kind: 'pgpOwn' | 'pgpContacts' | 'smimeOwn' | 'smimeContacts', id: string): Promise<Result<true>>;
   exportEml(accountId: string, folder: string, uid: number, subject: string): Promise<Result<string>>;
   exportMbox(accountId: string, folder: string): Promise<Result<{ file: string; count: number }>>;
   importFiles(accountId: string, folder: string): Promise<Result<number>>;
@@ -239,4 +260,17 @@ export interface DavCollection {
   events?: boolean;
   todos?: boolean;
   readOnly?: boolean;
+}
+
+export interface CertSummary {
+  emails: string[];
+  subject: string;
+  issuer: string;
+  validTo: string;
+}
+export interface CryptoSummary {
+  pgpOwn: Array<{ fingerprint: string; userIds: string[]; created: string }>;
+  pgpContacts: Array<{ fingerprint: string; userIds: string[] }>;
+  smimeOwn: CertSummary[];
+  smimeContacts: CertSummary[];
 }

@@ -439,3 +439,11 @@ body { overflow: hidden; }
 .app.dark .phish { background: #3a1d20; border-color: #6b2a30; } .app.dark .phish-head { color: #ff9aa2; }
 .app.dark .attach-warn { background: #3d3412; border-color: #6b5a1a; }
 .app.dark .invite.cancel { background: #3a1d20; }
+.pill.sec { background: #e0f2ec; color: #0b5a45; }
+.secbar { margin: 0 20px 8px; padding: 6px 12px; border-radius: 6px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.secbar span { display: inline-flex; align-items: center; gap: 4px; }
+.secbar.good { background: #e7f5ec; color: #0b5a2a; }
+.secbar.bad { background: #fdf3f4; color: #a4262c; }
+.app.dark .secbar.good { background: #183b26; color: #9be0b4; } .app.dark .secbar.bad { background: #3a1d20; color: #ff9aa2; }
+.mono { font-family: Consolas, 'Cascadia Mono', monospace; }
+.crypto-row { padding: 6px 0; border-bottom: 1px solid var(--colorNeutralStroke3); }

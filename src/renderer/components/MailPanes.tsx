@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -435,6 +435,21 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {m.security && (
+        <div className={`secbar ${m.security.decryptError || m.security.signatureValid === false ? 'bad' : 'good'}`}>
+          {m.security.encrypted && (
+            <span><LockSmallIcon /> {m.security.decryptError ? m.security.decryptError : `Zašifrovaná správa (${m.security.encrypted === 'pgp' ? 'PGP' : 'S/MIME'})`}</span>
+          )}
+          {m.security.signed && (
+            <span>
+              {m.security.signatureValid
+                ? `✓ Podpísal(a) ${m.security.signer ?? 'odosielateľ'}${m.security.trusted === false ? ' – certifikát nie je od dôveryhodnej autority' : ''}`
+                : `⚠ Podpis neplatný${m.security.signatureNote ? `: ${m.security.signatureNote}` : ''}`}
+            </span>
+          )}
+          {m.security.signatureValid && m.security.signatureNote && <span className="muted">{m.security.signatureNote}</span>}
+        </div>
+      )}
       {m.auth && m.auth.warnings.length > 0 && (
         <div className="phish">
           <div className="phish-head"><WarnIcon /> Pozor, správa môže byť podvodná</div>

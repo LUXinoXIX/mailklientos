@@ -15,6 +15,7 @@ import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
 import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
+import { CryptoDialog } from './components/CryptoDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel, type AgendaData } from './components/RightPanel';
@@ -61,7 +62,8 @@ type Dialogs =
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
-  | { kind: 'themes' };
+  | { kind: 'themes' }
+  | { kind: 'crypto' };
 
 const splitAddrs = (s: string) =>
   s
@@ -533,6 +535,7 @@ export function App() {
         importance: i.priority === 'high',
         receipt: i.readReceipt,
         fromEmail: i.from?.email,
+        security: i.security,
     };
     if (POP_COMPOSE) {
       setPopInit(init);
@@ -903,6 +906,7 @@ export function App() {
           onSignatures={() => openDialog({ kind: 'signatures' })}
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
+          onCrypto={() => openDialog({ kind: 'crypto' })}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
           gpuForced={gpuForced}
@@ -972,6 +976,7 @@ export function App() {
                       signatures: settings.signatures,
                       templates: settings.templates ?? [],
                       onManageTemplates: () => openDialog({ kind: 'templates' }),
+                      onManageCrypto: () => openDialog({ kind: 'crypto' }),
                       run: (fn) => composerRef.current && fn(composerRef.current),
                     }
                   : undefined
@@ -1189,6 +1194,7 @@ export function App() {
           }}
         />
       )}
+      {dialog.kind === 'crypto' && <CryptoDialog accounts={accounts.filter(isImap)} onClose={closeDialog} />}
       {dialog.kind === 'themes' && (
         <ThemeDialog
           custom={settings.customThemes ?? []}
