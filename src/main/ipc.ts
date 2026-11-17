@@ -12,6 +12,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
+import { syncWatchers } from './watch';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -45,12 +46,15 @@ export function registerIpc() {
   handle('accounts:list', () => ({ accounts: store.publicAccounts(), canStoreSecrets: store.canStoreSecrets() }));
   handle('accounts:save', (acc: AnyAccount, password?: string) => {
     mail.closeAllConnections(acc.id);
-    return store.saveAccount(acc, password);
+    const r = store.saveAccount(acc, password);
+    syncWatchers();
+    return r;
   });
   handle('accounts:delete', async (id: string) => {
     const acc = store.loadAccounts().find((a) => a.id === id);
     mail.closeAllConnections(id);
     store.deleteAccount(id);
+    syncWatchers();
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
   });

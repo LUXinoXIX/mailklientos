@@ -1,9 +1,10 @@
-import { app, BrowserWindow, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, powerMonitor, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { registerIpc } from './main/ipc';
 import { closeAllConnections } from './main/mail';
+import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
 import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
@@ -95,12 +96,19 @@ app.whenReady().then(() => {
   }
   registerIpc();
   createWindow();
+  // Windows: ID aplikácie pre upozornenia (inak sa nezobrazia pri Squirrel inštalácii)
+  if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.mailklient.MailKlient');
+  syncWatchers();
+  powerMonitor.on('resume', () => reconnectWatchers());
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-app.on('before-quit', () => closeAllConnections());
+app.on('before-quit', () => {
+  stopAllWatchers();
+  closeAllConnections();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

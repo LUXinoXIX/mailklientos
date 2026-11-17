@@ -91,6 +91,9 @@ export function App() {
   const [full, setFull] = useState<{ msg?: MessageFull; loading: boolean; error?: string }>({ loading: false });
   const [search, setSearch] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  // nová pošta (IDLE): obnoviť zoznam a počty bez načítania priečinkov
+  const [mailTick, setMailTick] = useState(0);
+  const pendingOpen = useRef<{ accountId: string; uid: number } | null>(null);
   const [status, setStatus] = useState('');
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
@@ -123,7 +126,19 @@ export function App() {
     const onRej = (e: PromiseRejectionEvent) => void api.logError(`promise: ${String(e.reason)}`);
     window.addEventListener('error', onErr);
     window.addEventListener('unhandledrejection', onRej);
-    const off = api.onAppEvent((ev) => ev.type === 'gpu-crash' && setGpuCrash(ev.count));
+    let tickTimer = 0;
+    const off = api.onAppEvent((ev) => {
+      if (ev.type === 'gpu-crash') setGpuCrash(ev.count);
+      else if (ev.type === 'mail-changed') {
+        window.clearTimeout(tickTimer);
+        tickTimer = window.setTimeout(() => setMailTick((t) => t + 1), 800);
+      } else if (ev.type === 'open-message') {
+        pendingOpen.current = { accountId: ev.accountId, uid: ev.uid };
+        setActiveId(ev.accountId);
+        setSelection({ accountId: ev.accountId, folder: 'INBOX' });
+        setMailTick((t) => t + 1);
+      }
+    });
     // dlhé zaseknutia rozhrania (> 300 ms) do záznamu, aby sa dalo dohľadať blikanie
     let po: PerformanceObserver | undefined;
     try {
@@ -246,12 +261,13 @@ export function App() {
         void api.unreadCount(a.id).then((r) => alive && r.ok && setUnread((u) => ({ ...u, [a.id]: r.data })));
     };
     run();
-    const t = window.setInterval(run, 120_000);
+    // počty sa menia hlavne udalosťou z IDLE; pravidelná kontrola len ako záloha
+    const t = window.setInterval(run, 600_000);
     return () => {
       alive = false;
       window.clearInterval(t);
     };
-  }, [api, accounts, demo, refreshKey]);
+  }, [api, accounts, demo, refreshKey, mailTick]);
 
   // priečinky aktívneho IMAP konta
   useEffect(() => {
@@ -283,7 +299,7 @@ export function App() {
         setMessages([]);
         return;
       }
-      setListState({ loading: true });
+      if (!mailTick || !messages.length) setListState({ loading: true });
       const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50)));
       if (cancelled) return;
       const errors = results.flatMap((r, i) => (r.ok ? [] : [`${accounts.find((a) => a.id === targets[i]!.id)?.name}: ${r.error}`]));
@@ -295,7 +311,18 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [selection, accounts, demo, api, refreshKey, showMail]);
+  }, [selection, accounts, demo, api, refreshKey, showMail, mailTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // otvorenie správy z upozornenia Windows
+  useEffect(() => {
+    const p = pendingOpen.current;
+    if (!p) return;
+    const m = messages.find((x) => x.accountId === p.accountId && x.uid === p.uid);
+    if (m) {
+      pendingOpen.current = null;
+      void open(m);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patchMsg = (m: MessageSummary, patch: Partial<MessageSummary>) => {
     const same = (x: MessageSummary) => x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder;
@@ -526,6 +553,8 @@ export function App() {
           onSettings={() => (activeAcc ? editAccount(activeAcc) : openDialog({ kind: 'chooser' }))}
           onSignatures={() => openDialog({ kind: 'signatures' })}
           gpuOff={gpuOff}
+          notifications={settings.notifications !== false}
+          onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
           gpuForced={gpuForced}
           onToggleGpuForced={() => void api?.setGpuForced(!gpuForced)}
