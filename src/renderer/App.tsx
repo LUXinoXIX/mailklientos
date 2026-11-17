@@ -99,12 +99,21 @@ export function App() {
   const [composerState, setComposerState] = useState<ComposerState>({ importance: false, receipt: false, savedAt: null, sending: false });
   const openKey = useRef('');
   const [gpuOff, setGpuOff] = useState(false);
+  const [gpuForced, setGpuForced] = useState(false);
   const [gpuCrash, setGpuCrash] = useState(0);
 
   // stabilita vykresľovania: stav akcelerácie, pády GPU, chyby rozhrania do záznamu
   useEffect(() => {
     if (!api) return;
     void api.gpuDisabled().then((r) => r.ok && setGpuOff(r.data));
+    void api.gpuForced().then((r) => r.ok && setGpuForced(r.data));
+    // kliknutia do záznamu (čas a cieľ), aby sa dalo spárovať s blikaním
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      const label = t?.closest('button,[role=tab],a')?.textContent?.trim().slice(0, 40) ?? t?.tagName ?? '';
+      void api.logError(`klik: ${label}`);
+    };
+    window.addEventListener('click', onClick, true);
     const onErr = (e: ErrorEvent) => void api.logError(`${e.message} @ ${e.filename}:${e.lineno}`);
     const onRej = (e: PromiseRejectionEvent) => void api.logError(`promise: ${String(e.reason)}`);
     window.addEventListener('error', onErr);
@@ -123,6 +132,7 @@ export function App() {
     return () => {
       window.removeEventListener('error', onErr);
       window.removeEventListener('unhandledrejection', onRej);
+      window.removeEventListener('click', onClick, true);
       po?.disconnect();
       off();
     };
@@ -509,6 +519,8 @@ export function App() {
           onSignatures={() => openDialog({ kind: 'signatures' })}
           gpuOff={gpuOff}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
+          gpuForced={gpuForced}
+          onToggleGpuForced={() => void api?.setGpuForced(!gpuForced)}
           onOpenLog={() => void api?.openLog()}
           onMenuOpen={setMenuOverlay}
         />

@@ -31,6 +31,8 @@ export function AccountRail(props: {
   onSignatures: () => void;
   gpuOff: boolean;
   onToggleGpu: () => void;
+  gpuForced: boolean;
+  onToggleGpuForced: () => void;
   onOpenLog: () => void;
   /** Ponuka je otvorená: vložené weby sa musia skryť, inak by ju prekryli. */
   onMenuOpen: (open: boolean) => void;
@@ -120,6 +122,9 @@ export function AccountRail(props: {
             <MenuDivider />
             <MenuItem onClick={props.onToggleGpu}>
               {props.gpuOff ? 'Zapnúť hardvérovú akceleráciu (reštart)' : 'Vypnúť hardvérovú akceleráciu, ak obraz bliká (reštart)'}
+            </MenuItem>
+            <MenuItem onClick={props.onToggleGpuForced}>
+              {props.gpuForced ? 'Zrušiť vynútenie grafickej karty (reštart)' : 'Vynútiť grafickú kartu – test proti blikaniu (reštart)'}
             </MenuItem>
             <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
           </MenuList>

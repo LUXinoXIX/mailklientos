@@ -121,6 +121,8 @@ export function registerIpc() {
 
   // stabilita vykresľovania a záznam chýb
   handle('diag:gpuDisabled', () => diag.gpuDisabled());
+  handle('diag:gpuForced', () => diag.gpuForced());
+  on('diag:setGpuForced', (on: boolean) => diag.setGpuForced(on));
   on('diag:setGpuDisabled', (off: boolean) => diag.setGpuDisabled(off));
   on('diag:openLog', () => diag.openLog());
   on('diag:log', (msg: string) => diag.log('renderer:', String(msg).slice(0, 2000)));
