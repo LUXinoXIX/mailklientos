@@ -172,12 +172,21 @@ jobs:
           f=$(find tauri/src-tauri/target/release/bundle/nsis -name '*.exe' | head -1)
           echo "inštalátor: $f"
           cp "$f" tauri-out/MailKlient-Tauri-Test-Setup.exe
+          m=$(find tauri/src-tauri/target/release/bundle/msi -name '*.msi' | head -1)
+          [ -n "$m" ] && cp "$m" tauri-out/MailKlient-Tauri-Test.msi
+          # prenosná verzia bez inštalácie (potrebuje WebView2, ktorý má každý Windows 11)
+          mkdir -p portable/MailKlient-Tauri
+          cp tauri/src-tauri/target/release/mailklient-tauri.exe portable/MailKlient-Tauri/MailKlient.exe
+          (cd portable && 7z a -tzip ../tauri-out/MailKlient-Tauri-Test-portable.zip MailKlient-Tauri >/dev/null)
           ls -la tauri-out
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: mailklient-tauri
-          path: tauri-out/*.exe
+          path: |
+            tauri-out/*.exe
+            tauri-out/*.msi
+            tauri-out/*.zip
       - name: Uloženie logov
         if: always()
         env:
@@ -208,7 +217,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p files
-          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' \) -exec cp {} files/ \;
+          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' \) -exec cp {} files/ \;
           ls -la files
           if [ -z "$(ls -A files)" ]; then echo "Žiadne inštalátory, release preskakujem."; exit 0; fi
           gh release delete latest-build --cleanup-tag -y || true
