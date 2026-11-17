@@ -64,6 +64,10 @@ const splitAddrs = (s: string) =>
 const IS_TAURI = '__TAURI_INTERNALS__' in window;
 
 /** Dymový test v CI: pravý panel otvorený, aby bolo vidieť aj vložené weby. */
+// Testy blikania (okná z ozubeného kolieska): vypnutie častí aplikácie cez parametre adresy
+const TEST = new URLSearchParams(window.location.search);
+const TEST_NODIAG = TEST.get('nodiag') === '1';
+const TEST_DEMO = TEST.get('demo') === '1';
 const SMOKE_MODE = new URLSearchParams(window.location.search).get('smoke') ?? '';
 const SMOKE = SMOKE_MODE === 'm365';
 
@@ -110,6 +114,7 @@ export function App() {
     if (!api) return;
     void api.gpuDisabled().then((r) => r.ok && setGpuOff(r.data));
     void api.gpuForced().then((r) => r.ok && setGpuForced(r.data));
+    if (TEST_NODIAG) return;
     // kliknutia do záznamu (čas a cieľ), aby sa dalo spárovať s blikaním
     const onClick = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
@@ -171,7 +176,7 @@ export function App() {
     }
     const r = await api.listAccounts();
     if (r.ok) {
-      setAccounts(r.data.accounts);
+      setAccounts(TEST_DEMO ? [] : r.data.accounts);
       setSecretsWarning(!r.data.canStoreSecrets && r.data.accounts.some(isImap));
     } else setStatus(r.error);
     setLoaded(true);

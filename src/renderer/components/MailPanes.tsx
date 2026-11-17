@@ -152,7 +152,18 @@ export function MessageList(props: {
 }
 
 /** HTML e-mailu: sanitizované (DOMPurify) a v izolovanom iframe bez skriptov. Vzdialené obrázky blokované. */
+const TEST_NOFRAME = new URLSearchParams(window.location.search).get('noframe') === '1';
+
 function HtmlBody({ html, showImages }: { html: string; showImages: boolean }) {
+  if (TEST_NOFRAME) {
+    // test blikania: obsah správy ako čistý text, bez iframe
+    const text = new DOMParser().parseFromString(DOMPurify.sanitize(html), 'text/html').body.textContent ?? '';
+    return <pre className="plain">{text}</pre>;
+  }
+  return <HtmlFrame html={html} showImages={showImages} />;
+}
+
+function HtmlFrame({ html, showImages }: { html: string; showImages: boolean }) {
   const doc = useMemo(() => {
     // WHOLE_DOCUMENT zachová <style> v hlavičke (rozloženie newsletterov)
     const clean = DOMPurify.sanitize(html, { WHOLE_DOCUMENT: true });

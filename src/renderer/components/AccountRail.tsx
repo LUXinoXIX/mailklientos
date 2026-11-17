@@ -34,7 +34,7 @@ export function AccountRail(props: {
   gpuForced: boolean;
   onToggleGpuForced: () => void;
   onOpenLog: () => void;
-  onBlinkTest: (kind: 'bare' | 'prefs' | 'webview' | 'app-noweb') => void;
+  onBlinkTest: (kind: 'bare' | 'prefs' | 'webview' | 'app-noweb' | 'app-noframe' | 'app-nodiag' | 'app-demo' | 'app-min') => void;
   /** Ponuka je otvorená: vložené weby sa musia skryť, inak by ju prekryli. */
   onMenuOpen: (open: boolean) => void;
 }) {
@@ -130,6 +130,10 @@ export function AccountRail(props: {
             <MenuItem onClick={() => props.onBlinkTest('prefs')}>Test blikania 2 – nastavenia okna</MenuItem>
             <MenuItem onClick={() => props.onBlinkTest('webview')}>Test blikania 3 – s vloženým webom</MenuItem>
             <MenuItem onClick={() => props.onBlinkTest('app-noweb')}>Test blikania 4 – MailKlient bez webov</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('app-noframe')}>Test blikania 5 – ako 4, správa bez iframe</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('app-nodiag')}>Test blikania 6 – ako 4, bez diagnostiky</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('app-demo')}>Test blikania 7 – ako 4, ukážkové dáta</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('app-min')}>Test blikania 8 – ako 4, bez všetkého</MenuItem>
             <MenuItem onClick={() => props.onBlinkTest('bare')}>Test blikania – holé okno</MenuItem>
             <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
           </MenuList>

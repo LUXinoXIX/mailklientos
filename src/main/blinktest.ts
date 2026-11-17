@@ -5,7 +5,16 @@ import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
 import { log } from './diagnostics';
 import { attachWindow } from './webviews';
 
-export type BlinkTestKind = 'bare' | 'prefs' | 'webview' | 'app-noweb';
+export type BlinkTestKind = 'bare' | 'prefs' | 'webview' | 'app-noweb' | 'app-noframe' | 'app-nodiag' | 'app-demo' | 'app-min';
+
+/** Parametre adresy pre okná s celým MailKlientom (každé vypína niečo navyše oproti testu 4). */
+const APP_QUERY: Partial<Record<BlinkTestKind, Record<string, string>>> = {
+  'app-noweb': { noweb: '1' },
+  'app-noframe': { noweb: '1', noframe: '1' },
+  'app-nodiag': { noweb: '1', nodiag: '1' },
+  'app-demo': { noweb: '1', demo: '1' },
+  'app-min': { noweb: '1', noframe: '1', nodiag: '1', demo: '1' },
+};
 
 let appWindowFactory: ((query?: Record<string, string>) => BrowserWindow) | null = null;
 export function setAppWindowFactory(f: (query?: Record<string, string>) => BrowserWindow) {
@@ -33,6 +42,10 @@ const TITLES: Record<BlinkTestKind, string> = {
   prefs: '2 – nastavenia okna ako MailKlient',
   webview: '3 – okno s vloženým webom',
   'app-noweb': '4 – MailKlient bez vložených webov',
+  'app-noframe': '5 – ako 4, správa bez iframe',
+  'app-nodiag': '6 – ako 4, bez diagnostiky',
+  'app-demo': '7 – ako 4, ukážkové dáta bez kont',
+  'app-min': '8 – ako 4, bez iframe, diagnostiky aj kont',
 };
 
 function page(kind: BlinkTestKind) {
@@ -72,9 +85,10 @@ function watchBlur(w: BrowserWindow, kind: BlinkTestKind) {
 
 export function openBlinkTest(kind: BlinkTestKind) {
   log(`test blikania ${kind}: otvorené`);
-  if (kind === 'app-noweb') {
+  const query = APP_QUERY[kind];
+  if (query) {
     if (!appWindowFactory) return;
-    const w = appWindowFactory({ noweb: '1' });
+    const w = appWindowFactory(query);
     w.setTitle(`MailKlient – test ${TITLES[kind]}`);
     watchBlur(w, kind);
     return;

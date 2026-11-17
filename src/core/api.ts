@@ -147,7 +147,7 @@ export interface MailApi {
   /** Vynúti grafickú kartu napriek zoznamu blokovaných ovládačov; reštart. */
   setGpuForced(on: boolean): Promise<void>;
   openLog(): Promise<void>;
-  blinkTest(kind: 'bare' | 'prefs' | 'webview' | 'app-noweb'): Promise<void>;
+  blinkTest(kind: 'bare' | 'prefs' | 'webview' | 'app-noweb' | 'app-noframe' | 'app-nodiag' | 'app-demo' | 'app-min'): Promise<void>;
   logError(msg: string): Promise<void>;
   onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
   // vložené weby
