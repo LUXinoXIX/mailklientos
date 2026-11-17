@@ -6,7 +6,7 @@ import http from 'node:http';
 import tls from 'node:tls';
 import { DOMParser } from '@xmldom/xmldom';
 import type { AccountConfig } from '../core/account';
-import { buildEvent, buildVCard, expand, parseEvents, parseVCards, type CalEvent, type Contact } from '../core/ical';
+import { buildEvent, buildTodo, buildVCard, expand, parseEvents, parseTodos, parseVCards, type CalEvent, type CalTodo, type Contact } from '../core/ical';
 import { buildTlsOptions, verifySocket } from '../core/tls';
 import { getPassword } from './accounts';
 import { log } from './diagnostics';
@@ -243,6 +243,36 @@ export async function saveRawEvent(acc: AccountConfig, cal: DavCollection, uid: 
 export async function deleteEvent(acc: AccountConfig, href: string, etag?: string) {
   const r = await request(acc, 'DELETE', href, undefined, etag ? { 'If-Match': etag } : {});
   if (r.status >= 400 && r.status !== 404) throw new UserError(`Udalosť sa nepodarilo odstrániť (chyba ${r.status}).`);
+}
+
+// ---------------------------------------------------------------------------
+// úlohy (VTODO)
+
+export async function todos(acc: AccountConfig, cal: DavCollection): Promise<CalTodo[]> {
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="${CAL}">
+  <d:prop><d:getetag/><c:calendar-data/></d:prop>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/></c:comp-filter></c:filter>
+</c:calendar-query>`;
+  const r = await request(acc, 'REPORT', cal.href, body, { Depth: '1' });
+  if (r.status >= 400) throw new UserError(`Úlohy „${cal.name}“ vrátili chybu ${r.status}.`);
+  return responses(r.body).flatMap((x) => {
+    const data = text(propEl(x.props, CAL, 'calendar-data'));
+    if (!data) return [];
+    return parseTodos(data).map((t) => ({ ...t, href: new URL(x.href, cal.href).toString(), etag: text(propEl(x.props, DAV, 'getetag')) }));
+  });
+}
+
+export async function saveTodo(acc: AccountConfig, cal: DavCollection, t: CalTodo): Promise<CalTodo> {
+  const href = t.href ?? new URL(`${encodeURIComponent(t.uid)}.ics`, cal.href.endsWith('/') ? cal.href : `${cal.href}/`).toString();
+  const r = await request(acc, 'PUT', href, buildTodo(t), { 'Content-Type': 'text/calendar; charset=utf-8' });
+  if (r.status >= 400) throw new UserError(`Úlohu sa nepodarilo uložiť (chyba ${r.status}).`);
+  return { ...t, href, etag: String(r.headers.etag ?? '') };
+}
+
+export async function deleteTodo(acc: AccountConfig, href: string) {
+  const r = await request(acc, 'DELETE', href);
+  if (r.status >= 400 && r.status !== 404) throw new UserError(`Úlohu sa nepodarilo odstrániť (chyba ${r.status}).`);
 }
 
 // ---------------------------------------------------------------------------

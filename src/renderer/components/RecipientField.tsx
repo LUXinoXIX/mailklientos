@@ -1,5 +1,5 @@
 // Pole príjemcov s „čipmi“ a dopĺňaním adries (ako v Outlooku).
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseSmallIcon } from '../icons';
 
 export interface Contact {
@@ -36,8 +36,21 @@ export function RecipientField(props: {
   contacts: Contact[];
   autoFocus?: boolean;
   extra?: React.ReactNode;
+  /** vyhľadanie v adresári firmy (Zimbra GAL) */
+  lookup?: (q: string) => Promise<Contact[]>;
 }) {
   const [text, setText] = useState('');
+  const [remote, setRemote] = useState<Contact[]>([]);
+  useEffect(() => {
+    const q = text.trim();
+    if (!props.lookup || q.length < 2) return setRemote([]);
+    let alive = true;
+    const t = window.setTimeout(() => void props.lookup!(q).then((r) => alive && setRemote(r)), 200);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [text, props.lookup]);
   const [hi, setHi] = useState(0);
   const [focus, setFocus] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -46,10 +59,12 @@ export function RecipientField(props: {
     const q = text.trim().toLowerCase();
     if (q.length < 1) return [];
     const taken = new Set(props.value.map((v) => v.email.toLowerCase()));
-    return props.contacts
-      .filter((c) => !taken.has(c.email.toLowerCase()) && `${c.name} ${c.email}`.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [text, props.contacts, props.value]);
+    const n = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const nq = n(q);
+    const local = props.contacts.filter((c) => !taken.has(c.email.toLowerCase()) && n(`${c.name} ${c.email}`).includes(nq));
+    const all = [...local, ...remote.filter((c) => !taken.has(c.email.toLowerCase()))];
+    return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i).slice(0, 10);
+  }, [text, props.contacts, props.value, remote]);
 
   const commit = (c?: Contact | null) => {
     const v = c ?? parseAddress(text);

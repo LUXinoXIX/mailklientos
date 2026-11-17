@@ -43,6 +43,8 @@ export interface AccountConfig {
   identities?: Identity[];
   /** adresa CalDAV/CardDAV (kalendár, kontakty); prázdne = zistiť automaticky */
   davUrl?: string;
+  /** adresa Zimbry (https://server); prázdne = server IMAP */
+  zimbraUrl?: string;
 }
 
 export interface Identity {

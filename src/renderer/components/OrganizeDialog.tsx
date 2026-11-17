@@ -234,7 +234,7 @@ export function OrganizeDialog(props: {
               <div className="org-list">
                 <div className="muted small">
                   Automatická odpoveď sa posiela, keď je MailKlient spustený: každému odosielateľovi najviac raz za 4 dni, nie na hromadnú poštu ani automatické správy.
-                  Ak má váš server vlastnú funkciu neprítomnosti (napr. webová Zimbra), stačí použiť jednu z nich.
+                  Ak máte poštu na Zimbre, použite radšej neprítomnosť priamo na serveri (ozubené koliesko → Zimbra) – funguje aj s vypnutým počítačom.
                 </div>
                 <Checkbox label="Posielať automatickú odpoveď" checked={vac.enabled} onChange={(_, d) => setVac({ ...vac, enabled: !!d.checked })} />
                 <div className="org-row">

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
 import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
-import type { AppSettings, LauncherItem, RuleAction } from '../core/settings';
+import type { AppSettings, LauncherItem, RuleAction, Task } from '../core/settings';
 import { autodetect, probeServer, type Protocol } from '../core/tls';
 import * as store from './accounts';
 import { autoconfig } from './autoconfig';
@@ -20,6 +20,8 @@ import * as outbox from './outbox';
 import * as updater from './updater';
 import * as io from './importexport';
 import * as cstore from './cryptostore';
+import * as zimbra from './zimbra';
+import * as tasksync from './tasksync';
 import * as cal from './calendar';
 import * as dav from './dav';
 import type { CalEvent, Contact } from '../core/ical';
@@ -63,6 +65,7 @@ export function registerIpc() {
   handle('accounts:save', (acc: AnyAccount, password?: string) => {
     mail.closeAllConnections(acc.id);
     cal.forget(acc.id);
+    zimbra.forget(acc.id);
     const r = store.saveAccount(acc, password);
     syncWatchers();
     return r;
@@ -158,6 +161,46 @@ export function registerIpc() {
     cstore.remove(kind, id);
     return true as const;
   });
+  // Zimbra
+  const zacc = (id: string) => store.getImap(id);
+  handle('zimbra:check', (id: string) => zimbra.isZimbra(zacc(id)));
+  handle('zimbra:gal', (id: string, q: string) => zimbra.galSearch(zacc(id), q));
+  handle('zimbra:galAuto', (id: string, q: string) => zimbra.galAutocomplete(zacc(id), q));
+  handle('zimbra:freeBusy', (id: string, emails: string[], from: number, to: number) => zimbra.freeBusy(zacc(id), emails, from, to));
+  handle('zimbra:resources', (id: string) => zimbra.resources(zacc(id)));
+  handle('zimbra:shares', (id: string) => zimbra.shares(zacc(id)));
+  handle('zimbra:mount', (id: string, sh: zimbra.Share, name: string) => zimbra.mountShare(zacc(id), sh, name));
+  handle('zimbra:getOoo', (id: string) => zimbra.getOoo(zacc(id)));
+  handle('zimbra:setOoo', (id: string, o: zimbra.ServerOoo) => zimbra.setOoo(zacc(id), o));
+  handle('zimbra:getFilters', (id: string) => zimbra.getFilters(zacc(id)));
+  handle('zimbra:setFilters', (id: string, r: zimbra.ServerRule[]) => zimbra.setFilters(zacc(id), r));
+  handle('zimbra:signatures', (id: string) => zimbra.getSignatures(zacc(id)));
+  handle('zimbra:saveSignature', (id: string, sig: { id?: string; name: string; html: string; text: string }) => zimbra.saveSignature(zacc(id), sig));
+  handle('zimbra:identities', (id: string) => zimbra.getIdentities(zacc(id)));
+  handle('zimbra:tags', (id: string) => zimbra.tags(zacc(id)));
+  handle('zimbra:briefcase', (id: string, q: string) => zimbra.briefcase(zacc(id), q));
+  handle('zimbra:download', (id: string, d: zimbra.BriefcaseDoc) => zimbra.downloadDoc(zacc(id), d));
+  handle('zimbra:quota', async (id: string) => {
+    const acc = zacc(id);
+    if (await zimbra.isZimbra(acc)) {
+      const q = await zimbra.quota(acc).catch(() => null);
+      if (q && q.limit) return q;
+    }
+    return mail.imapQuota(acc).catch(() => null);
+  });
+  handle('zimbra:changePassword', async (id: string, oldPass: string, newPass: string) => {
+    const acc = zacc(id);
+    await zimbra.changePassword(acc, oldPass, newPass);
+    mail.closeAllConnections(id);
+    store.saveAccount(store.getAccount(id), newPass);
+    syncWatchers();
+    return true as const;
+  });
+  handle('zimbra:getWB', (id: string) => zimbra.getWhiteBlack(zacc(id)));
+  handle('zimbra:setWB', (id: string, w: string[], b: string[]) => zimbra.setWhiteBlack(zacc(id), w, b));
+  handle('zimbra:block', (id: string, email: string) => zimbra.blockSender(zacc(id), email));
+  handle('tasks:sync', (tasks: Task[]) => tasksync.syncTasks(tasks));
+  handle('tasks:delete', (t: Task) => tasksync.deleteRemote(t));
   handle('update:check', () => updater.check());
   handle('update:install', () => {
     updater.installNow();

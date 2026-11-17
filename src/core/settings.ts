@@ -21,6 +21,8 @@ export interface Signature {
   text: string;
   /** formátovaný podpis (HTML, obrázky ako data: URL) */
   html?: string;
+  /** id podpisu na serveri Zimbra (synchronizácia) */
+  zimbraId?: string;
 }
 
 const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -84,6 +86,10 @@ export interface Task {
   created: string;
   /** úloha vytvorená zo správy */
   message?: { accountId: string; folder: string; uid: number; messageId?: string; subject: string; from: string };
+  /** úloha na serveri (CalDAV VTODO, napr. Úlohy v Zimbre) */
+  remote?: { accountId: string; uid: string; href?: string; etag?: string };
+  /** zmenené lokálne a ešte neodoslané na server */
+  dirty?: boolean;
 }
 
 export interface Template {

@@ -16,6 +16,7 @@ import { signatureToHtml, type AppSettings } from '../../core/settings';
 import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
+import { BriefcasePicker } from './BriefcasePicker';
 
 export type ComposeKind = 'new' | 'reply' | 'replyAll' | 'forward';
 
@@ -237,6 +238,8 @@ export const Composer = forwardRef<
     onSaveTemplate?: (t: { name: string; subject: string; html: string }) => void;
     /** samostatné okno: po odoslaní/zahodení zavrieť okno */
     standalone?: boolean;
+    /** kontá na Zimbre: adresár firmy a Aktovka */
+    zimbra?: Record<string, boolean>;
   }
 >(function Composer(props, ref) {
   const api = window.mailApi;
@@ -376,6 +379,17 @@ export const Composer = forwardRef<
     const id = acc?.identities?.find((x) => x.email === fromEmail);
     return id ? { name: id.name, email: id.email } : undefined;
   }
+
+  const zimbraOn = !!props.zimbra?.[accountId];
+  const lookup = useCallback(
+    async (q: string): Promise<Contact[]> => {
+      if (!api || !zimbraOn) return [];
+      const r = await api.zimbraGalAuto(accountId, q);
+      return r.ok ? r.data.map((g) => ({ name: g.name, email: g.email })) : [];
+    },
+    [api, accountId, zimbraOn],
+  );
+  const [briefcase, setBriefcase] = useState(false);
 
   function rememberContacts() {
     try {
@@ -554,6 +568,7 @@ export const Composer = forwardRef<
             value={to}
             onChange={setTo}
             contacts={props.contacts}
+            lookup={zimbraOn ? lookup : undefined}
             autoFocus={init.kind === 'new' || init.kind === 'forward'}
             extra={
               <span className="rcpt-extra">
@@ -562,8 +577,8 @@ export const Composer = forwardRef<
               </span>
             }
           />
-          {showCc && <RecipientField label="Kópia" value={cc} onChange={setCc} contacts={props.contacts} />}
-          {showBcc && <RecipientField label="Skrytá" value={bcc} onChange={setBcc} contacts={props.contacts} />}
+          {showCc && <RecipientField label="Kópia" value={cc} onChange={setCc} contacts={props.contacts} lookup={zimbraOn ? lookup : undefined} />}
+          {showBcc && <RecipientField label="Skrytá" value={bcc} onChange={setBcc} contacts={props.contacts} lookup={zimbraOn ? lookup : undefined} />}
           <div className="rcpt-row">
             <span className="rcpt-label">Predmet</span>
             <input className="subject-input" aria-label="Predmet" placeholder="Pridajte predmet" value={subject} onChange={(e) => setSubject(e.target.value)} />
@@ -593,8 +608,16 @@ export const Composer = forwardRef<
         )}
         <div className="composer-foot">
           <Button size="small" icon={<AttachIcon />} onClick={() => void attach()}>Priložiť súbor</Button>
+          {zimbraOn && <Button size="small" onClick={() => setBriefcase(true)}>Z Aktovky</Button>}
           <span className="muted small">Súbory aj obrázky môžeš pretiahnuť sem alebo vložiť cez Ctrl+V.</span>
         </div>
+        {briefcase && (
+          <BriefcasePicker
+            accountId={accountId}
+            onPick={(f) => setFiles((x) => [...x, f])}
+            onClose={() => setBriefcase(false)}
+          />
+        )}
         {attachWarn && (
           <div className="attach-warn">
             V texte spomínate prílohu, ale žiadna nie je priložená.

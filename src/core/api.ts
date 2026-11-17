@@ -1,5 +1,5 @@
 // Zmluva medzi rendererom a hlavným procesom (cez preload). Len typy.
-import type { RuleAction } from './settings';
+import type { RuleAction, Task } from './settings';
 import type { CalEvent, Contact } from './ical';
 import type { AccountConfig, AccountPublic, AnyAccount, ServerConfig } from './account';
 import type { AppSettings, LauncherItem } from './settings';
@@ -168,6 +168,30 @@ export interface MailApi {
   composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
   updateCheck(): Promise<Result<boolean>>;
+  zimbraCheck(accountId: string): Promise<Result<boolean>>;
+  zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
+  zimbraGalAuto(accountId: string, q: string): Promise<Result<GalEntry[]>>;
+  zimbraFreeBusy(accountId: string, emails: string[], from: number, to: number): Promise<Result<FreeBusy[]>>;
+  zimbraResources(accountId: string): Promise<Result<ZResource[]>>;
+  zimbraShares(accountId: string): Promise<Result<ZShare[]>>;
+  zimbraMount(accountId: string, share: ZShare, name: string): Promise<Result<true>>;
+  zimbraGetOoo(accountId: string): Promise<Result<ServerOoo>>;
+  zimbraSetOoo(accountId: string, o: ServerOoo): Promise<Result<true>>;
+  zimbraGetFilters(accountId: string): Promise<Result<ServerRule[]>>;
+  zimbraSetFilters(accountId: string, rules: ServerRule[]): Promise<Result<true>>;
+  zimbraSignatures(accountId: string): Promise<Result<Array<{ id: string; name: string; html?: string; text?: string }>>>;
+  zimbraSaveSignature(accountId: string, s: { id?: string; name: string; html: string; text: string }): Promise<Result<string>>;
+  zimbraIdentities(accountId: string): Promise<Result<Array<{ name: string; email: string; signatureId?: string }>>>;
+  zimbraTags(accountId: string): Promise<Result<Array<{ id: string; name: string; color: string }>>>;
+  zimbraBriefcase(accountId: string, q: string): Promise<Result<BriefcaseDoc[]>>;
+  zimbraDownload(accountId: string, d: BriefcaseDoc): Promise<Result<PickedFile>>;
+  zimbraQuota(accountId: string): Promise<Result<{ used: number; limit: number } | null>>;
+  zimbraChangePassword(accountId: string, oldPass: string, newPass: string): Promise<Result<true>>;
+  zimbraGetWB(accountId: string): Promise<Result<{ white: string[]; black: string[] }>>;
+  zimbraSetWB(accountId: string, white: string[], black: string[]): Promise<Result<true>>;
+  zimbraBlock(accountId: string, email: string): Promise<Result<true>>;
+  tasksSync(tasks: Task[]): Promise<Result<{ tasks: Task[]; accounts: number }>>;
+  tasksDelete(task: Task): Promise<Result<true>>;
   cryptoSummary(): Promise<Result<CryptoSummary>>;
   pgpGenerate(name: string, email: string, pass: string): Promise<Result<string>>;
   cryptoPick(kind: 'pgp' | 'p12' | 'cert'): Promise<Result<string>>;
@@ -274,3 +298,19 @@ export interface CryptoSummary {
   smimeOwn: CertSummary[];
   smimeContacts: CertSummary[];
 }
+
+export interface GalEntry { name: string; email: string; company?: string; title?: string; department?: string; phone?: string; mobile?: string; type?: 'account' | 'resource' | 'group' }
+export interface FreeBusy { email: string; slots: Array<{ s: number; e: number; kind: 'b' | 't' | 'u' | 'n' }> }
+export interface ZResource { name: string; email: string; kind: 'Location' | 'Equipment'; capacity?: number; location?: string; description?: string }
+export interface ZShare { ownerEmail: string; ownerName?: string; ownerId: string; folderId: string; folderPath: string; view: string; rights: string; mounted: boolean }
+export interface ServerOoo { enabled: boolean; reply: string; from?: string; until?: string; external?: string; externalEnabled?: boolean }
+export interface ServerRule {
+  name: string;
+  active: boolean;
+  match: 'all' | 'any';
+  conds: Array<{ field: 'from' | 'to' | 'subject' | 'any'; contains: string }>;
+  actions: Array<{ type: 'move' | 'read' | 'flag' | 'tag' | 'delete' | 'stop'; folder?: string; tag?: string }>;
+  readOnly?: boolean;
+  raw?: unknown;
+}
+export interface BriefcaseDoc { id: string; name: string; size: number; contentType: string; modified: string; folder: string }

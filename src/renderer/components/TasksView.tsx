@@ -1,6 +1,6 @@
 // Úlohy: vlastné aj zo správ (vlajka s termínom). Skupiny Po termíne / Dnes / Zajtra / Neskôr / Bez termínu / Hotové.
 import { Button, Checkbox, Input } from '@fluentui/react-components';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, Task } from '../../core/settings';
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -25,7 +25,36 @@ export function TasksView(props: {
   const [due, setDue] = useState('');
   const [showDone, setShowDone] = useState(false);
   const save = (list: Task[]) => props.onSettings({ ...props.settings, tasks: list });
-  const patch = (id: string, p: Partial<Task>) => save(tasks.map((t) => (t.id === id ? { ...t, ...p } : t)));
+  const patch = (id: string, p: Partial<Task>) => save(tasks.map((t) => (t.id === id ? { ...t, ...p, dirty: true } : t)));
+  const [sync, setSync] = useState<string>('');
+
+  // synchronizácia so serverom (Úlohy v Zimbre / CalDAV): pri otvorení a 3 s po zmene
+  const latest = useRef(props.settings);
+  latest.current = props.settings;
+  const running = useRef(false);
+  const runSync = async () => {
+    const api = window.mailApi;
+    if (!api || running.current) return;
+    running.current = true;
+    setSync('Synchronizujem úlohy…');
+    const before = latest.current.tasks ?? [];
+    const r = await api.tasksSync(before);
+    running.current = false;
+    if (!r.ok) return setSync(`Synchronizácia zlyhala: ${r.error}`);
+    if (!r.data.accounts) return setSync('');
+    // ak sa medzitým niečo zmenilo, synchronizovať znova neskôr
+    if (latest.current.tasks !== before) return setSync('');
+    if (JSON.stringify(r.data.tasks) !== JSON.stringify(before)) props.onSettings({ ...latest.current, tasks: r.data.tasks });
+    setSync(`Synchronizované so serverom ${new Date().toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`);
+  };
+  useEffect(() => {
+    void runSync();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!tasks.some((t) => t.dirty || !t.remote)) return;
+    const t = window.setTimeout(() => void runSync(), 3000);
+    return () => window.clearTimeout(t);
+  }, [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups = useMemo(() => {
     const t = todayIso();
@@ -63,7 +92,10 @@ export function TasksView(props: {
           )}
         </div>
       </div>
-      <Button size="small" appearance="subtle" aria-label="Odstrániť úlohu" onClick={() => save(tasks.filter((x) => x.id !== t.id))}>×</Button>
+      <Button size="small" appearance="subtle" aria-label="Odstrániť úlohu" onClick={() => {
+        if (t.remote) void window.mailApi?.tasksDelete(t);
+        save(tasks.filter((x) => x.id !== t.id));
+      }}>×</Button>
     </div>
   );
 
@@ -74,6 +106,7 @@ export function TasksView(props: {
         <input type="date" className="date-input" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Termín" />
         <Button appearance="primary" onClick={add}>Pridať</Button>
       </div>
+      {sync && <div className="muted small pad">{sync}</div>}
       <div className="tasks-list">
         {groups.map((g) =>
           g.list.length ? (

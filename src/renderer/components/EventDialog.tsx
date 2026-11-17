@@ -1,10 +1,11 @@
 // Nová / upravená udalosť kalendára: čas, celodenná, miesto, účastníci (pozvánky e-mailom), opakovanie, popis.
 import {
-  Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Textarea,
+  Button, Checkbox, Spinner, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Textarea,
 } from '@fluentui/react-components';
-import { useState } from 'react';
-import type { DavCollection } from '../../core/api';
-import type { CalEvent } from '../../core/ical';
+import { useEffect, useState } from 'react';
+import type { DavCollection, FreeBusy, ZResource } from '../../core/api';
+import type { ImapAccountPublic } from '../../core/account';
+import type { CalAttendee, CalEvent } from '../../core/ical';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const toLocalInput = (iso: string) => {
@@ -22,9 +23,67 @@ const REPEAT: Array<{ v: string; label: string }> = [
   { v: 'FREQ=YEARLY', label: 'Každý rok' },
 ];
 
+/** Asistent plánovania: obsadenosť účastníkov a zasadačiek v deň udalosti (Zimbra). */
+function Scheduler(props: { accountId: string; me: string; emails: string[]; start: string; end: string; onPick: (start: Date) => void }) {
+  const api = window.mailApi!;
+  const day = new Date(props.start);
+  const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 7).getTime();
+  const to = from + 12 * 3600_000;
+  const [fb, setFb] = useState<FreeBusy[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const key = [props.me, ...props.emails].join(',');
+  useEffect(() => {
+    let alive = true;
+    setFb(null);
+    void api.zimbraFreeBusy(props.accountId, [props.me, ...props.emails], from, to).then((r) => {
+      if (!alive) return;
+      if (r.ok) setFb(r.data);
+      else setErr(r.error);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [key, from]); // eslint-disable-line react-hooks/exhaustive-deps
+  const len = Date.parse(props.end) - Date.parse(props.start);
+  const busyAt = (t: number) => (fb ?? []).some((u) => u.slots.some((x) => x.kind !== 'n' && x.s < t + len && x.e > t));
+  const firstFree = () => {
+    for (let t = Math.max(from, Math.ceil(Date.now() / 1800000) * 1800000); t + len <= to; t += 1800000) if (!busyAt(t)) return t;
+    return null;
+  };
+  const pct = (t: number) => `${((t - from) / (to - from)) * 100}%`;
+  const evS = Date.parse(props.start);
+  return (
+    <div className="sched">
+      <div className="sched-head">
+        <b>Asistent plánovania</b>
+        <span className="muted small">{day.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'numeric' })}, 7:00–19:00</span>
+        <span className="grow" />
+        <Button size="small" disabled={!fb} onClick={() => { const t = firstFree(); if (t) props.onPick(new Date(t)); }}>Nájsť voľný čas</Button>
+      </div>
+      {err && <div className="muted small">⚠ {err}</div>}
+      {!fb && !err && <Spinner size="extra-tiny" />}
+      <div className="sched-hours">{Array.from({ length: 12 }, (_, i) => <span key={i}>{7 + i}</span>)}</div>
+      {fb?.map((u) => (
+        <div key={u.email} className="sched-row">
+          <span className="sched-name" title={u.email}>{u.email === props.me ? 'Ja' : u.email}</span>
+          <div className="sched-bar">
+            {u.slots.filter((x) => x.e > from && x.s < to).map((x, i) => (
+              <span key={i} className={`sched-slot ${x.kind}`} style={{ left: pct(Math.max(x.s, from)), width: `calc(${pct(Math.min(x.e, to))} - ${pct(Math.max(x.s, from))})` }} />
+            ))}
+            {evS >= from && evS < to && <span className="sched-event" style={{ left: pct(evS), width: `calc(${pct(Math.min(evS + len, to))} - ${pct(evS)})` }} />}
+          </div>
+        </div>
+      ))}
+      <div className="muted small">Tmavé = obsadený, šrafované = predbežne, fialové = mimo kancelárie.</div>
+    </div>
+  );
+}
+
 export function EventDialog(props: {
   event: CalEvent;
   calendars: DavCollection[];
+  account?: ImapAccountPublic;
+  zimbra?: boolean;
   onSave: (e: CalEvent, calendarId: string, invite: boolean) => Promise<string | null>;
   onDelete?: (e: CalEvent, notify: boolean) => Promise<string | null>;
   onClose: () => void;
@@ -32,15 +91,22 @@ export function EventDialog(props: {
   const writable = props.calendars.filter((c) => !c.readOnly && c.events !== false);
   const [e, setE] = useState<CalEvent>(props.event);
   const [calId, setCalId] = useState(props.event.calendarId ?? writable[0]?.id ?? '');
-  const [people, setPeople] = useState((props.event.attendees ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', '));
+  const [people, setPeople] = useState((props.event.attendees ?? []).filter((a) => a.cutype !== 'ROOM' && a.cutype !== 'RESOURCE').map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', '));
   const [invite, setInvite] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [rooms, setRooms] = useState<ZResource[]>([]);
+  const [showSched, setShowSched] = useState(false);
+  const [roomList, setRoomList] = useState<CalAttendee[]>((props.event.attendees ?? []).filter((a) => a.cutype === 'ROOM' || a.cutype === 'RESOURCE'));
+  useEffect(() => {
+    if (!props.zimbra || !props.account) return;
+    void window.mailApi?.zimbraResources(props.account.id).then((r) => r.ok && setRooms(r.data));
+  }, [props.zimbra, props.account]);
   const [error, setError] = useState<string | null>(null);
   const isNew = !props.event.href;
   const repeatKnown = REPEAT.some((r) => r.v === (e.rrule ?? '').replace(/;?(COUNT|UNTIL)=[^;]+/g, ''));
 
-  const attendees = () =>
-    people
+  const attendees = (): CalAttendee[] => [
+    ...people
       .split(/[,;\n]+/)
       .map((x) => x.trim())
       .filter(Boolean)
@@ -50,7 +116,9 @@ export function EventDialog(props: {
         const prev = props.event.attendees?.find((a) => a.email.toLowerCase() === email.toLowerCase());
         return { email, name: m ? m[1]!.replace(/^"|"$/g, '').trim() || undefined : undefined, partstat: prev?.partstat ?? 'NEEDS-ACTION' };
       })
-      .filter((a) => a.email.includes('@'));
+      .filter((a) => a.email.includes('@')),
+    ...roomList,
+  ];
 
   async function save() {
     if (!e.summary.trim()) return setError('Zadaj názov udalosti.');
@@ -139,6 +207,52 @@ export function EventDialog(props: {
                   </span>
                 ))}
               </div>
+            )}
+            {props.zimbra && props.account && (
+              <>
+                {rooms.length > 0 && (
+                  <div className="row gap">
+                    <Select
+                      size="small"
+                      value=""
+                      onChange={(_, d) => {
+                        const r = rooms.find((x) => x.email === d.value);
+                        if (!r || roomList.some((x) => x.email === r.email)) return;
+                        setRoomList([...roomList, { email: r.email, name: r.name, cutype: r.kind === 'Location' ? 'ROOM' : 'RESOURCE', partstat: 'NEEDS-ACTION', role: 'NON-PARTICIPANT' }]);
+                        if (r.kind === 'Location' && !e.location) setE({ ...e, location: r.location || r.name });
+                      }}
+                      aria-label="Pridať zasadačku alebo zariadenie"
+                    >
+                      <option value="">+ Zasadačka / zariadenie…</option>
+                      {rooms.map((r) => (
+                        <option key={r.email} value={r.email}>{r.name}{r.capacity ? ` (${r.capacity} miest)` : ''}{r.kind === 'Equipment' ? ' – zariadenie' : ''}</option>
+                      ))}
+                    </Select>
+                    {roomList.map((r) => (
+                      <span key={r.email} className="att">
+                        {r.name || r.email}{' '}
+                        <button className="cat-x" aria-label="Odobrať" onClick={() => setRoomList(roomList.filter((x) => x.email !== r.email))}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {!e.allDay && (attendees().length > 0) && (
+                  <Button size="small" appearance="subtle" onClick={() => setShowSched(!showSched)}>{showSched ? 'Skryť asistenta plánovania' : 'Asistent plánovania (kedy majú všetci čas)'}</Button>
+                )}
+                {showSched && !e.allDay && (
+                  <Scheduler
+                    accountId={props.account.id}
+                    me={props.account.email}
+                    emails={attendees().map((a) => a.email)}
+                    start={e.start}
+                    end={e.end}
+                    onPick={(d) => {
+                      const len = Date.parse(e.end) - Date.parse(e.start);
+                      setE({ ...e, start: d.toISOString(), end: new Date(d.getTime() + len).toISOString() });
+                    }}
+                  />
+                )}
+              </>
             )}
             {people.trim() && <Checkbox label="Poslať účastníkom pozvánku e-mailom" checked={invite} onChange={(_, d) => setInvite(!!d.checked)} />}
             <Field label="Popis">

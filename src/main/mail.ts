@@ -772,3 +772,12 @@ export async function unreadCount(acc: AccountConfig): Promise<number> {
     return Number(st?.unseen ?? 0);
   });
 }
+
+/** Obsadenosť schránky cez IMAP QUOTA (ak ju server podporuje). */
+export async function imapQuota(acc: AccountConfig): Promise<{ used: number; limit: number } | null> {
+  return withImap(acc, async (c) => {
+    const q = await c.getQuota('INBOX').catch((): null => null);
+    if (!q?.storage) return null;
+    return { used: Number(q.storage.used ?? q.storage.usage ?? 0), limit: Number(q.storage.limit ?? 0) };
+  });
+}
