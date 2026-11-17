@@ -190,3 +190,15 @@ body { overflow: hidden; }
 .swatch.on { border-color: var(--colorNeutralForeground1); }
 .log { font-family: monospace; }
 .compose-text textarea { min-height: 220px; }
+
+/* podpisy */
+.sig-dialog { max-width: 1040px; width: 94vw; }
+.sig-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: 16px; min-height: 420px; max-height: 70vh; }
+.sig-list { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; overflow: auto; display: flex; flex-direction: column; padding: 4px 0; }
+.sig-list-actions { margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.sig-edit { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sig-text textarea { min-height: 220px; font-family: inherit; }
+.sig-defaults { display: flex; flex-direction: column; gap: 12px; overflow: auto; padding-left: 12px; border-left: 1px solid var(--colorNeutralStroke2); }
+.sig-defaults-title { font-weight: 600; }
+.sig-acc { display: flex; flex-direction: column; gap: 4px; }
+.gap0 { gap: 6px; align-items: center; }

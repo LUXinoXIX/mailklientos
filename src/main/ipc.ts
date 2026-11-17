@@ -103,6 +103,7 @@ export function registerIpc() {
   // nastavenia a spúšťače
   handle('settings:get', () => settings.loadSettings());
   handle('settings:save', (s: AppSettings) => settings.saveSettings(s));
+  handle('signatures:outlook', () => settings.outlookSignatures());
   handle('launcher:pick', () => settings.pickProgram(winOf()));
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
   handle('launcher:icon', (target: string) => settings.programIcon(target));

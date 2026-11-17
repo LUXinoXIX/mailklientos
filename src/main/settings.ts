@@ -14,6 +14,8 @@ export function loadSettings(): AppSettings {
     return {
       webs: Array.isArray(s.webs) ? s.webs : DEFAULT_SETTINGS.webs,
       launchers: Array.isArray(s.launchers) ? s.launchers : DEFAULT_SETTINGS.launchers,
+      signatures: Array.isArray(s.signatures) ? s.signatures : [],
+      signatureDefaults: s.signatureDefaults && typeof s.signatureDefaults === 'object' ? s.signatureDefaults : {},
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);
@@ -82,5 +84,25 @@ export async function programIcon(target: string): Promise<string | null> {
     return img.isEmpty() ? null : img.toDataURL();
   } catch {
     return null;
+  }
+}
+
+/** Podpisy klasického Outlooku na tomto počítači (%APPDATA%\\Microsoft\\Signatures\\*.txt). */
+export function outlookSignatures(): Array<{ name: string; text: string }> {
+  if (process.platform !== 'win32' || !process.env.APPDATA) return [];
+  const dir = path.join(process.env.APPDATA, 'Microsoft', 'Signatures');
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.txt'))
+      .map((f) => {
+        const buf = fs.readFileSync(path.join(dir, f));
+        // Outlook ukladá .txt ako UTF-16 LE s BOM alebo v kódovaní Windows; UTF-8 ako záloha.
+        const text = buf[0] === 0xff && buf[1] === 0xfe ? buf.subarray(2).toString('utf16le') : buf.toString('utf8');
+        return { name: f.replace(/\.txt$/i, ''), text: text.replace(/\r\n/g, '\n').trim() };
+      })
+      .filter((x) => x.text);
+  } catch {
+    return [];
   }
 }

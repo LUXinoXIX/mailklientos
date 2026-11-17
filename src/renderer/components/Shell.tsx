@@ -6,7 +6,7 @@ import {
 import type { ReactNode } from 'react';
 import type { FolderInfo } from '../../core/api';
 import {
-  ArchiveIcon, CalendarIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
+  ArchiveIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
   TasksIcon, TeamsIcon, WordIcon,
 } from '../icons';
@@ -70,6 +70,7 @@ export function Ribbon(props: {
   onToggleFlag: () => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
+  onSignatures: () => void;
   theme: ThemeKey;
   onTheme: (t: ThemeKey) => void;
   rightOpen: boolean;
@@ -119,6 +120,7 @@ export function Ribbon(props: {
             </ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
+            <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
             {p.onEditAccount && (
               <ToolbarButton icon={<SettingsIcon />} onClick={p.onEditAccount}>Nastavenia konta</ToolbarButton>
             )}

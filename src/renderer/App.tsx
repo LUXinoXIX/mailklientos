@@ -11,6 +11,7 @@ import {
   M365View, MODULE_TITLES, baseKey, initialTabs, moduleUrl, tabTitle, type TabsState,
 } from './components/M365View';
 import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
+import { SignaturesDialog } from './components/SignaturesDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel } from './components/RightPanel';
 import {
@@ -50,7 +51,8 @@ type Dialogs =
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
   | { kind: 'm365'; edit?: M365Account }
-  | { kind: 'compose'; init: ComposeInit };
+  | { kind: 'compose'; init: ComposeInit }
+  | { kind: 'signatures' };
 
 const quote = (m: MessageFull) =>
   `\n\n${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}, ${m.fromName || m.fromAddress} napísal(a):\n${m.text
@@ -64,11 +66,14 @@ const splitAddrs = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
+/** Dymový test v CI: pravý panel otvorený, aby bolo vidieť aj vložené weby. */
+const SMOKE = new URLSearchParams(window.location.search).get('smoke') === '1';
+
 export function App() {
   const api = window.mailApi;
   const [theme, setTheme] = usePersisted<ThemeKey>('theme', 'blue');
   const [compact, setCompact] = usePersisted('ribbonCompact', false);
-  const [rightOpen, setRightOpen] = usePersisted('rightOpen', false);
+  const [rightOpen, setRightOpen] = usePersisted('rightOpen', SMOKE);
   const [rightActive, setRightActive] = usePersisted('rightActive', 'copilot');
   const [activeId, setActiveId] = usePersisted<string>('activeAccount', '');
   const [ribbonTab, setRibbonTab] = useState<RibbonTab>('home');
@@ -326,7 +331,7 @@ export function App() {
   function compose(kind: 'new' | 'reply' | 'replyAll' | 'forward') {
     const m = full.msg;
     const accountId = m && m.accountId !== DEMO_ID ? m.accountId : activeImap && activeImap.id !== DEMO_ID ? activeImap.id : undefined;
-    if (kind === 'new' || !m) return openDialog({ kind: 'compose', init: { accountId } });
+    if (kind === 'new' || !m) return openDialog({ kind: 'compose', init: { accountId, kind: 'new' } });
     const me = (imapAccounts.find((a) => a.id === m.accountId)?.email ?? '').toLowerCase();
     if (kind === 'forward')
       return openDialog({
@@ -334,6 +339,7 @@ export function App() {
         init: {
           accountId,
           title: 'Preposlať',
+          kind: 'reply',
           subject: /^(fw|fwd):/i.test(m.subject) ? m.subject : `Fwd: ${m.subject}`,
           text: `\n\n---------- Preposlaná správa ----------\nOd: ${m.fromName} <${m.fromAddress}>\nDátum: ${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}\nPredmet: ${m.subject}\nKomu: ${m.to}\n\n${m.text}`,
         },
@@ -347,6 +353,7 @@ export function App() {
       init: {
         accountId,
         title: kind === 'replyAll' ? 'Odpovedať všetkým' : 'Odpovedať',
+        kind: 'reply',
         to: m.fromAddress,
         cc,
         subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`,
@@ -461,6 +468,7 @@ export function App() {
               onToggleFlag={() => void toggleFlag()}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
+              onSignatures={() => openDialog({ kind: 'signatures' })}
               theme={theme}
               onTheme={setTheme}
               rightOpen={rightOpen}
@@ -565,6 +573,18 @@ export function App() {
         </div>
       </div>
 
+      {dialog.kind === 'signatures' && (
+        <SignaturesDialog
+          settings={settings}
+          accounts={accounts.filter(isImap)}
+          onClose={closeDialog}
+          onSave={(s) => {
+            saveSettings(s);
+            closeDialog();
+            setStatus('Podpisy uložené.');
+          }}
+        />
+      )}
       {dialog.kind === 'chooser' && (
         <AddAccountChooser
           onClose={closeDialog}
@@ -618,6 +638,7 @@ export function App() {
           open
           init={dialog.init}
           accounts={accounts.filter(isImap)}
+          settings={settings}
           onClose={closeDialog}
           onSent={(info) => {
             closeDialog();

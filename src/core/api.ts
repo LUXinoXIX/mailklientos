@@ -114,6 +114,8 @@ export interface MailApi {
   // nastavenia a spúšťače
   getSettings(): Promise<Result<AppSettings>>;
   saveSettings(s: AppSettings): Promise<Result<AppSettings>>;
+  /** Podpisy klasického Outlooku na tomto počítači (len Windows). */
+  outlookSignatures(): Promise<Result<Array<{ name: string; text: string }>>>;
   pickProgram(): Promise<Result<{ target: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
