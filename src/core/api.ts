@@ -1,4 +1,5 @@
 // Zmluva medzi rendererom a hlavným procesom (cez preload). Len typy.
+import type { RuleAction } from './settings';
 import type { AccountConfig, AccountPublic, AnyAccount, ServerConfig } from './account';
 import type { AppSettings, LauncherItem } from './settings';
 import type { Protocol, ProbeResult } from './tls-types';
@@ -124,6 +125,13 @@ export interface MailApi {
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
+  setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
+  /** správy toho istého vlákna z cache (všetky priečinky konta) */
+  thread(accountId: string, messageId: string): Promise<Result<MessageSummary[]>>;
+  runActions(accountId: string, folder: string, uids: number[], actions: RuleAction[]): Promise<Result<true>>;
+  snooze(accountId: string, folder: string, uid: number, messageId: string, subject: string, until: string): Promise<Result<true>>;
+  /** spustí pravidlá na uložené správy priečinka; vráti počet zasiahnutých */
+  runRules(accountId: string, folder: string): Promise<Result<number>>;
   /** fulltext v lokálnej cache */
   searchLocal(q: string, accountId?: string, folder?: string): Promise<Result<MessageSummary[]>>;
   /** hľadanie na serveri (IMAP SEARCH) */

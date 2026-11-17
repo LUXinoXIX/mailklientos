@@ -278,3 +278,43 @@ body { overflow: hidden; }
 .composer-body p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #8a8a8a; float: left; height: 0; pointer-events: none; }
 .composer-files { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--colorNeutralStroke3); }
 .composer-foot { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--colorNeutralStroke3); }
+
+/* konverzácie, kategórie, pripnutie */
+.msg-icons { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.msg-icons .pin { color: var(--colorBrandForeground1); width: 14px; height: 14px; }
+.thread-toggle { display: inline-block; width: 14px; margin-right: 2px; color: var(--colorNeutralForeground3); }
+.thread-count { margin-left: 6px; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 8px; background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); }
+.msg-child { padding-left: 54px; background: var(--colorNeutralBackground2); }
+.msg-cats, .read-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.read-cats { padding: 0 20px 8px; }
+.cat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
+.cat-x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0; font-size: 13px; line-height: 1; }
+.cat-dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.thread-box { margin: 0 20px 8px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.thread-box summary { cursor: pointer; padding: 6px 10px; font-weight: 600; font-size: 13px; }
+.thread-item { display: flex; gap: 10px; width: 100%; border: 0; border-top: 1px solid var(--colorNeutralStroke3); background: none; padding: 6px 10px; font: inherit; font-size: 13px; text-align: left; cursor: pointer; color: inherit; }
+.thread-item:hover:not(:disabled) { background: var(--colorNeutralBackground1Hover); }
+.thread-item.current { font-weight: 600; cursor: default; }
+.list-extra { display: inline-flex; gap: 10px; }
+
+/* priečinky: ťahanie správ, uložené hľadania */
+.folder.drop-over { background: var(--colorBrandBackground2); outline: 2px dashed var(--colorBrandStroke1); outline-offset: -2px; }
+.folder-section { margin: 12px 14px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--colorNeutralForeground3); }
+.saved-search { display: flex; align-items: center; }
+.saved-search .folder { flex: 1; min-width: 0; }
+.saved-search-x { border: 0; background: none; color: var(--colorNeutralForeground3); cursor: pointer; padding: 0 10px; font-size: 16px; visibility: hidden; }
+.saved-search:hover .saved-search-x { visibility: visible; }
+
+/* organizácia: pravidlá, rýchle kroky, kategórie */
+.org-list { display: flex; flex-direction: column; gap: 10px; }
+.org-card { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.org-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.org-row .grow { flex: 1; min-width: 160px; }
+.org-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.org-indent { padding-left: 24px; }
+.org-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.swatch-row { display: flex; gap: 4px; }
+.swatch-row .swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; padding: 0; }
+.swatch-row .swatch.on { outline: 2px solid var(--colorNeutralForeground1); outline-offset: 1px; }
+.snooze-custom { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--colorNeutralStroke3); margin-top: 4px; }
+.snooze-custom input { font: inherit; font-size: 13px; padding: 3px 4px; }

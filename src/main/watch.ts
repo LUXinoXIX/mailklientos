@@ -6,6 +6,7 @@ import * as store from './accounts';
 import { log } from './diagnostics';
 import { closeClient, connectWatcher } from './mail';
 import { loadSettings } from './settings';
+import { runRules } from './actions';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -64,17 +65,26 @@ async function fetchNew(w: Watch, acc: AccountConfig) {
   const c = w.client;
   if (!c) return;
   const items: Array<{ uid: number; from: string; subject: string }> = [];
+  const forRules: Array<{ uid: number; from: string; to: string; subject: string }> = [];
   const lock = await c.getMailboxLock('INBOX');
   try {
     for await (const m of c.fetch(`${w.lastUid + 1}:*`, { uid: true, envelope: true, flags: true }, { uid: true })) {
       if (m.uid <= w.lastUid) continue;
       w.lastUid = Math.max(w.lastUid, m.uid);
-      if (m.flags?.has('\\Seen')) continue;
       const f = m.envelope?.from?.[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const to = [...(m.envelope?.to ?? []), ...(m.envelope?.cc ?? [])].map((x: any) => `${x.name ?? ''} ${x.address ?? ''}`).join(' ');
+      forRules.push({ uid: m.uid, from: `${f?.name ?? ''} ${f?.address ?? ''}`, to, subject: m.envelope?.subject ?? '' });
+      if (m.flags?.has('\\Seen')) continue;
       items.push({ uid: m.uid, from: f?.name || f?.address || '', subject: m.envelope?.subject ?? '' });
     }
   } finally {
     lock.release();
+  }
+  const rules = loadSettings().rules ?? [];
+  if (forRules.length && rules.length) {
+    const hits = await runRules(acc, 'INBOX', rules, forRules).catch(() => 0);
+    if (hits) log(`pravidlá: použité na ${hits} nových správ (${acc.name})`);
   }
   send({ type: 'mail-changed', accountId: acc.id, folder: 'INBOX', newCount: items.length });
   if (items.length) notify(acc, items);

@@ -4,7 +4,8 @@ import DOMPurify from 'dompurify';
 import { useMemo, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary } from '../../core/api';
-import { AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
+import { PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -36,8 +37,47 @@ export function FolderPane(props: {
   unread: Record<string, number>;
   selection: Selection;
   onSelect: (s: Selection) => void;
+  onDropMessages?: (destFolder: string, d: DragMessages) => void;
+  savedSearches?: SavedSearch[];
+  activeSearch?: string;
+  onSavedSearch?: (s: SavedSearch) => void;
+  onRemoveSearch?: (s: SavedSearch) => void;
 }) {
   const a = props.account;
+  const [over, setOver] = useState<string | null>(null);
+  const searches = (props.savedSearches ?? []).filter((x) => !x.accountId || !a || x.accountId === a.id);
+  const searchList = searches.length > 0 && (
+    <>
+      <div className="folder-section">Uložené hľadania</div>
+      {searches.map((x) => (
+        <div key={x.id} className="saved-search">
+          <button className={`folder ${props.activeSearch === x.query ? 'active' : ''}`} onClick={() => props.onSavedSearch?.(x)} title={x.query}>
+            <SearchSmallIcon /> <span className="grow">{x.name}</span>
+          </button>
+          <button className="saved-search-x" aria-label={`Odstrániť hľadanie ${x.name}`} title="Odstrániť" onClick={() => props.onRemoveSearch?.(x)}>×</button>
+        </div>
+      ))}
+    </>
+  );
+  const dropProps = (accountId: string, path: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes('application/x-mailklient')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setOver(`${accountId}|${path}`);
+    },
+    onDragLeave: () => setOver((o) => (o === `${accountId}|${path}` ? null : o)),
+    onDrop: (e: React.DragEvent) => {
+      setOver(null);
+      try {
+        const d = JSON.parse(e.dataTransfer.getData('application/x-mailklient')) as DragMessages;
+        e.preventDefault();
+        if (d.accountId === accountId && d.folder !== path) props.onDropMessages?.(path, d);
+      } catch {
+        /* nič */
+      }
+    },
+  });
   if (!a)
     return (
       <aside className="accounts">
@@ -54,6 +94,7 @@ export function FolderPane(props: {
             {(props.unread[x.id] ?? 0) > 0 && <span className="count">{props.unread[x.id]}</span>}
           </button>
         ))}
+        {searchList}
       </aside>
     );
   const f = props.folders[a.id];
@@ -71,8 +112,9 @@ export function FolderPane(props: {
         f.map((fo) => (
           <button
             key={fo.path}
-            className={`folder ${props.selection.accountId === a.id && props.selection.folder === fo.path ? 'active' : ''}`}
+            className={`folder ${props.selection.accountId === a.id && props.selection.folder === fo.path ? 'active' : ''} ${over === `${a.id}|${fo.path}` ? 'drop-over' : ''}`}
             style={{ paddingLeft: 14 + fo.depth * 14 }}
+            {...dropProps(a.id, fo.path)}
             onClick={() => props.onSelect({ accountId: a.id, folder: fo.path })}
           >
             {folderIcon(fo)} <span className="grow">{fo.name}</span>
@@ -80,6 +122,7 @@ export function FolderPane(props: {
           </button>
         ))
       )}
+      {searchList}
     </aside>
   );
 }
@@ -92,6 +135,45 @@ function fmtDate(iso: string | null) {
   return d.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : '2-digit' });
 }
 
+const normSubject = (s: string) => s.replace(/^((re|fw|fwd|pd|odp|aw|wg)\s*(\[\d+\])?\s*:\s*)+/i, '').trim().toLowerCase();
+
+/** Zoskupenie do konverzácií: Message-ID / In-Reply-To, inak rovnaký predmet bez RE:/PD: v rámci konta. */
+export function groupThreads(list: MessageSummary[]): MessageSummary[][] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) && parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  const key = (m: MessageSummary) => `${m.accountId}|${m.folder}|${m.uid}`;
+  for (const m of list) {
+    const k = key(m);
+    if (!parent.has(k)) parent.set(k, k);
+    if (m.messageId) union(k, `id:${m.accountId}:${m.messageId}`);
+    if (m.inReplyTo) union(k, `id:${m.accountId}:${m.inReplyTo}`);
+    const ns = normSubject(m.subject);
+    if (ns.length > 3) union(k, `subj:${m.accountId}:${ns}`);
+  }
+  const groups = new Map<string, MessageSummary[]>();
+  for (const m of list) {
+    const r = find(key(m));
+    groups.set(r, [...(groups.get(r) ?? []), m]);
+  }
+  return [...groups.values()];
+}
+
+export interface DragMessages {
+  accountId: string;
+  folder: string;
+  uids: number[];
+}
+
 export function MessageList(props: {
   title: string;
   messages: MessageSummary[];
@@ -102,9 +184,81 @@ export function MessageList(props: {
   onOpen: (m: MessageSummary) => void;
   onDeleteKey?: () => void;
   headerExtra?: React.ReactNode;
+  categories?: Category[];
+  conversations?: boolean;
 }) {
   const [tab, setTab] = useState<'all' | 'unread'>('all');
-  const list = tab === 'unread' ? props.messages.filter((m) => !m.seen) : props.messages;
+  const [open, setOpen] = useState<string | null>(null);
+  const base = tab === 'unread' ? props.messages.filter((m) => !m.seen) : props.messages;
+  const isPinned = (m: MessageSummary) => !!m.keywords?.includes(PIN_KEYWORD);
+  // pripnuté hore, potom podľa dátumu
+  const groups = useMemo(() => {
+    const g = props.conversations ? groupThreads(base) : base.map((m) => [m]);
+    for (const x of g) x.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    return g.sort((a, b) => Number(b.some(isPinned)) - Number(a.some(isPinned)) || (b[0]!.date ?? '').localeCompare(a[0]!.date ?? ''));
+  }, [base, props.conversations]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cats = props.categories ?? [];
+  const row = (m: MessageSummary, opts: { count?: number; unreadInThread?: boolean; child?: boolean; gk?: string } = {}) => {
+    const sel = props.selected && props.selected.uid === m.uid && props.selected.accountId === m.accountId && props.selected.folder === m.folder;
+    const mc = cats.filter((c) => m.keywords?.includes(c.id));
+    const unread = opts.unreadInThread ?? !m.seen;
+    return (
+      <button
+        key={`${m.accountId}/${m.folder}/${m.uid}`}
+        className={`msg ${sel ? 'selected' : ''} ${unread ? 'unread' : ''} ${opts.child ? 'msg-child' : ''}`}
+        draggable
+        onDragStart={(e) => {
+          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid] };
+          e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onClick={() => {
+          if (opts.count && opts.count > 1 && opts.gk) setOpen((o) => (o === opts.gk ? o : opts.gk!));
+          props.onOpen(m);
+        }}
+      >
+        {!opts.child && <Avatar name={m.fromName || m.fromAddress} color={props.colorOf(m.accountId)} />}
+        <div className="msg-main">
+          <div className="msg-row">
+            <span className="msg-from">
+              {opts.count && opts.count > 1 && (
+                <span
+                  className="thread-toggle"
+                  role="button"
+                  aria-label={open === opts.gk ? 'Zbaliť konverzáciu' : 'Rozbaliť konverzáciu'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen((o) => (o === opts.gk ? null : opts.gk!));
+                  }}
+                >
+                  {open === opts.gk ? '▾' : '▸'}
+                </span>
+              )}
+              {m.fromName || m.fromAddress}
+              {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
+            </span>
+            <span className="msg-date">{fmtDate(m.date)}</span>
+          </div>
+          <div className="msg-row">
+            <span className="msg-subject">{m.subject}</span>
+            <span className="msg-icons">
+              {isPinned(m) && <PinSmallIcon className="pin" aria-label="Pripnuté" />}
+              {m.flagged && <FlagFilledIcon className="flag" />}
+            </span>
+          </div>
+          {mc.length > 0 && (
+            <div className="msg-cats">
+              {mc.map((c) => (
+                <span key={c.id} className="cat-chip" style={{ background: `${c.color}22`, color: c.color, borderColor: `${c.color}55` }}>
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </button>
+    );
+  };
   return (
     <section className="list">
       <div className="list-head">
@@ -124,28 +278,17 @@ export function MessageList(props: {
       >
         {props.loading && <div className="progress" role="progressbar" aria-label="Načítavam" />}
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
-        {props.loading && list.length === 0 && <div className="empty">Načítavam…</div>}
-        {!props.loading && !props.error && list.length === 0 && <div className="empty">Žiadne správy</div>}
-        {list.map((m) => {
-          const sel = props.selected && props.selected.uid === m.uid && props.selected.accountId === m.accountId && props.selected.folder === m.folder;
+        {props.loading && base.length === 0 && <div className="empty">Načítavam…</div>}
+        {!props.loading && !props.error && base.length === 0 && <div className="empty">Žiadne správy</div>}
+        {groups.map((g) => {
+          const head = g[0]!;
+          const gk = `${head.accountId}/${head.folder}/${head.uid}`;
+          if (g.length === 1) return row(head);
           return (
-            <button
-              key={`${m.accountId}/${m.folder}/${m.uid}`}
-              className={`msg ${sel ? 'selected' : ''} ${m.seen ? '' : 'unread'}`}
-              onClick={() => props.onOpen(m)}
-            >
-              <Avatar name={m.fromName || m.fromAddress} color={props.colorOf(m.accountId)} />
-              <div className="msg-main">
-                <div className="msg-row">
-                  <span className="msg-from">{m.fromName || m.fromAddress}</span>
-                  <span className="msg-date">{fmtDate(m.date)}</span>
-                </div>
-                <div className="msg-row">
-                  <span className="msg-subject">{m.subject}</span>
-                  {m.flagged && <FlagFilledIcon className="flag" />}
-                </div>
-              </div>
-            </button>
+            <div key={`g-${gk}`} className="thread">
+              {row(head, { count: g.length, unreadInThread: g.some((m) => !m.seen), gk })}
+              {open === gk && g.slice(1).map((m) => row(m, { child: true }))}
+            </div>
           );
         })}
       </div>
@@ -177,6 +320,10 @@ export function ReadingPane(props: {
   onReply: () => void;
   onReplyAll: () => void;
   onForward: () => void;
+  thread?: MessageSummary[];
+  onOpenThread?: (m: MessageSummary) => void;
+  categories?: Category[];
+  onRemoveCategory?: (id: string) => void;
 }) {
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
@@ -205,6 +352,36 @@ export function ReadingPane(props: {
           <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
         </div>
       </div>
+      {(() => {
+        const mc = (props.categories ?? []).filter((c) => m.keywords?.includes(c.id));
+        return mc.length ? (
+          <div className="read-cats">
+            {mc.map((c) => (
+              <span key={c.id} className="cat-chip" style={{ background: `${c.color}22`, color: c.color, borderColor: `${c.color}55` }}>
+                {c.name}
+                {props.onRemoveCategory && (
+                  <button className="cat-x" aria-label={`Odobrať kategóriu ${c.name}`} onClick={() => props.onRemoveCategory!(c.id)}>×</button>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : null;
+      })()}
+      {props.thread && props.thread.length > 1 && (
+        <details className="thread-box">
+          <summary>Konverzácia: {props.thread.length} správ</summary>
+          {props.thread.map((t) => {
+            const cur = t.uid === m.uid && t.folder === m.folder;
+            return (
+              <button key={`${t.folder}/${t.uid}`} className={`thread-item ${cur ? 'current' : ''}`} disabled={cur} onClick={() => props.onOpenThread?.(t)}>
+                <span className="grow">{t.fromName || t.fromAddress}</span>
+                <span className="muted small">{t.folder === 'INBOX' ? 'Doručená pošta' : t.folder}</span>
+                <span className="muted small">{fmtDate(t.date)}</span>
+              </button>
+            );
+          })}
+        </details>
+      )}
       {m.attachments.length > 0 && (
         <div className="attachments">
           {m.attachments.map((a, i) => (

@@ -521,6 +521,50 @@ export async function setFlags(acc: AccountConfig, folder: string, uids: number[
   });
 }
 
+/** Kľúčové slová (kategórie, pripnutie) na serveri a v cache. */
+export async function setKeywords(acc: AccountConfig, folder: string, uids: number[], add: string[], remove: string[]) {
+  if (!uids.length) return true;
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const set = uidSet(uids);
+      if (add.length) await c.messageFlagsAdd(set, add, { uid: true });
+      if (remove.length) await c.messageFlagsRemove(set, remove, { uid: true });
+      for (const uid of uids) {
+        const cur = cache.cachedSummary(acc.id, folder, uid)?.keywords ?? [];
+        cache.updateKeywords(acc.id, folder, uid, [...new Set([...cur.filter((k) => !remove.includes(k)), ...add])]);
+      }
+      return true;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Vytvorí priečinok, ak neexistuje; vráti jeho cestu. */
+export async function ensureFolder(acc: AccountConfig, name: string): Promise<string> {
+  return withImap(acc, async (c) => {
+    const list: Array<{ path: string; name: string }> = await c.list();
+    const hit = list.find((m) => m.path === name || m.name === name);
+    if (hit) return hit.path;
+    await c.mailboxCreate(name).catch((): void => undefined);
+    return name;
+  });
+}
+
+/** Nájde UID správy podľa Message-ID v priečinku (po presune sa UID mení). */
+export async function findByMessageId(acc: AccountConfig, folder: string, messageId: string): Promise<number | null> {
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const uids: number[] = (await c.search({ header: { 'message-id': messageId } }, { uid: true })) || [];
+      return uids.length ? uids[uids.length - 1]! : null;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
 async function findSpecial(c: Client, use: string, names: RegExp): Promise<string | undefined> {
   const list: Array<{ path: string; specialUse?: string }> = await c.list();
   return (list.find((m) => m.specialUse === use) ?? list.find((m) => names.test(m.path)))?.path;

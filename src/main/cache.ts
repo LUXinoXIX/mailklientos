@@ -158,6 +158,13 @@ export function cachedSummary(account: string, folder: string, uid: number): Mes
   }, null);
 }
 
+export function recipientsOf(account: string, folder: string, uid: number): string {
+  return safe((d) => {
+    const r = d.prepare('SELECT recipients FROM messages WHERE account = ? AND folder = ? AND uid = ?').get(account, folder, uid) as Row;
+    return (r?.recipients as string) ?? '';
+  }, '');
+}
+
 /** Zdrojový text správy (ak bola otvorená), pre otvorenie offline. */
 export function cachedSource(account: string, folder: string, uid: number): Buffer | null {
   return safe((d) => {

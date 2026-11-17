@@ -1,17 +1,18 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
 import {
-  Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
+  Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
 } from '@fluentui/react-components';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { THEMES, type ThemeKey } from '../theme';
-import type { Signature } from '../../core/settings';
+import type { Category, QuickStep, Signature } from '../../core/settings';
+import type { OrganizeTab } from './OrganizeDialog';
 import type { ComposerHandle, ComposerState } from './Composer';
 
 export function TopBar(props: {
@@ -51,6 +52,41 @@ export function TopBar(props: {
   );
 }
 
+/** Odložiť: rýchle voľby ako v Outlooku + vlastný dátum a čas. */
+function SnoozeMenu(props: { disabled: boolean; onSnooze: (d: Date) => void }) {
+  const [custom, setCustom] = useState('');
+  const at = (days: number, hour: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+  const laterToday = () => new Date(Date.now() + 3 * 3600_000);
+  const nextMonday = () => {
+    const d = at(1, 8);
+    while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+    return d;
+  };
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <ToolbarButton icon={<SnoozeIcon />} disabled={props.disabled}>Odložiť</ToolbarButton>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          <MenuItem onClick={() => props.onSnooze(laterToday())}>O 3 hodiny</MenuItem>
+          <MenuItem onClick={() => props.onSnooze(at(1, 8))}>Zajtra o 8:00</MenuItem>
+          <MenuItem onClick={() => props.onSnooze(nextMonday())}>Budúci pondelok o 8:00</MenuItem>
+          <div className="snooze-custom" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <input type="datetime-local" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Vlastný dátum a čas" />
+            <Button size="small" disabled={!custom} onClick={() => custom && props.onSnooze(new Date(custom))}>Odložiť</Button>
+          </div>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+}
+
 export type RibbonTab = 'home' | 'message' | 'insert' | 'view';
 
 export interface RibbonComposer {
@@ -76,6 +112,17 @@ export function Ribbon(props: {
   onMove: (dest: string) => void;
   onToggleSeen: () => void;
   onToggleFlag: () => void;
+  categories: Category[];
+  keywords: string[];
+  onCategory: (id: string, on: boolean) => void;
+  pinned: boolean;
+  onTogglePin: () => void;
+  onSnooze: (until: Date) => void;
+  quickSteps: QuickStep[];
+  onQuickStep: (q: QuickStep) => void;
+  onOrganize: (tab: OrganizeTab) => void;
+  conversations: boolean;
+  onConversations: (v: boolean) => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -169,6 +216,44 @@ export function Ribbon(props: {
             <ToolbarButton icon={<FlagIcon />} disabled={!p.hasMessage} onClick={p.onToggleFlag}>
               {p.flagged ? 'Zrušiť vlajku' : 'Vlajka'}
             </ToolbarButton>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<TagIcon />} disabled={!p.hasMessage}>Kategorizovať</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {p.categories.map((c) => {
+                    const on = p.keywords.includes(c.id);
+                    return (
+                      <MenuItem key={c.id} onClick={() => p.onCategory(c.id, !on)} icon={<span className="cat-dot" style={{ background: c.color }} />}>
+                        {on ? '✓ ' : ''}{c.name}
+                      </MenuItem>
+                    );
+                  })}
+                  <MenuItem onClick={() => p.onOrganize('categories')}>Spravovať kategórie…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            <ToolbarButton icon={<PinIcon />} disabled={!p.hasMessage} onClick={p.onTogglePin}>
+              {p.pinned ? 'Odopnúť' : 'Pripnúť'}
+            </ToolbarButton>
+            <SnoozeMenu disabled={!p.hasMessage} onSnooze={p.onSnooze} />
+            <ToolbarDivider />
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<QuickStepIcon />}>Rýchle kroky</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {p.quickSteps.map((q) => (
+                    <MenuItem key={q.id} disabled={!p.hasMessage} onClick={() => p.onQuickStep(q)}>{q.name}</MenuItem>
+                  ))}
+                  {!p.quickSteps.length && <MenuItem disabled>Zatiaľ žiadne</MenuItem>}
+                  <MenuItem onClick={() => p.onOrganize('quick')}>Spravovať rýchle kroky…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            <ToolbarButton icon={<RulesIcon />} onClick={() => p.onOrganize('rules')}>Pravidlá</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
@@ -189,6 +274,10 @@ export function Ribbon(props: {
               {p.rightOpen ? 'Skryť pravý panel' : 'Zobraziť pravý panel'}
             </ToolbarButton>
             <ToolbarButton onClick={() => p.onCompact(!p.compact)}>{p.compact ? 'Plný ribbon' : 'Kompaktný ribbon'}</ToolbarButton>
+            <ToolbarButton icon={<ConversationIcon />} onClick={() => p.onConversations(!p.conversations)} aria-pressed={p.conversations}>
+              {p.conversations ? '✓ ' : ''}Konverzácie
+            </ToolbarButton>
+            <ToolbarButton icon={<SearchSmallIcon />} onClick={() => p.onOrganize('searches')}>Uložené hľadania</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton onClick={p.onToggleGpu}>{p.gpuOff ? 'Zapnúť hardvérovú akceleráciu' : 'Vypnúť hardvérovú akceleráciu'}</ToolbarButton>
             <ToolbarButton onClick={p.onOpenLog}>Záznam chýb</ToolbarButton>

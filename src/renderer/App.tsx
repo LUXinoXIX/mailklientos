@@ -3,7 +3,7 @@ import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary } from '../core/api';
-import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
+import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
 import { Composer, type ComposeInit, type ComposeKind, type ComposerHandle, type ComposerState } from './components/Composer';
@@ -13,6 +13,7 @@ import {
 } from './components/M365View';
 import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
 import { SignaturesDialog } from './components/SignaturesDialog';
+import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel } from './components/RightPanel';
 import {
@@ -52,7 +53,8 @@ type Dialogs =
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
   | { kind: 'm365'; edit?: M365Account }
-  | { kind: 'signatures' };
+  | { kind: 'signatures' }
+  | { kind: 'organize'; tab?: OrganizeTab };
 
 const splitAddrs = (s: string) =>
   s
@@ -355,7 +357,7 @@ export function App() {
     openKey.current = ck;
     const cached = msgCache.current.get(ck);
     if (cached) {
-      setFull({ loading: false, msg: cached });
+      setFull({ loading: false, msg: { ...cached, keywords: m.keywords, answered: m.answered } });
       if (m.seen) return;
     } else setFull((f) => ({ loading: true, msg: f.msg })); // predchádzajúca správa ostáva viditeľná
     const r = cached ? ({ ok: true, data: cached } as const) : await api!.getMessage(m.accountId, m.folder, m.uid);
@@ -364,7 +366,7 @@ export function App() {
       if (msgCache.current.size > 200) msgCache.current.delete(msgCache.current.keys().next().value!);
     }
     if (openKey.current !== ck) return; // medzitým klikol na inú správu
-    setFull(r.ok ? { loading: false, msg: r.data } : { loading: false, error: `${r.error}${'hint' in r && r.hint ? ` ${r.hint}` : ''}` });
+    setFull(r.ok ? { loading: false, msg: { ...r.data, keywords: m.keywords, answered: m.answered } } : { loading: false, error: `${r.error}${'hint' in r && r.hint ? ` ${r.hint}` : ''}` });
     if (r.ok && !m.seen) {
       patchMsg(m, { seen: true });
       setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 1) - 1) }));
@@ -425,6 +427,70 @@ export function App() {
     if (!r.ok) return setStatus(r.error);
     patchMsg(m, { flagged });
   }
+
+  async function setCategory(id: string, on: boolean) {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.setKeywords(m.accountId, m.folder, [m.uid], on ? [id] : [], on ? [] : [id]);
+    if (!r.ok) return setStatus(r.error);
+    const kw = new Set(m.keywords ?? []);
+    if (on) kw.add(id);
+    else kw.delete(id);
+    patchMsg(m, { keywords: [...kw] });
+  }
+  async function togglePin() {
+    const m = current;
+    if (!m) return;
+    await setCategory(PIN_KEYWORD, !m.keywords?.includes(PIN_KEYWORD));
+  }
+  async function snoozeCurrent(until: Date) {
+    const m = current;
+    const mf = full.msg;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.snooze(m.accountId, m.folder, m.uid, mf?.messageId ?? m.messageId ?? '', m.subject, until.toISOString());
+    if (!r.ok) return setStatus(r.error);
+    removeFromList(m);
+    setStatus(`Správa odložená do ${until.toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })} (priečinok Odložené).`);
+  }
+  async function runQuickStep(q: QuickStep) {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.runActions(m.accountId, m.folder, [m.uid], q.actions);
+    if (!r.ok) return setStatus(r.error);
+    if (q.actions.some((a) => ['move', 'archive', 'delete'].includes(a.type))) removeFromList(m);
+    else setMailTick((t) => t + 1);
+    setStatus(`Rýchly krok „${q.name}“ vykonaný.`);
+  }
+  async function dropMessages(dest: string, d: { accountId: string; folder: string; uids: number[] }) {
+    if (!api || d.accountId === DEMO_ID) return;
+    const r = await api.moveMessages(d.accountId, d.folder, d.uids, dest);
+    if (!r.ok) return setStatus(r.error);
+    setMessages((list) => list.filter((x) => !(x.accountId === d.accountId && x.folder === d.folder && d.uids.includes(x.uid))));
+    if (current && current.accountId === d.accountId && d.uids.includes(current.uid)) {
+      setCurrent(undefined);
+      setFull({ loading: false });
+    }
+    setStatus('Správa presunutá.');
+  }
+  function saveCurrentSearch() {
+    const q = search.trim();
+    if (!q) return;
+    const s2: SavedSearch = { id: Math.random().toString(36).slice(2, 10), name: q, query: q, accountId: selection.accountId === ALL ? undefined : selection.accountId };
+    saveSettings({ ...settings, savedSearches: [...(settings.savedSearches ?? []), s2] });
+    setStatus(`Hľadanie „${q}“ uložené medzi priečinky.`);
+  }
+
+  // konverzácia otvorenej správy (z cache naprieč priečinkami, napr. aj Odoslané)
+  const [thread, setThread] = useState<MessageSummary[]>([]);
+  useEffect(() => {
+    const id = full.msg?.messageId;
+    if (!api || !full.msg || !id || full.msg.accountId === DEMO_ID) return setThread([]);
+    let alive = true;
+    void api.thread(full.msg.accountId, id).then((r) => alive && setThread(r.ok ? r.data : []));
+    return () => {
+      alive = false;
+    };
+  }, [full.msg?.messageId, full.msg?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
@@ -627,6 +693,17 @@ export function App() {
               onMove={(d) => void move(d)}
               onToggleSeen={() => void toggleSeen()}
               onToggleFlag={() => void toggleFlag()}
+              categories={categoriesOf(settings)}
+              keywords={current?.keywords ?? []}
+              onCategory={(id, on) => void setCategory(id, on)}
+              pinned={!!current?.keywords?.includes(PIN_KEYWORD)}
+              onTogglePin={() => void togglePin()}
+              onSnooze={(d) => void snoozeCurrent(d)}
+              quickSteps={settings.quickSteps ?? []}
+              onQuickStep={(q) => void runQuickStep(q)}
+              onOrganize={(tab) => openDialog({ kind: 'organize', tab })}
+              conversations={!!settings.conversations}
+              onConversations={(v) => saveSettings({ ...settings, conversations: v })}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
@@ -704,20 +781,36 @@ export function App() {
                     selection={selection}
                     onSelect={(s) => {
                       setSelection(s);
+                      setSearch('');
                       setCurrent(undefined);
                       setFull({ loading: false });
                     }}
+                    onDropMessages={(dest, d) => void dropMessages(dest, d)}
+                    savedSearches={settings.savedSearches}
+                    activeSearch={search.trim()}
+                    onSavedSearch={(x) => {
+                      if (x.accountId && x.accountId !== selection.accountId) setSelection({ accountId: x.accountId, folder: 'INBOX' });
+                      setSearch(x.query);
+                    }}
+                    onRemoveSearch={(x) => saveSettings({ ...settings, savedSearches: (settings.savedSearches ?? []).filter((y) => y.id !== x.id) })}
                   />
                   <MessageList
                     title={found ? `Hľadanie: ${found.q}` : listTitle}
                     headerExtra={
                       found ? (
-                        <button className="link small" disabled={found.server === 'loading'} onClick={() => void searchOnServer()}>
-                          {found.server === 'loading' ? 'Hľadám na serveri…' : found.server === 'done' ? 'Prehľadané aj na serveri' : `Nájdené v uložených: ${found.list.length} · hľadať aj na serveri`}
-                        </button>
+                        <span className="list-extra">
+                          <button className="link small" disabled={found.server === 'loading'} onClick={() => void searchOnServer()}>
+                            {found.server === 'loading' ? 'Hľadám na serveri…' : found.server === 'done' ? 'Prehľadané aj na serveri' : `Nájdené: ${found.list.length} · hľadať aj na serveri`}
+                          </button>
+                          {!(settings.savedSearches ?? []).some((x) => x.query === found.q) && (
+                            <button className="link small" onClick={saveCurrentSearch}>uložiť hľadanie</button>
+                          )}
+                        </span>
                       ) : undefined
                     }
                     messages={filtered}
+                    categories={categoriesOf(settings)}
+                    conversations={!!settings.conversations && !found}
                     loading={listState.loading}
                     error={listState.error}
                     selected={current}
@@ -749,6 +842,10 @@ export function App() {
                     onReply={() => compose('reply')}
                     onReplyAll={() => compose('replyAll')}
                     onForward={() => compose('forward')}
+                    thread={thread}
+                    onOpenThread={(t) => void open(t)}
+                    categories={categoriesOf(settings)}
+                    onRemoveCategory={(id) => void setCategory(id, false)}
                   />
                   )}
                 </div>
@@ -793,6 +890,31 @@ export function App() {
             saveSettings(s);
             closeDialog();
             setStatus('Podpisy uložené.');
+          }}
+        />
+      )}
+      {dialog.kind === 'organize' && (
+        <OrganizeDialog
+          key={dialogKey}
+          settings={settings}
+          accounts={accounts.filter(isImap)}
+          folders={Object.fromEntries(Object.entries(folders).filter(([, v]) => Array.isArray(v))) as Record<string, FolderInfo[]>}
+          defaultAccountId={activeImap?.id}
+          tab={dialog.tab}
+          onRunRules={
+            api && selection.accountId !== ALL
+              ? async () => {
+                  const r = await api.runRules(selection.accountId, selection.folder);
+                  setMailTick((t) => t + 1);
+                  return r.ok ? `Pravidlá použité na ${r.data} správ.` : r.error;
+                }
+              : undefined
+          }
+          onClose={closeDialog}
+          onSave={(s2) => {
+            saveSettings(s2);
+            closeDialog();
+            setStatus('Nastavenia organizácie uložené.');
           }}
         />
       )}

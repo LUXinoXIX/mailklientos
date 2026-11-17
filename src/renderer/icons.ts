@@ -1,6 +1,14 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  Pin24Regular as PinIcon,
+  Pin16Filled as PinSmallIcon,
+  Tag24Regular as TagIcon,
+  Clock24Regular as SnoozeIcon,
+  Flash24Regular as QuickStepIcon,
+  Filter24Regular as RulesIcon,
+  Search16Regular as SearchSmallIcon,
+  Chat24Regular as ConversationIcon,
   Mail24Regular as MailIcon,
   Calendar24Regular as CalendarIcon,
   CheckmarkCircle24Regular as TasksIcon,
