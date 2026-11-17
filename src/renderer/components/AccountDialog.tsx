@@ -283,7 +283,7 @@ export function AccountDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(_, d) => !d.open && props.onClose()}>
-      <DialogSurface className="account-dialog">
+      <DialogSurface className="account-dialog" style={{ maxWidth: 1000, width: "94vw" }}>
         <DialogBody>
           <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : 'Pridať konto IMAP'}</DialogTitle>
           <DialogContent className="dialog-content">

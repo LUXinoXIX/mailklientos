@@ -16,6 +16,7 @@ import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
 import { CryptoDialog } from './components/CryptoDialog';
+import { AboutDialog } from './components/AboutDialog';
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
@@ -65,6 +66,7 @@ type Dialogs =
   | { kind: 'templates' }
   | { kind: 'themes' }
   | { kind: 'crypto' }
+  | { kind: 'about' }
   | { kind: 'zimbra'; tab?: ZimbraTab };
 
 const splitAddrs = (s: string) =>
@@ -928,6 +930,8 @@ export function App() {
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
+          onAbout={() => openDialog({ kind: 'about' })}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? '365' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
@@ -939,6 +943,7 @@ export function App() {
         />
         <div className="workspace">
           <TopBar
+            kind={activeM365 ? 'OUTLOOK WEB' : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1250,6 +1255,7 @@ export function App() {
           onClose={closeDialog}
         />
       )}
+      {dialog.kind === 'about' && <AboutDialog onClose={closeDialog} />}
       {dialog.kind === 'crypto' && <CryptoDialog accounts={accounts.filter(isImap)} onClose={closeDialog} />}
       {dialog.kind === 'themes' && (
         <ThemeDialog

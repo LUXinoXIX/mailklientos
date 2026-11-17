@@ -169,6 +169,7 @@ export interface MailApi {
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
   updateCheck(): Promise<Result<boolean>>;
   testNotification(): Promise<Result<string>>;
+  appInfo(): Promise<Result<{ version: string; electron: string; chrome: string; node: string; platform: string }>>;
   zimbraCheck(accountId: string): Promise<Result<boolean>>;
   zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraGalAuto(accountId: string, q: string): Promise<Result<GalEntry[]>>;

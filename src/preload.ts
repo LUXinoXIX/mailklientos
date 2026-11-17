@@ -20,6 +20,7 @@ const api: MailApi = {
   davCollections: (id) => inv('dav:collections', id),
   updateCheck: () => inv('update:check'),
   testNotification: () => inv('diag:testNotification'),
+  appInfo: () => inv('app:info'),
   zimbraCheck: (id) => inv('zimbra:check', id),
   zimbraGal: (id, q) => inv('zimbra:gal', id, q),
   zimbraGalAuto: (id, q) => inv('zimbra:galAuto', id, q),

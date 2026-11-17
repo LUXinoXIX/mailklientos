@@ -8,7 +8,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
@@ -23,11 +23,16 @@ export function TopBar(props: {
   onSearch?: (v: string) => void;
   rightOpen: boolean;
   onToggleRight: () => void;
+  /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
+  kind?: string;
 }) {
   return (
     <header className="topbar" style={{ background: props.color, color: onColor(props.color) }}>
       <div className="topbar-title">
-        <div className="topbar-name">{props.title}</div>
+        <div className="topbar-name">
+          {props.title}
+          {props.kind && <span className="kind-badge" title="Typ konta">{props.kind}</span>}
+        </div>
         <div className="topbar-sub">{props.subtitle}</div>
       </div>
       {props.onSearch ? (
@@ -440,7 +445,7 @@ export function Ribbon(props: {
 // Pás modulov: mení sa podľa typu konta.
 
 export type ImapModule = 'mail' | 'calendar' | 'tasks' | 'contacts';
-export type M365Module = 'mail' | 'calendar' | 'todo' | 'people' | 'teams' | 'onedrive' | 'word' | 'excel' | 'powerpoint';
+export type M365Module = 'mail' | 'calendar' | 'todo' | 'people' | 'copilot' | 'planner' | 'teams' | 'onedrive' | 'sharepoint' | 'word' | 'excel' | 'powerpoint' | 'onenote' | 'forms' | 'loop';
 
 export interface ModuleDef<K extends string> {
   key: K;
@@ -461,11 +466,17 @@ export const M365_MODULES: ModuleDef<M365Module>[] = [
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
   { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
   { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
-  { key: 'teams', label: 'Teams', icon: <TeamsIcon />, sep: true },
-  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon /> },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true },
+  { key: 'planner', label: 'Planner', icon: <PlannerIcon /> },
+  { key: 'teams', label: 'Teams', icon: <TeamsIcon /> },
+  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon />, sep: true },
+  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon /> },
   { key: 'word', label: 'Word', icon: <WordIcon /> },
   { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
   { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
+  { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
+  { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
+  { key: 'loop', label: 'Loop', icon: <LoopIcon /> },
 ];
 
 export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void }) {
