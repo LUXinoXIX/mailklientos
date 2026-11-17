@@ -8,6 +8,7 @@ import type { OutboxItem, SendInput } from '../core/api';
 import * as store from './accounts';
 import { log } from './diagnostics';
 import * as mail from './mail';
+import { addFollowUp } from './extras';
 
 const file = () => path.join(app.getPath('userData'), 'outbox.json');
 const load = (): OutboxItem[] => {
@@ -51,6 +52,9 @@ async function tick() {
       // pred odoslaním vyradiť z fronty (aby sa pri páde neodoslala dvakrát)
       save(load().filter((x) => x.id !== it.id));
       const r = await mail.sendMail(acc, it.input);
+      if (it.input.followUpDays && r.messageId) {
+        addFollowUp({ accountId: it.accountId, messageId: r.messageId, subject: it.subject, to: it.to, due: new Date(Date.now() + it.input.followUpDays * 86400_000).toISOString() });
+      }
       emit({ type: 'outbox-sent', id: it.id, subject: it.subject, savedToSent: r.savedToSent });
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);

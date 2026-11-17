@@ -214,6 +214,8 @@ export function MessageList(props: {
   headerExtra?: React.ReactNode;
   categories?: Category[];
   conversations?: boolean;
+  density?: 'comfortable' | 'compact';
+  previewLine?: boolean;
 }) {
   const [tab, setTab] = useState<'all' | 'unread'>('all');
   const [open, setOpen] = useState<string | null>(null);
@@ -233,7 +235,7 @@ export function MessageList(props: {
     return (
       <button
         key={`${m.accountId}/${m.folder}/${m.uid}`}
-        className={`msg ${sel ? 'selected' : ''} ${unread ? 'unread' : ''} ${opts.child ? 'msg-child' : ''}`}
+        className={`msg ${sel ? 'selected' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
         draggable
         onDragStart={(e) => {
           const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid] };
@@ -274,6 +276,7 @@ export function MessageList(props: {
               {m.flagged && <FlagFilledIcon className="flag" />}
             </span>
           </div>
+          {props.previewLine && m.preview && !opts.child && <div className="msg-preview">{m.preview}</div>}
           {mc.length > 0 && (
             <div className="msg-cats">
               {mc.map((c) => (
@@ -288,7 +291,7 @@ export function MessageList(props: {
     );
   };
   return (
-    <section className="list">
+    <section className={`list ${props.density === 'compact' ? 'compact' : ''}`}>
       <div className="list-head">
         <div className="list-title">{props.title}</div>
         {props.headerExtra}
@@ -399,7 +402,10 @@ export function ReadingPane(props: {
   onRemoveCategory?: (id: string) => void;
   onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void;
   onBlockSender?: () => void;
+  onPrint?: (pdf: boolean) => void;
+  onUnsubscribe?: () => void;
 }) {
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
   const api = window.mailApi;
@@ -430,6 +436,8 @@ export function ReadingPane(props: {
           <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
           <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
           <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+          {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)">Tlačiť</Button>}
+          {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(true)} title="Uložiť ako PDF">PDF</Button>}
           {props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
         </div>
       </div>
@@ -448,6 +456,12 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {props.onUnsubscribe && (
+        <div className="unsub">
+          Hromadná správa (newsletter).
+          <Button size="small" appearance="transparent" onClick={props.onUnsubscribe}>Odhlásiť odber</Button>
+        </div>
+      )}
       {m.security && (
         <div className={`secbar ${m.security.decryptError || m.security.signatureValid === false ? 'bad' : 'good'}`}>
           {m.security.encrypted && (
@@ -498,6 +512,18 @@ export function ReadingPane(props: {
               >
                 <AttachIcon /> {a.filename} <span className="muted">({Math.ceil(a.size / 1024)} kB)</span>
               </button>
+              <Button
+                size="small"
+                appearance="transparent"
+                disabled={demo}
+                title="Náhľad: obrázky priamo tu, PDF v okne náhľadu, Office v nainštalovanom programe"
+                onClick={async () => {
+                  const r = await api?.previewAttachment(m.accountId, m.folder, m.uid, i);
+                  if (r?.ok && r.data.kind === 'image' && r.data.src) setPreview({ src: r.data.src, name: r.data.filename });
+                }}
+              >
+                Náhľad
+              </Button>
               <Button size="small" appearance="transparent" disabled={demo} onClick={() => void api?.saveAttachment(m.accountId, m.folder, m.uid, i)}>
                 Uložiť
               </Button>
@@ -508,6 +534,12 @@ export function ReadingPane(props: {
       {m.html && !showImages && (
         <div className="images-bar">
           Vzdialené obrázky sú zablokované kvôli súkromiu. <Button size="small" appearance="transparent" onClick={() => setShowImages(true)}>Zobraziť obrázky</Button>
+        </div>
+      )}
+      {preview && (
+        <div className="att-preview" onClick={() => setPreview(null)} role="dialog" aria-label={`Náhľad ${preview.name}`}>
+          <div className="att-preview-bar">{preview.name} <span className="muted">– kliknutím zavrieť</span></div>
+          <img src={preview.src} alt={preview.name} />
         </div>
       )}
       <div className="read-body">{m.html ? <HtmlBody html={m.html} showImages={showImages} /> : <pre className="plain">{m.text}</pre>}</div>

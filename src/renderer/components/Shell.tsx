@@ -8,7 +8,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, LockIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
@@ -23,11 +23,16 @@ export function TopBar(props: {
   onSearch?: (v: string) => void;
   rightOpen: boolean;
   onToggleRight: () => void;
+  /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
+  kind?: string;
 }) {
   return (
     <header className="topbar" style={{ background: props.color, color: onColor(props.color) }}>
       <div className="topbar-title">
-        <div className="topbar-name">{props.title}</div>
+        <div className="topbar-name">
+          {props.title}
+          {props.kind && <span className="kind-badge" title="Typ konta">{props.kind}</span>}
+        </div>
         <div className="topbar-sub">{props.subtitle}</div>
       </div>
       {props.onSearch ? (
@@ -185,13 +190,20 @@ export function Ribbon(props: {
   pinned: boolean;
   onTogglePin: () => void;
   onTask: (due?: string) => void;
-  onIo: (k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update') => void;
+  onIo: (k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update' | 'print' | 'pdf' | 'backup' | 'restore' | 'shortcuts') => void;
+  onZimbra?: (tab?: 'ooo' | 'filters' | 'shares' | 'spam' | 'sync' | 'password') => void;
   onSnooze: (until: Date) => void;
   quickSteps: QuickStep[];
   onQuickStep: (q: QuickStep) => void;
   onOrganize: (tab: OrganizeTab) => void;
   conversations: boolean;
   onConversations: (v: boolean) => void;
+  density: 'comfortable' | 'compact';
+  onDensity: (d: 'comfortable' | 'compact') => void;
+  previewLine: boolean;
+  onPreviewLine: (v: boolean) => void;
+  runInBackground: boolean;
+  onRunInBackground: (v: boolean) => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -264,6 +276,20 @@ export function Ribbon(props: {
             <ToolbarButton onClick={() => c.run((h) => h.toggleReceipt())} aria-pressed={c.state.receipt}>
               {c.state.receipt ? '✓ ' : ''}Potvrdenie o prečítaní
             </ToolbarButton>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<SnoozeIcon />}>{c.state.followUp ? `Pripomenúť o ${c.state.followUp} d` : 'Pripomenúť, ak neodpovie'}</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {[0, 1, 2, 3, 5, 7, 14].map((d) => (
+                    <MenuItem key={d} onClick={() => c.run((h) => h.setFollowUp(d))}>
+                      {(c.state.followUp ?? 0) === d ? '✓ ' : ''}{d ? `ak neodpovie do ${d} ${d === 1 ? 'dňa' : 'dní'}` : 'nepripomínať'}
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             <ToolbarDivider />
             <Menu>
               <MenuTrigger disableButtonEnhancement>
@@ -369,6 +395,23 @@ export function Ribbon(props: {
               </MenuPopover>
             </Menu>
             <ToolbarButton icon={<RulesIcon />} onClick={() => p.onOrganize('rules')}>Pravidlá</ToolbarButton>
+            {p.onZimbra && (
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <ToolbarButton icon={<ServerIcon />}>Zimbra</ToolbarButton>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem onClick={() => p.onZimbra!('ooo')}>Neprítomnosť (automatická odpoveď)</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('filters')}>Filtre na serveri</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('shares')}>Zdieľané od kolegov</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('spam')}>Spam: dôveryhodní a blokovaní</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('sync')}>Podpisy, identity a značky</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('password')}>Zmeniť heslo</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+            )}
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
@@ -378,10 +421,15 @@ export function Ribbon(props: {
               </MenuTrigger>
               <MenuPopover>
                 <MenuList>
+                  <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('print')}>Tlačiť správu (Ctrl+P)</MenuItem>
+                  <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('pdf')}>Uložiť správu ako PDF</MenuItem>
                   <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('eml')}>Uložiť správu ako .eml</MenuItem>
                   <MenuItem onClick={() => p.onIo('mbox')}>Exportovať priečinok (.mbox)</MenuItem>
                   <MenuItem onClick={() => p.onIo('import')}>Importovať .eml / .mbox…</MenuItem>
                   <MenuItem onClick={() => p.onIo('thunderbird')}>Importovať z Thunderbirdu…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('backup')}>Zálohovať nastavenia…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('restore')}>Obnoviť nastavenia zo zálohy…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('shortcuts')}>Klávesové skratky</MenuItem>
                   <MenuItem onClick={() => p.onIo('update')}>Skontrolovať aktualizácie</MenuItem>
                 </MenuList>
               </MenuPopover>
@@ -409,6 +457,16 @@ export function Ribbon(props: {
             </ToolbarButton>
             <ToolbarButton icon={<SearchSmallIcon />} onClick={() => p.onOrganize('searches')}>Uložené hľadania</ToolbarButton>
             <ToolbarDivider />
+            <ToolbarButton onClick={() => p.onDensity(p.density === 'compact' ? 'comfortable' : 'compact')}>
+              {p.density === 'compact' ? 'Pohodlný zoznam' : 'Kompaktný zoznam'}
+            </ToolbarButton>
+            <ToolbarButton onClick={() => p.onPreviewLine(!p.previewLine)} aria-pressed={p.previewLine}>
+              {p.previewLine ? '✓ ' : ''}Náhľad textu v zozname
+            </ToolbarButton>
+            <ToolbarButton onClick={() => p.onRunInBackground(!p.runInBackground)} aria-pressed={p.runInBackground}>
+              {p.runInBackground ? '✓ ' : ''}Po zatvorení bežať pri hodinách
+            </ToolbarButton>
+            <ToolbarDivider />
             <ToolbarButton onClick={p.onToggleGpu}>{p.gpuOff ? 'Zapnúť hardvérovú akceleráciu' : 'Vypnúť hardvérovú akceleráciu'}</ToolbarButton>
             <ToolbarButton onClick={p.onOpenLog}>Záznam chýb</ToolbarButton>
           </>
@@ -422,7 +480,7 @@ export function Ribbon(props: {
 // Pás modulov: mení sa podľa typu konta.
 
 export type ImapModule = 'mail' | 'calendar' | 'tasks' | 'contacts';
-export type M365Module = 'mail' | 'calendar' | 'todo' | 'people' | 'teams' | 'onedrive' | 'word' | 'excel' | 'powerpoint';
+export type M365Module = 'mail' | 'calendar' | 'todo' | 'people' | 'copilot' | 'planner' | 'teams' | 'onedrive' | 'sharepoint' | 'word' | 'excel' | 'powerpoint' | 'onenote' | 'forms' | 'loop';
 
 export interface ModuleDef<K extends string> {
   key: K;
@@ -443,11 +501,17 @@ export const M365_MODULES: ModuleDef<M365Module>[] = [
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
   { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
   { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
-  { key: 'teams', label: 'Teams', icon: <TeamsIcon />, sep: true },
-  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon /> },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true },
+  { key: 'planner', label: 'Planner', icon: <PlannerIcon /> },
+  { key: 'teams', label: 'Teams', icon: <TeamsIcon /> },
+  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon />, sep: true },
+  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon /> },
   { key: 'word', label: 'Word', icon: <WordIcon /> },
   { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
   { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
+  { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
+  { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
+  { key: 'loop', label: 'Loop', icon: <LoopIcon /> },
 ];
 
 export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void }) {

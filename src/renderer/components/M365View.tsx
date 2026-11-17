@@ -4,7 +4,7 @@ import { Button, Tooltip } from '@fluentui/react-components';
 import { accountPartition, type M365Account } from '../../core/account';
 import { BackIcon, CloseSmallIcon, OpenOutsideIcon, ReloadIcon, SettingsIcon } from '../icons';
 import type { M365Module } from './Shell';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WebSlot, type WebSlotHandle } from './WebSlot';
 
 export interface WebTab {
@@ -34,12 +34,20 @@ export function moduleUrl(m: M365Module, host: 'office' | 'live' = 'office'): st
     case 'word': return 'https://www.office.com/launch/word';
     case 'excel': return 'https://www.office.com/launch/excel';
     case 'powerpoint': return 'https://www.office.com/launch/powerpoint';
+    case 'copilot': return o ? 'https://m365.cloud.microsoft/chat' : 'https://copilot.microsoft.com/';
+    case 'planner': return o ? 'https://planner.cloud.microsoft/' : 'https://to-do.live.com/tasks/';
+    case 'sharepoint': return 'https://www.office.com/launch/sharepoint';
+    case 'onenote': return o ? 'https://www.office.com/launch/onenote' : 'https://www.onenote.com/notebooks';
+    case 'forms': return 'https://forms.office.com/';
+    case 'loop': return 'https://loop.cloud.microsoft/';
   }
 }
 
 export const MODULE_TITLES: Record<M365Module, string> = {
+  loop: 'Loop',
   mail: 'Outlook', calendar: 'Kalendár', people: 'Ľudia', todo: 'To Do', teams: 'Teams', onedrive: 'OneDrive',
-  word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint',
+  word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint', copilot: 'Copilot', planner: 'Planner', sharepoint: 'SharePoint',
+  onenote: 'OneNote', forms: 'Forms',
 };
 
 export function initialTabs(acc: M365Account): TabsState {
@@ -64,6 +72,8 @@ export function M365View(props: {
   onClose: (key: string) => void;
   onTitle: (key: string, title: string) => void;
   onEditAccount: () => void;
+  /** počet neprečítaných v Doručenej pošte vloženého Outlooku */
+  onUnread?: (n: number) => void;
 }) {
   const api = window.mailApi;
   const { account, state } = props;
@@ -71,6 +81,38 @@ export function M365View(props: {
   const active = state.tabs.find((t) => t.key === state.active) ?? state.tabs[0]!;
   const slots = useRef(new Map<string, WebSlotHandle>());
   const cur = () => slots.current.get(active.key);
+  const [curUrl, setCurUrl] = useState(active.url);
+  useEffect(() => {
+    const t = window.setInterval(() => setCurUrl(cur()?.url() ?? active.url), 3000);
+    return () => window.clearInterval(t);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const isDoc = /sharepoint\.com|onedrive|:[wxp]:\/|Doc\.aspx|\.(docx?|xlsx?|pptx?)(\?|$)/i.test(curUrl) && !/outlook\./i.test(curUrl);
+
+  // počet neprečítaných z Outlooku na webe (priečinok Doručená pošta v strome priečinkov)
+  const onUnread = useRef(props.onUnread);
+  onUnread.current = props.onUnread;
+  useEffect(() => {
+    const first = state.tabs[0];
+    if (!first) return;
+    const js = `(() => {
+      const items = [...document.querySelectorAll('[role="treeitem"]')];
+      const inbox = items.find((e) => /^(Doručená pošta|Doručené|Inbox|Posteingang|Doručená)/i.test((e.getAttribute('aria-label') || e.textContent || '').trim()));
+      if (!inbox) { const m = /\((\d+)\)/.exec(document.title); return m ? Number(m[1]) : -1; }
+      const label = inbox.getAttribute('aria-label') || '';
+      const m = /(\d+)\s*(neprečítan|unread|ungelesen)/i.exec(label) || /(\d+)/.exec(inbox.textContent || '');
+      return m ? Number(m[1]) : 0;
+    })()`;
+    const run = async () => {
+      const n = await slots.current.get(first.key)?.exec<number>(js);
+      if (typeof n === 'number' && n >= 0) onUnread.current?.(n);
+    };
+    const t = window.setInterval(() => void run(), 30_000);
+    const t0 = window.setTimeout(() => void run(), 8000);
+    return () => {
+      window.clearInterval(t);
+      window.clearTimeout(t0);
+    };
+  }, [state.tabs[0]?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className={`m365 ${props.visible ? '' : 'm365-hidden'}`} aria-hidden={!props.visible}>
@@ -104,6 +146,11 @@ export function M365View(props: {
               Edge
             </Button>
           </Tooltip>
+          {isDoc && (
+            <Tooltip content="Otvoriť tento dokument v nainštalovanom Office (Word, Excel, PowerPoint)" relationship="label">
+              <Button size="small" appearance="subtle" onClick={() => void api?.openInOffice(curUrl)}>Otvoriť v Office</Button>
+            </Tooltip>
+          )}
           <Tooltip content="Nastavenia konta" relationship="label">
             <Button size="small" appearance="subtle" icon={<SettingsIcon />} onClick={props.onEditAccount} aria-label="Nastavenia konta" />
           </Tooltip>
