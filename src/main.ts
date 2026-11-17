@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { registerIpc } from './main/ipc';
+import { closeAllConnections } from './main/mail';
 import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
@@ -84,6 +85,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on('before-quit', () => closeAllConnections());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

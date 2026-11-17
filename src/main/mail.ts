@@ -1,6 +1,6 @@
 // IMAP (imapflow) a SMTP (nodemailer) nad nastaveniami konta z TLS jadra.
-// Každá operácia si zatiaľ otvára vlastné spojenie (jednoduché a odolné);
-// trvalé spojenie s IDLE a lokálna cache prídu v ďalšom kroku.
+// Operácie zdieľajú jedno trvalé spojenie na konto (pool nižšie).
+import crypto from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
@@ -52,20 +52,37 @@ function passwordFor(acc: AccountConfig, override?: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-async function withImap<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pwOverride?: string): Promise<T> {
-  const pass = passwordFor(acc, pwOverride);
-  await ensureTrusted(acc.imap, 'imap');
+function newClient(acc: AccountConfig, pass: string): Client {
   const client: Client = new ImapFlow({
     ...imapflowConnection(acc.imap),
     auth: { user: acc.username, pass },
     logger: false,
     connectionTimeout: 20000,
     greetingTimeout: 15000,
-    socketTimeout: 120000,
+    socketTimeout: 300000,
   });
   client.on('error', () => {
     /* bez tohto by chyba na pozadí zhodila hlavný proces */
   });
+  return client;
+}
+
+async function closeClient(client: Client) {
+  try {
+    await client.logout();
+  } catch {
+    try {
+      client.close();
+    } catch {
+      /* nič */
+    }
+  }
+}
+
+/** Jednorazové spojenie (test konta s novým heslom). */
+async function withOneShot<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pass: string): Promise<T> {
+  await ensureTrusted(acc.imap, 'imap');
+  const client = newClient(acc, pass);
   try {
     await client.connect();
     const bad = verifySocket(client.socket ?? client._socket, acc.imap.host, acc.imap.tls);
@@ -74,16 +91,103 @@ async function withImap<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pw
   } catch (e) {
     throw toUserError(e, acc.imap);
   } finally {
+    await closeClient(client);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trvalé spojenia: jedno na konto, znovu použité pre všetky operácie (rýchle otváranie správ).
+// Po 5 minútach nečinnosti sa zavrie; pri zmene nastavení alebo hesla sa vytvorí nové.
+
+interface Pooled {
+  key: string;
+  client: Client;
+  ready: Promise<Client>;
+  /** spojenie je nadviazané (od tej chvíle sa dá kontrolovať client.usable) */
+  ok: boolean;
+  idle?: ReturnType<typeof setTimeout>;
+}
+
+const pool = new Map<string, Pooled>();
+const IDLE_MS = 5 * 60_000;
+
+const poolKey = (acc: AccountConfig, pass: string) =>
+  JSON.stringify([acc.imap, acc.username, crypto.createHash('sha256').update(pass).digest('hex')]);
+
+function drop(id: string, p?: Pooled) {
+  const cur = pool.get(id);
+  if (!cur || (p && cur !== p)) return;
+  pool.delete(id);
+  if (cur.idle) clearTimeout(cur.idle);
+  void closeClient(cur.client);
+}
+
+async function pooledClient(acc: AccountConfig): Promise<Pooled> {
+  const pass = passwordFor(acc);
+  const key = poolKey(acc, pass);
+  let p = pool.get(acc.id);
+  if (p && (p.key !== key || (p.ok && p.client.usable === false))) {
+    drop(acc.id, p);
+    p = undefined;
+  }
+  if (!p) {
+    await ensureTrusted(acc.imap, 'imap');
+    const client = newClient(acc, pass);
+    const entry: Pooled = { key, client, ok: false, ready: Promise.resolve(client) };
+    entry.ready = (async () => {
+      await client.connect();
+      const bad = verifySocket(client.socket ?? client._socket, acc.imap.host, acc.imap.tls);
+      if (bad) throw new UserError(bad, undefined, true);
+      entry.ok = true;
+      return client;
+    })();
+    client.on('close', () => drop(acc.id, entry));
+    pool.set(acc.id, entry);
+    p = entry;
+  }
+  if (p.idle) clearTimeout(p.idle);
+  try {
+    await p.ready;
+  } catch (e) {
+    drop(acc.id, p);
+    throw e;
+  }
+  return p;
+}
+
+const isConnectionError = (e: unknown) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = e as any;
+  return /NoConnection|ECONNRESET|EPIPE|ETIMEDOUT|Socket|Connection not available|closed/i.test(`${err?.code ?? ''} ${err?.message ?? ''}`);
+};
+
+async function withImap<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pwOverride?: string): Promise<T> {
+  if (pwOverride) return withOneShot(acc, fn, pwOverride);
+  for (let attempt = 0; ; attempt++) {
+    let p: Pooled | undefined;
     try {
-      await client.logout();
-    } catch {
-      try {
-        client.close();
-      } catch {
-        /* nič */
+      p = await pooledClient(acc);
+      return await fn(p.client);
+    } catch (e) {
+      // spojenie medzičasom spadlo (uspatý počítač, server ho zavrel): skúsiť raz znova s novým
+      if (p && attempt === 0 && p.ok && (isConnectionError(e) || p.client.usable === false)) {
+        drop(acc.id, p);
+        continue;
+      }
+      throw toUserError(e, acc.imap);
+    } finally {
+      const cur = pool.get(acc.id);
+      if (cur) {
+        if (cur.idle) clearTimeout(cur.idle);
+        cur.idle = setTimeout(() => drop(acc.id, cur), IDLE_MS);
       }
     }
   }
+}
+
+/** Zavrie spojenia (pri ukončení aplikácie alebo zmene konta). */
+export function closeAllConnections(id?: string) {
+  for (const k of [...pool.keys()]) if (!id || k === id) drop(k);
 }
 
 const SPECIAL_ORDER = ['\\Inbox', '\\Drafts', '\\Sent', '\\Archive', '\\Junk', '\\Trash'];

@@ -202,3 +202,9 @@ body { overflow: hidden; }
 .sig-defaults-title { font-weight: 600; }
 .sig-acc { display: flex; flex-direction: column; gap: 4px; }
 .gap0 { gap: 6px; align-items: center; }
+
+/* tenký pásik priebehu namiesto prázdnej plochy pri načítaní */
+.list-body, .reading { position: relative; }
+.progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; overflow: hidden; z-index: 2; background: var(--colorBrandBackground2); }
+.progress::after { content: ''; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--colorBrandBackground); animation: progress-slide 1s ease-in-out infinite; }
+@keyframes progress-slide { from { left: -30%; } to { left: 100%; } }

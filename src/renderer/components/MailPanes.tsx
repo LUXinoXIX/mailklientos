@@ -120,8 +120,9 @@ export function MessageList(props: {
           if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
         }}
       >
-        {props.loading && <Spinner size="small" label="Načítavam…" className="pad" />}
+        {props.loading && <div className="progress" role="progressbar" aria-label="Načítavam" />}
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
+        {props.loading && list.length === 0 && <div className="empty">Načítavam…</div>}
         {!props.loading && !props.error && list.length === 0 && <div className="empty">Žiadne správy</div>}
         {list.map((m) => {
           const sel = props.selected && props.selected.uid === m.uid && props.selected.accountId === m.accountId && props.selected.folder === m.folder;
@@ -178,12 +179,14 @@ export function ReadingPane(props: {
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
   const api = window.mailApi;
-  if (props.loading) return <section className="reading"><Spinner label="Otváram správu…" className="pad" /></section>;
+  // Pri načítaní ostáva viditeľná predchádzajúca správa (žiadne biele bliknutie), hore len pásik priebehu.
+  if (props.loading && !props.message) return <section className="reading"><div className="progress" role="progressbar" aria-label="Otváram správu" /><div className="empty">Otváram správu…</div></section>;
   if (props.error) return <section className="reading"><div className="pane-error pad">⚠ {props.error}</div></section>;
   if (!m) return <section className="reading"><div className="empty">Vyber správu na čítanie</div></section>;
   const demo = m.accountId === 'demo';
   return (
     <section className="reading">
+      {props.loading && <div className="progress" role="progressbar" aria-label="Otváram správu" />}
       <h2 className="read-subject">{m.subject}</h2>
       <div className="read-head">
         <Avatar name={m.fromName || m.fromAddress} color={props.color} size={40} />

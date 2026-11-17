@@ -42,8 +42,13 @@ jobs:
       - name: Inštalácia závislostí
         run: |
           mkdir -p ci
-          if [ -f package-lock.json ]; then cmd="npm ci"; else cmd="npm install"; fi
-          $cmd --no-audit --no-fund 2>&1 | tee ci/install.log
+          # npm ci so zámkom; ak zámok nesedí s package.json (nové balíky), npm install ho aktualizuje
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund 2>&1 | tee ci/install.log
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then exit 0; fi
+            echo "--- npm ci zlyhalo, skúšam npm install ---" | tee -a ci/install.log
+          fi
+          npm install --no-audit --no-fund 2>&1 | tee -a ci/install.log
           exit ${PIPESTATUS[0]}
 
       # Balík závislostí (bez binárky Electronu) pre kontrolu typov v prostredí Claude.
