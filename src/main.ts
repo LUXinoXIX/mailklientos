@@ -41,9 +41,10 @@ const createWindow = () => {
   attachWindow(win);
   if (SMOKE)
     win.webContents.once('did-finish-load', () => {
-      void win.webContents.executeJavaScript(
+      // počkať, kým React zapíše svoje predvoľby, potom prepísať a načítať znova
+      setTimeout(() => void win.webContents.executeJavaScript(
         "localStorage.setItem('rightOpen','true');localStorage.setItem('activeAccount',JSON.stringify('smoke'));location.reload();",
-      );
+      ), 3000);
     });
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.

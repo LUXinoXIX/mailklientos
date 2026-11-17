@@ -2,7 +2,7 @@
 // Office aplikácie otvorené z Outlooku (prepínač aplikácií) alebo z pása modulov idú do kariet, nie do nových okien.
 import { Button, Tooltip } from '@fluentui/react-components';
 import { accountPartition, type M365Account } from '../../core/account';
-import { BackIcon, CloseSmallIcon, OpenOutsideIcon, PanelIcon, ReloadIcon, SettingsIcon } from '../icons';
+import { BackIcon, CloseSmallIcon, OpenOutsideIcon, ReloadIcon, SettingsIcon } from '../icons';
 import type { M365Module } from './Shell';
 import { WebSlot } from './WebSlot';
 
@@ -100,9 +100,6 @@ export function M365View(props: {
             <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(active.key, active.url)}>
               Edge
             </Button>
-          </Tooltip>
-          <Tooltip content="Pravý panel (weby a programy)" relationship="label">
-            <Button size="small" appearance={props.rightOpen ? 'secondary' : 'subtle'} icon={<PanelIcon />} onClick={props.onToggleRight} aria-label="Pravý panel" />
           </Tooltip>
           <Tooltip content="Nastavenia konta" relationship="label">
             <Button size="small" appearance="subtle" icon={<SettingsIcon />} onClick={props.onEditAccount} aria-label="Nastavenia konta" />

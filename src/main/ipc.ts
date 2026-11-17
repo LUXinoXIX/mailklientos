@@ -7,6 +7,7 @@ import type { PickedFile, Result, SendInput, WebBounds } from '../core/api';
 import type { AppSettings, LauncherItem } from '../core/settings';
 import { autodetect, probeServer, type Protocol } from '../core/tls';
 import * as store from './accounts';
+import { autoconfig } from './autoconfig';
 import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
@@ -54,6 +55,7 @@ export function registerIpc() {
   });
   handle('server:probe', (cfg: ServerConfig, proto: Protocol) => probeServer(cfg, proto));
   handle('server:autodetect', (host: string, proto: Protocol) => autodetect(host, proto));
+  handle('server:autoconfig', (email: string) => autoconfig(email));
   handle('account:test', (acc: AccountConfig, password?: string) => mail.testAccount(acc, password));
 
   // pošta
