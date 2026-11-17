@@ -60,7 +60,7 @@ body { overflow: hidden; }
 /* hlavná plocha */
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 68px minmax(0, 1fr); }
 .body.with-right { grid-template-columns: 68px minmax(0, 1fr) minmax(320px, 380px); }
-.content { min-width: 0; min-height: 0; display: flex; }
+.content { min-width: 0; min-height: 0; display: flex; position: relative; }
 .mail { flex: 1; min-width: 0; display: grid; grid-template-columns: 230px minmax(260px, 360px) minmax(0, 1fr); }
 
 /* pás modulov */
@@ -141,7 +141,12 @@ body { overflow: hidden; }
 .right-tab.on > button:first-child { font-weight: 600; box-shadow: inset 0 -2px 0 var(--colorBrandBackground); }
 .right-tab-x { border: 0; background: none; cursor: pointer; display: grid; place-items: center; padding: 2px; color: var(--colorNeutralForeground3); }
 .right-url { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 12px; color: var(--colorNeutralForeground2); }
-.right-web { margin: 0 6px; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; }
+/* vložené weby (<webview>): všetky karty ostávajú načítané, viditeľná je len aktívna */
+.m365-hidden { position: absolute; inset: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+.m365-webs { flex: 1; min-height: 0; position: relative; }
+.right-webs { flex: 1; min-height: 0; position: relative; margin: 0 6px; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; overflow: hidden; }
+.m365-webs > .webslot, .right-webs > .webslot { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.webslot-hidden { visibility: hidden; pointer-events: none; }
 .launchers { flex: none; padding: 10px 8px; border-top: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; gap: 8px; }
 .launchers-title { font-size: 12px; font-weight: 600; color: var(--colorNeutralForeground2); }
 .launchers-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
