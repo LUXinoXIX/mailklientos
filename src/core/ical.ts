@@ -4,6 +4,8 @@
 export interface CalAttendee {
   email: string;
   name?: string;
+  /** ROOM / RESOURCE pri zasadačkách a zariadeniach */
+  cutype?: string;
   partstat?: 'NEEDS-ACTION' | 'ACCEPTED' | 'DECLINED' | 'TENTATIVE' | string;
   role?: string;
 }
@@ -200,7 +202,7 @@ function eventFrom(c: Comp): CalEvent | null {
     organizer: org ? { email: mailto(org.value), name: org.params.CN } : undefined,
     attendees: c.props
       .filter((p) => p.name === 'ATTENDEE')
-      .map((p) => ({ email: mailto(p.value), name: p.params.CN, partstat: p.params.PARTSTAT, role: p.params.ROLE })),
+      .map((p) => ({ email: mailto(p.value), name: p.params.CN, partstat: p.params.PARTSTAT, role: p.params.ROLE, cutype: p.params.CUTYPE })),
     status: get(c, 'STATUS')?.value,
     rrule: get(c, 'RRULE')?.value,
     recurrenceId: rid ? new Date(parseIcalDate(rid.value, rid.params.TZID).ms).toISOString() : undefined,
@@ -350,7 +352,9 @@ function eventLines(e: CalEvent, extra: string[] = []): string[] {
   if (e.status) L.push(`STATUS:${e.status}`);
   if (e.organizer) L.push(`ORGANIZER${e.organizer.name ? `;CN="${e.organizer.name}"` : ''}:mailto:${e.organizer.email}`);
   for (const a of e.attendees ?? [])
-    L.push(`ATTENDEE${a.name ? `;CN="${a.name}"` : ''};ROLE=${a.role ?? 'REQ-PARTICIPANT'};PARTSTAT=${a.partstat ?? 'NEEDS-ACTION'};RSVP=TRUE:mailto:${a.email}`);
+    L.push(
+      `ATTENDEE${a.name ? `;CN="${a.name}"` : ''}${a.cutype ? `;CUTYPE=${a.cutype}` : ''};ROLE=${a.role ?? (a.cutype ? 'NON-PARTICIPANT' : 'REQ-PARTICIPANT')};PARTSTAT=${a.partstat ?? 'NEEDS-ACTION'};RSVP=TRUE:mailto:${a.email}`,
+    );
   L.push(...extra, 'END:VEVENT');
   return L;
 }
@@ -420,4 +424,51 @@ export function buildVCard(c: Contact): string {
   if (c.title) L.push(`TITLE:${escapeText(c.title)}`);
   L.push('END:VCARD');
   return L.map(fold).join('\r\n') + '\r\n';
+}
+
+// ---------------------------------------------------------------------------
+// úlohy (VTODO)
+
+export interface CalTodo {
+  uid: string;
+  summary: string;
+  /** YYYY-MM-DD */
+  due?: string;
+  done: boolean;
+  description?: string;
+  href?: string;
+  etag?: string;
+  lastModified?: string;
+}
+
+export function parseTodos(ics: string): CalTodo[] {
+  const tree = toTree(parseLines(ics));
+  return tree.flatMap((cal) => all(cal, 'VTODO')).map((c) => {
+    const due = get(c, 'DUE');
+    const st = get(c, 'STATUS')?.value?.toUpperCase();
+    const lm = get(c, 'LAST-MODIFIED');
+    let dueIso: string | undefined;
+    if (due) {
+      const d = new Date(parseIcalDate(due.value, due.params.TZID).ms);
+      dueIso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    return {
+      uid: get(c, 'UID')?.value ?? '',
+      summary: unescapeText(get(c, 'SUMMARY')?.value ?? ''),
+      due: dueIso,
+      done: st === 'COMPLETED' || Number(get(c, 'PERCENT-COMPLETE')?.value ?? 0) >= 100,
+      description: get(c, 'DESCRIPTION') ? unescapeText(get(c, 'DESCRIPTION')!.value) : undefined,
+      lastModified: lm ? new Date(parseIcalDate(lm.value).ms).toISOString() : undefined,
+    };
+  });
+}
+
+export function buildTodo(t: CalTodo): string {
+  const L = ['BEGIN:VTODO', `UID:${t.uid}`, `DTSTAMP:${utcStamp(Date.now())}`, `LAST-MODIFIED:${utcStamp(Date.now())}`, `SUMMARY:${escapeText(t.summary)}`];
+  if (t.due) L.push(`DUE;VALUE=DATE:${t.due.replace(/-/g, '')}`);
+  if (t.description) L.push(`DESCRIPTION:${escapeText(t.description)}`);
+  L.push(t.done ? 'STATUS:COMPLETED' : 'STATUS:NEEDS-ACTION', `PERCENT-COMPLETE:${t.done ? 100 : 0}`);
+  if (t.done) L.push(`COMPLETED:${utcStamp(Date.now())}`);
+  L.push('END:VTODO');
+  return wrap(L);
 }

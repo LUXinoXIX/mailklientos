@@ -16,6 +16,7 @@ import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
 import { CryptoDialog } from './components/CryptoDialog';
+import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel, type AgendaData } from './components/RightPanel';
@@ -63,7 +64,8 @@ type Dialogs =
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
   | { kind: 'themes' }
-  | { kind: 'crypto' };
+  | { kind: 'crypto' }
+  | { kind: 'zimbra'; tab?: ZimbraTab };
 
 const splitAddrs = (s: string) =>
   s
@@ -728,6 +730,24 @@ export function App() {
   }, [demo]);
 
   // kontakty na dopĺňanie: odosielatelia načítaných správ + adresy, na ktoré si písal
+  // ktoré kontá sú na serveri Zimbra (rozšírené funkcie cez jej rozhranie)
+  const [zimbraOk, setZimbraOk] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!api || demo) return;
+    for (const a of accounts.filter(isImap)) void api.zimbraCheck(a.id).then((r) => setZimbraOk((z) => ({ ...z, [a.id]: r.ok && r.data })));
+  }, [api, accounts, demo]);
+  // obsadenosť schránky (Zimbra alebo IMAP QUOTA)
+  const [quota, setQuota] = useState<Record<string, { used: number; limit: number } | null>>({});
+  useEffect(() => {
+    if (!api || demo) return;
+    const run = () => {
+      for (const a of accounts.filter(isImap)) void api.zimbraQuota(a.id).then((r) => r.ok && setQuota((q) => ({ ...q, [a.id]: r.data })));
+    };
+    run();
+    const t = window.setInterval(run, 30 * 60_000);
+    return () => window.clearInterval(t);
+  }, [api, accounts, demo, refreshKey]);
+
   // adresáre CardDAV (napr. Zimbra) na dopĺňanie adries
   const [davContacts, setDavContacts] = useState<Record<string, Contact[]>>({});
   useEffect(() => {
@@ -857,6 +877,7 @@ export function App() {
               accounts={imapOnly}
               settings={settings}
               contacts={contacts}
+              zimbra={zimbraOk}
               standalone
               onState={() => undefined}
               onQueued={(it) => it.kind === 'undo' && setUndo(it)}
@@ -907,6 +928,7 @@ export function App() {
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
+          onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
           gpuForced={gpuForced}
@@ -988,6 +1010,9 @@ export function App() {
               Zobrazujú sa ukážkové dáta. Pridaj konto tlačidlom <b>+</b> v páse kont vľavo (IMAP alebo Microsoft 365).
             </div>
           )}
+          {Object.entries(quota).some(([, q]) => q && q.limit > 0 && q.used / q.limit > 0.95) && (
+            <div className="banner warn">Schránka na serveri je takmer plná – nové správy nemusia byť doručené. Odstráňte staré správy alebo veľké prílohy (aj z koša).</div>
+          )}
           {updateReady && (
             <div className="banner">
               Je pripravená nová verzia MailKlienta.{' '}
@@ -1055,6 +1080,7 @@ export function App() {
                     onDropMessages={(dest, d) => void dropMessages(dest, d)}
                     scheduled={scheduled.filter((x) => selection.accountId === ALL || x.accountId === selection.accountId)}
                     onScheduled={(it, edit) => void cancelScheduled(it, edit)}
+                    quota={activeImap ? quota[activeImap.id] : null}
                     savedSearches={settings.savedSearches}
                     activeSearch={search.trim()}
                     onSavedSearch={(x) => {
@@ -1095,6 +1121,7 @@ export function App() {
                       accounts={imapAccounts.filter((a) => a.id !== DEMO_ID).length ? imapAccounts.filter((a) => a.id !== DEMO_ID) : imapAccounts}
                       settings={settings}
                       contacts={contacts}
+                      zimbra={zimbraOk}
                       onState={setComposerState}
                       onQueued={(it) => it.kind === 'undo' && setUndo(it)}
                       onSaveTemplate={saveTemplate}
@@ -1117,6 +1144,15 @@ export function App() {
                     onOpenThread={(t) => void open(t)}
                     categories={categoriesOf(settings)}
                     onRemoveCategory={(id) => void setCategory(id, false)}
+                    onBlockSender={
+                      full.msg && zimbraOk[full.msg.accountId]
+                        ? async () => {
+                            const m = full.msg!;
+                            const r = await api!.zimbraBlock(m.accountId, m.fromAddress);
+                            setStatus(r.ok ? `${m.fromAddress} je blokovaný – ďalšia pošta od neho pôjde do spamu.` : r.error);
+                          }
+                        : undefined
+                    }
                     onRespond={async (ps) => {
                       const m = full.msg;
                       if (!m || !api || m.accountId === DEMO_ID) return;
@@ -1131,11 +1167,12 @@ export function App() {
                 curImapModule === 'tasks' ? (
                   <TasksView settings={settings} onSettings={saveSettings} onOpenMessage={openTaskMessage} />
                 ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'calendar' ? (
-                  <CalendarView key={activeImap.id} account={activeImap} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
+                  <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
                 ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'contacts' ? (
                   <ContactsView
                     key={activeImap.id}
                     account={activeImap}
+                    zimbra={!!zimbraOk[activeImap.id]}
                     onStatus={setStatus}
                     onCompose={(to) => {
                       setImapModule((m) => ({ ...m, [activeImap.id]: 'mail' }));
@@ -1192,6 +1229,23 @@ export function App() {
             closeDialog();
             setStatus('Podpisy uložené.');
           }}
+        />
+      )}
+      {dialog.kind === 'zimbra' && activeImap && activeImap.id !== DEMO_ID && (
+        <ZimbraDialog
+          account={activeImap}
+          folders={folderList}
+          settings={settings}
+          tab={dialog.tab}
+          onSettings={saveSettings}
+          onStatus={setStatus}
+          onAccountIdentities={(ids) => {
+            const cur = activeImap.identities ?? [];
+            const merged = [...cur, ...ids.filter((x) => !cur.some((c) => c.email.toLowerCase() === x.email.toLowerCase()))];
+            const { hasPassword: _h, ...acc } = activeImap;
+            void api?.saveAccount({ ...acc, identities: merged }).then(() => void loadAccounts());
+          }}
+          onClose={closeDialog}
         />
       )}
       {dialog.kind === 'crypto' && <CryptoDialog accounts={accounts.filter(isImap)} onClose={closeDialog} />}

@@ -44,6 +44,7 @@ export function FolderPane(props: {
   onRemoveSearch?: (s: SavedSearch) => void;
   scheduled?: OutboxItem[];
   onScheduled?: (it: OutboxItem, edit: boolean) => void;
+  quota?: { used: number; limit: number } | null;
 }) {
   const a = props.account;
   const [over, setOver] = useState<string | null>(null);
@@ -140,6 +141,16 @@ export function FolderPane(props: {
         ))
       )}
       {searchList}
+      {props.quota && props.quota.limit > 0 && (() => {
+        const p = props.quota.used / props.quota.limit;
+        const gb = (b: number) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
+        return (
+          <div className={`quota ${p > 0.9 ? 'warn' : ''}`} title="Obsadenosť schránky na serveri">
+            Schránka: {gb(props.quota.used)} z {gb(props.quota.limit)} ({Math.round(p * 100)} %){p > 0.9 ? ' – takmer plná, odstráňte staré správy alebo prílohy' : ''}
+            <div className="quota-bar"><span style={{ width: `${Math.min(100, p * 100)}%` }} /></div>
+          </div>
+        );
+      })()}
     </aside>
   );
 }
@@ -387,6 +398,7 @@ export function ReadingPane(props: {
   categories?: Category[];
   onRemoveCategory?: (id: string) => void;
   onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void;
+  onBlockSender?: () => void;
 }) {
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
@@ -418,6 +430,7 @@ export function ReadingPane(props: {
           <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
           <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
           <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+          {props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
         </div>
       </div>
       {(() => {

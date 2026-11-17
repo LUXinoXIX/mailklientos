@@ -12,6 +12,7 @@ export function ContactsView(props: {
   onCompose: (to: string) => void;
   onStatus: (s: string) => void;
   onLoaded?: (list: Contact[]) => void;
+  zimbra?: boolean;
 }) {
   const api = window.mailApi;
   const [list, setList] = useState<Contact[] | null>(null);
@@ -21,6 +22,24 @@ export function ContactsView(props: {
   const [edit, setEdit] = useState<Contact | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [source, setSource] = useState<'mine' | 'gal'>('mine');
+  const [gal, setGal] = useState<Contact[] | null>(null);
+  useEffect(() => {
+    if (source !== 'gal' || !api) return;
+    let alive = true;
+    const t = window.setTimeout(() => {
+      void api.zimbraGal(props.account.id, q.trim() || '.').then((r) => {
+        if (!alive) return;
+        if (r.ok)
+          setGal(r.data.map((g) => ({ uid: g.email, name: g.name, emails: [g.email], phones: [g.phone, g.mobile].filter(Boolean) as string[], org: [g.company, g.department].filter(Boolean).join(' · ') || undefined, title: g.title })));
+        else setError(r.error);
+      });
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [source, q, api, props.account.id]);
 
   useEffect(() => {
     if (!api) return;
@@ -42,11 +61,12 @@ export function ContactsView(props: {
     };
   }, [api, props.account.id, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shown = useMemo(() => {
+  const shownMine = useMemo(() => {
     const n = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const qq = n(q.trim());
     return (list ?? []).filter((c) => !qq || n(`${c.name} ${c.emails.join(' ')} ${c.org ?? ''} ${c.phones.join(' ')}`).includes(qq));
   }, [list, q]);
+  const shown = source === 'gal' ? gal ?? [] : shownMine;
 
   async function save() {
     if (!edit || !api) return;
@@ -75,6 +95,12 @@ export function ContactsView(props: {
           <Input className="grow" placeholder="Hľadať kontakt" value={q} onChange={(_, d) => setQ(d.value)} />
           <Button appearance="primary" disabled={!books.length} onClick={() => setEdit({ uid: '', name: '', emails: [''], phones: [''], bookId: books[0]?.id })}>Nový</Button>
         </div>
+        {props.zimbra && (
+          <div className="contacts-src">
+            <button className={source === 'mine' ? 'on' : ''} onClick={() => setSource('mine')}>Moje kontakty</button>
+            <button className={source === 'gal' ? 'on' : ''} onClick={() => setSource('gal')}>Adresár firmy</button>
+          </div>
+        )}
         {list === null && <Spinner size="tiny" className="pad" />}
         {error && <div className="pane-error pad">⚠ {error}</div>}
         {shown.map((c) => (
@@ -126,8 +152,9 @@ export function ContactsView(props: {
             {sel.phones.map((p) => <div key={p}><a href={`tel:${p.replace(/\s/g, '')}`}>{p}</a></div>)}
             <div className="row gap" style={{ marginTop: 12 }}>
               {sel.emails[0] && <Button appearance="primary" onClick={() => props.onCompose(sel.name ? `"${sel.name}" <${sel.emails[0]}>` : sel.emails[0]!)}>Napísať e-mail</Button>}
-              <Button onClick={() => setEdit({ ...sel, emails: sel.emails.length ? sel.emails : [''], phones: sel.phones.length ? sel.phones : [''] })}>Upraviť</Button>
-              <Button appearance="subtle" onClick={() => void remove(sel)}>Odstrániť</Button>
+              {source === 'gal' && <Button onClick={() => { setEdit({ ...sel, uid: '', href: undefined, bookId: books[0]?.id }); }}>Uložiť do mojich kontaktov</Button>}
+              {source === 'mine' && <Button onClick={() => setEdit({ ...sel, emails: sel.emails.length ? sel.emails : [''], phones: sel.phones.length ? sel.phones : [''] })}>Upraviť</Button>}
+              {source === 'mine' && <Button appearance="subtle" onClick={() => void remove(sel)}>Odstrániť</Button>}
             </div>
           </div>
         ) : (
