@@ -34,6 +34,7 @@ export function AccountRail(props: {
   gpuForced: boolean;
   onToggleGpuForced: () => void;
   onOpenLog: () => void;
+  onBlinkTest: () => void;
   /** Ponuka je otvorená: vložené weby sa musia skryť, inak by ju prekryli. */
   onMenuOpen: (open: boolean) => void;
 }) {
@@ -126,6 +127,7 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleGpuForced}>
               {props.gpuForced ? 'Zrušiť vynútenie grafickej karty (reštart)' : 'Vynútiť grafickú kartu bez sandboxu – test proti blikaniu (reštart)'}
             </MenuItem>
+            <MenuItem onClick={props.onBlinkTest}>Test blikania – holé okno</MenuItem>
             <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
           </MenuList>
         </MenuPopover>

@@ -125,6 +125,7 @@ export function registerIpc() {
   on('diag:setGpuForced', (on: boolean) => diag.setGpuForced(on));
   on('diag:setGpuDisabled', (off: boolean) => diag.setGpuDisabled(off));
   on('diag:openLog', () => diag.openLog());
+  on('diag:blinkTest', () => diag.openBlinkTest());
   on('diag:log', (msg: string) => diag.log('renderer:', String(msg).slice(0, 2000)));
 
   // vložené weby
