@@ -34,12 +34,20 @@ export function moduleUrl(m: M365Module, host: 'office' | 'live' = 'office'): st
     case 'word': return 'https://www.office.com/launch/word';
     case 'excel': return 'https://www.office.com/launch/excel';
     case 'powerpoint': return 'https://www.office.com/launch/powerpoint';
+    case 'copilot': return o ? 'https://m365.cloud.microsoft/chat' : 'https://copilot.microsoft.com/';
+    case 'planner': return o ? 'https://planner.cloud.microsoft/' : 'https://to-do.live.com/tasks/';
+    case 'sharepoint': return 'https://www.office.com/launch/sharepoint';
+    case 'onenote': return o ? 'https://www.office.com/launch/onenote' : 'https://www.onenote.com/notebooks';
+    case 'forms': return 'https://forms.office.com/';
+    case 'loop': return 'https://loop.cloud.microsoft/';
   }
 }
 
 export const MODULE_TITLES: Record<M365Module, string> = {
+  loop: 'Loop',
   mail: 'Outlook', calendar: 'Kalendár', people: 'Ľudia', todo: 'To Do', teams: 'Teams', onedrive: 'OneDrive',
-  word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint',
+  word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint', copilot: 'Copilot', planner: 'Planner', sharepoint: 'SharePoint',
+  onenote: 'OneNote', forms: 'Forms',
 };
 
 export function initialTabs(acc: M365Account): TabsState {

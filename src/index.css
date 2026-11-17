@@ -470,3 +470,15 @@ body { overflow: hidden; }
 .contacts-src { display: flex; gap: 4px; padding: 0 10px 8px; }
 .contacts-src button { flex: 1; border: 1px solid var(--colorNeutralStroke2); background: none; border-radius: var(--radius, 4px); padding: 4px; font: inherit; font-size: 12px; cursor: pointer; color: inherit; }
 .contacts-src button.on { background: var(--colorBrandBackground2); border-color: var(--colorBrandStroke1); font-weight: 600; }
+.kind-badge { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 9px; background: rgba(255,255,255,0.92); color: #1f2d2a; vertical-align: 2px; }
+.acc-icon { position: relative; }
+.acc-kind { position: absolute; right: -6px; bottom: -4px; font-size: 8px; font-weight: 700; line-height: 1; padding: 2px 3px; border-radius: 6px; background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); border: 1px solid var(--colorNeutralStroke1); }
+.about-head { display: flex; gap: 16px; align-items: center; margin-bottom: 10px; }
+.about-name { font-size: 22px; font-weight: 600; }
+.about-ver { font-size: 12px; color: var(--colorNeutralForeground3); margin-top: 2px; }
+.about-sec { margin-top: 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--colorNeutralForeground3); }
+.about-tech { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+/* zoznam: neprečítané a dôležité (vlajka) podfarbené */
+.msg.unread { background: color-mix(in srgb, var(--colorBrandBackground) 9%, transparent); }
+.msg.important { background: color-mix(in srgb, #c50f1f 8%, transparent); box-shadow: inset 3px 0 0 #c50f1f; }
+.msg.selected { background: var(--colorBrandBackground2) !important; }

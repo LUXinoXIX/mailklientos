@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
 import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
 import type { AppSettings, LauncherItem, RuleAction, Task } from '../core/settings';
@@ -201,6 +201,7 @@ export function registerIpc() {
   handle('zimbra:block', (id: string, email: string) => zimbra.blockSender(zacc(id), email));
   handle('tasks:sync', (tasks: Task[]) => tasksync.syncTasks(tasks));
   handle('tasks:delete', (t: Task) => tasksync.deleteRemote(t));
+  handle('app:info', () => ({ version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node, platform: `${process.platform} ${process.arch}` }));
   handle('diag:testNotification', () => testNotification());
   handle('update:check', () => updater.check());
   handle('update:install', () => {

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { registerIpc, setComposeWindowFactory } from './main/ipc';
 import { startOutbox } from './main/outbox';
 import { startUpdater } from './main/updater';
+import { showSplash } from './main/splash';
 import { closeAllConnections } from './main/mail';
 import { startSnoozeTimer } from './main/snooze';
 import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
@@ -50,10 +51,15 @@ const createWindow = (query?: Record<string, string>) => {
     height: compose ? 820 : 900,
     minWidth: compose ? 640 : 960,
     minHeight: 600,
-    title: compose ? 'Nová správa – MailKlient' : 'MailKlient',
+    title: compose ? 'Nová správa – Universum eMail' : 'Universum eMail',
     show: false,
   });
-  win.once('ready-to-show', () => win.show());
+  // štartovací banner len pri hlavnom okne (nie pri okne písania a dymovom teste)
+  const closeSplash = !compose && !SMOKE && BrowserWindow.getAllWindows().length <= 1 ? showSplash() : null;
+  win.once('ready-to-show', () => {
+    if (closeSplash) closeSplash(() => win.show());
+    else win.show();
+  });
   win.on('unresponsive', () => log('okno neodpovedá'));
   attachWindow(win);
 

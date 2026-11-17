@@ -4,3 +4,4 @@ declare module 'mailparser';
 declare module 'nodemailer';
 declare module 'nodemailer/lib/mail-composer';
 declare module '*.css';
+declare module '*.svg' { const url: string; export default url; }
