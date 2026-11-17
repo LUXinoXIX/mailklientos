@@ -2,7 +2,8 @@ name: Zostavenie inštalátorov
 
 on:
   push:
-    branches: [main]
+    # dev: len kontrola a zostavenie (bez zverejnenia); main: zverejnenie latest-build
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -141,7 +142,7 @@ jobs:
   release:
     name: Zverejnenie (latest-build)
     needs: [build]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
