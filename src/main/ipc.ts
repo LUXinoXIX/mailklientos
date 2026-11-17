@@ -19,6 +19,7 @@ import { snooze } from './snooze';
 import * as outbox from './outbox';
 import * as updater from './updater';
 import * as io from './importexport';
+import * as cstore from './cryptostore';
 import * as cal from './calendar';
 import * as dav from './dav';
 import type { CalEvent, Contact } from '../core/ical';
@@ -123,6 +124,40 @@ export function registerIpc() {
   handle('io:exportMbox', (id: string, folder: string) => io.exportMbox(store.getImap(id), folder));
   handle('io:importFiles', (id: string, folder: string) => io.importFiles(store.getImap(id), folder));
   handle('io:importThunderbird', (id: string) => io.importThunderbird(store.getImap(id)));
+  handle('crypto:summary', () => cstore.summary());
+  handle('crypto:pgpGenerate', (name: string, email: string, pass: string) => cstore.pgpGenerate(name, email, pass));
+  handle('crypto:pick', async (kind: 'pgp' | 'p12' | 'cert') => {
+    const w = winOf();
+    const filters =
+      kind === 'pgp' ? [{ name: 'Kľúč PGP', extensions: ['asc', 'gpg', 'pgp', 'key', 'txt'] }]
+      : kind === 'p12' ? [{ name: 'Certifikát s kľúčom', extensions: ['p12', 'pfx'] }]
+      : [{ name: 'Certifikát', extensions: ['cer', 'crt', 'pem', 'der'] }];
+    const opts = { title: 'Vyberte súbor', properties: ['openFile'] as Array<'openFile'>, filters };
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts);
+    return r.canceled ? '' : r.filePaths[0] ?? '';
+  });
+  handle('crypto:pgpImportFile', (file: string, pass?: string) => cstore.pgpImport(fs.readFileSync(file, 'utf8'), pass));
+  handle('crypto:pgpImportText', (text: string, pass?: string) => cstore.pgpImport(text, pass));
+  handle('crypto:smimeImportFile', (file: string, pass: string) => {
+    try {
+      return cstore.smimeImportP12(fs.readFileSync(file), pass);
+    } catch (e) {
+      throw new mail.UserError(/password|MAC|Invalid/i.test(String((e as Error).message)) ? 'Nesprávne heslo k súboru .p12.' : (e as Error).message);
+    }
+  });
+  handle('crypto:certImportFile', (file: string) => cstore.smimeImportCert(fs.readFileSync(file)));
+  handle('crypto:pgpExport', async (fp: string) => {
+    const w = winOf();
+    const opts = { title: 'Uložiť verejný kľúč', defaultPath: path.join(os.homedir(), 'Documents', `verejny-kluc-${fp.slice(-8)}.asc`) };
+    const r = w ? await dialog.showSaveDialog(w, opts) : await dialog.showSaveDialog(opts);
+    if (r.canceled || !r.filePath) return '';
+    fs.writeFileSync(r.filePath, cstore.pgpExportPublic(fp), 'utf8');
+    return r.filePath;
+  });
+  handle('crypto:remove', (kind: 'pgpOwn' | 'pgpContacts' | 'smimeOwn' | 'smimeContacts', id: string) => {
+    cstore.remove(kind, id);
+    return true as const;
+  });
   handle('update:check', () => updater.check());
   handle('update:install', () => {
     updater.installNow();

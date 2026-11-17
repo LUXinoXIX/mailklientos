@@ -36,6 +36,7 @@ export interface ComposeInit {
   receipt?: boolean;
   /** adresa odosielateľa (alias) */
   fromEmail?: string;
+  security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
 }
 
 export interface ComposerHandle {
@@ -53,9 +54,11 @@ export interface ComposerHandle {
   popOut(): void;
   insertTemplate(id: string): void;
   saveAsTemplate(): void;
+  setSecurity(s: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }): void;
 }
 
 export interface ComposerState {
+  security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
   importance: boolean;
   receipt: boolean;
   savedAt: string | null;
@@ -250,6 +253,7 @@ export const Composer = forwardRef<
   const [importance, setImportance] = useState(!!init.importance);
   const [receipt, setReceipt] = useState(!!init.receipt);
   const [attachWarn, setAttachWarn] = useState(false);
+  const [security, setSecurity] = useState<{ sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }>(init.security ?? {});
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -326,8 +330,9 @@ export const Composer = forwardRef<
       draft: draft.current ?? undefined,
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
       from: fromIdentity(),
+      security: security.sign || security.encrypt ? security : undefined,
     };
-  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId, security]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priebežné ukladanie konceptu (každých 5 s, ak sa niečo zmenilo)
   useEffect(() => {
@@ -352,8 +357,8 @@ export const Composer = forwardRef<
   }, [api, accountId, buildInput, sending]);
 
   useEffect(() => {
-    props.onState({ importance, receipt, savedAt, sending });
-  }, [importance, receipt, savedAt, sending]); // eslint-disable-line react-hooks/exhaustive-deps
+    props.onState({ importance, receipt, savedAt, sending, security });
+  }, [importance, receipt, savedAt, sending, security]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zmena odosielateľa: vymeniť podpis za podpis nového konta. */
   function changeAccount(id: string) {
@@ -468,6 +473,7 @@ export const Composer = forwardRef<
       sig.current = next;
     },
     sendLater: (at) => void send(at),
+    setSecurity: (x) => setSecurity(x),
     popOut: () => void popOut(),
     insertTemplate: (id) => insertTemplate(id),
     saveAsTemplate: () => {
@@ -512,6 +518,8 @@ export const Composer = forwardRef<
           <span className="composer-title">{title}</span>
           {importance && <span className="pill warn">Vysoká dôležitosť</span>}
           {receipt && <span className="pill">Potvrdenie o prečítaní</span>}
+          {security.encrypt && <span className="pill sec">🔒 Šifrovať ({security.encrypt === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
+          {security.sign && <span className="pill sec">✓ Podpísať ({security.sign === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
           <span className="grow" />
           <span className="muted small">{savedAt ? `Koncept uložený ${savedAt}` : ''}</span>
         </div>

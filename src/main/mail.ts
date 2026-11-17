@@ -13,6 +13,7 @@ import {
 } from '../core/tls';
 import { getPassword } from './accounts';
 import * as cache from './cache';
+import * as secure from './securemail';
 import { parseEvents, parseMethod } from '../core/ical';
 
 export class UserError extends Error {
@@ -403,9 +404,19 @@ function authOf(p: any): MessageFull['auth'] {
 }
 
 async function parseFull(acc: AccountConfig, folder: string, uid: number, source: Buffer, flagged: boolean): Promise<MessageFull> {
-  const p = await simpleParser(source);
+  // šifrovaná alebo podpísaná správa (PGP/MIME, S/MIME): dešifrovať a overiť podpis
+  const sec = await secure.unwrap(source).catch(() => ({ source, info: undefined }));
+  const p = await simpleParser(sec.source);
+  if (!sec.info && typeof p.text === 'string' && p.text.includes('-----BEGIN PGP MESSAGE-----')) {
+    const plain = await secure.decryptInline(p.text);
+    if (plain) {
+      p.text = plain;
+      p.html = false;
+    }
+  }
   const f = p.from?.value?.[0];
   return {
+    security: sec.info,
     accountId: acc.id,
     folder,
     uid,
@@ -448,7 +459,8 @@ export async function getMessage(acc: AccountConfig, folder: string, uid: number
       await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch((): void => undefined);
       const full = await parseFull(acc, folder, uid, msg.source, !!msg.flags?.has('\\Flagged'));
       cache.updateFlags(acc.id, folder, [uid], { seen: true });
-      cache.storeBody(acc.id, folder, uid, msg.source, `${full.text}`, `${full.to} ${full.cc}`);
+      // text šifrovaných správ sa do lokálneho fulltextu neukladá
+      cache.storeBody(acc.id, folder, uid, msg.source, full.security?.encrypted ? '' : `${full.text}`, `${full.to} ${full.cc}`);
       return full;
     } finally {
       lock.release();
@@ -552,9 +564,17 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
     greetingTimeout: 15000,
   });
   let info;
+  let secureRaw: Buffer | null = null;
   try {
-    info = await transport.sendMail(mail);
+    if (input.security?.sign || input.security?.encrypt) {
+      const messageId = `<${crypto.randomUUID()}@${(mail.from as { address: string }).address.split('@')[1] ?? 'mailklient'}>`;
+      const built = await secure.buildSecure({ ...mail, messageId, date: new Date() } as Record<string, unknown>, input.security, (mail.from as { address: string }).address);
+      secureRaw = built.raw;
+      info = await transport.sendMail({ envelope: { from: (mail.from as { address: string }).address, to: built.recipients }, raw: built.raw });
+      info.messageId = messageId;
+    } else info = await transport.sendMail(mail);
   } catch (e) {
+    if (e instanceof secure.SecureError) throw new UserError(e.message);
     throw toUserError(e, acc.smtp);
   } finally {
     transport.close();
@@ -562,7 +582,7 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   // Uloženie do Odoslaných (IMAP servery to zvyčajne nerobia samy).
   let savedToSent = false;
   try {
-    const raw: Buffer = await new MailComposer({ ...mail, messageId: info.messageId, date: new Date() }).compile().build();
+    const raw: Buffer = secureRaw ?? (await new MailComposer({ ...mail, messageId: info.messageId, date: new Date() }).compile().build());
     await withImap(acc, async (c) => {
       const list: Array<{ path: string; specialUse?: string }> = await c.list();
       const sent = list.find((m) => m.specialUse === '\\Sent') ?? list.find((m) => /^(sent|odoslan)/i.test(m.path));

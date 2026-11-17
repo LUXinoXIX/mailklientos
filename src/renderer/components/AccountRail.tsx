@@ -32,6 +32,7 @@ export function AccountRail(props: {
   gpuOff: boolean;
   onToggleGpu: () => void;
   notifications: boolean;
+  onCrypto: () => void;
   onToggleNotifications: () => void;
   gpuForced: boolean;
   onToggleGpuForced: () => void;
@@ -121,6 +122,7 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onSettings}>Nastavenia konta…</MenuItem>
             <MenuItem onClick={props.onAdd}>Pridať konto…</MenuItem>
             <MenuItem onClick={props.onSignatures}>Podpisy…</MenuItem>
+            <MenuItem onClick={props.onCrypto}>Šifrovanie (PGP, S/MIME)…</MenuItem>
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>

@@ -193,6 +193,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   launchers: [],
   signatures: [],
   signatureDefaults: {},
+  // príklad vlastnej témy, ktorý si používateľ vybral v návrhu tém
+  customThemes: [
+    { id: 'custom-moja', name: 'Moja téma', dark: false, accent: '#2F6F5E', top: '#2F6F5E', rail: '#e3e6ea', pane: '#f5f6f7', read: '#ffffff', text: '#242424', radius: 6 },
+  ],
 };
 
 /** Webová relácia (cookies, prihlásenie) webu v pravom paneli. */

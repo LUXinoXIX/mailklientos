@@ -12,6 +12,9 @@ export function loadSettings(): AppSettings {
   try {
     const s = JSON.parse(fs.readFileSync(file(), 'utf8')) as Partial<AppSettings>;
     return {
+      // všetky ostatné nastavenia (pravidlá, kategórie, šablóny, úlohy, témy…) ostávajú tak, ako boli uložené
+      ...structuredClone(DEFAULT_SETTINGS),
+      ...s,
       webs: Array.isArray(s.webs) ? s.webs : DEFAULT_SETTINGS.webs,
       launchers: Array.isArray(s.launchers) ? s.launchers : DEFAULT_SETTINGS.launchers,
       signatures: Array.isArray(s.signatures) ? s.signatures : [],

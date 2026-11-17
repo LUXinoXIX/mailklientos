@@ -8,7 +8,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, LockIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
@@ -158,6 +158,7 @@ export interface RibbonComposer {
   signatures: Signature[];
   templates: Template[];
   onManageTemplates: () => void;
+  onManageCrypto: () => void;
   run: (fn: (h: ComposerHandle) => void) => void;
 }
 
@@ -263,6 +264,32 @@ export function Ribbon(props: {
             <ToolbarButton onClick={() => c.run((h) => h.toggleReceipt())} aria-pressed={c.state.receipt}>
               {c.state.receipt ? '✓ ' : ''}Potvrdenie o prečítaní
             </ToolbarButton>
+            <ToolbarDivider />
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<LockIcon />}>
+                  {c.state.security?.encrypt ? 'Šifrované' : c.state.security?.sign ? 'Podpísané' : 'Zabezpečenie'}
+                </ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {(() => {
+                    const sec = c.state.security ?? {};
+                    const set = (x: typeof sec) => c.run((h) => h.setSecurity(x));
+                    return (
+                      <>
+                        <MenuItem onClick={() => set({})}>{!sec.sign && !sec.encrypt ? '✓ ' : ''}Bez zabezpečenia</MenuItem>
+                        <MenuItem onClick={() => set({ sign: 'smime' })}>{sec.sign === 'smime' && !sec.encrypt ? '✓ ' : ''}Podpísať (S/MIME)</MenuItem>
+                        <MenuItem onClick={() => set({ sign: 'smime', encrypt: 'smime' })}>{sec.encrypt === 'smime' ? '✓ ' : ''}Podpísať a šifrovať (S/MIME)</MenuItem>
+                        <MenuItem onClick={() => set({ sign: 'pgp' })}>{sec.sign === 'pgp' && !sec.encrypt ? '✓ ' : ''}Podpísať (PGP)</MenuItem>
+                        <MenuItem onClick={() => set({ sign: 'pgp', encrypt: 'pgp' })}>{sec.encrypt === 'pgp' ? '✓ ' : ''}Podpísať a šifrovať (PGP)</MenuItem>
+                        <MenuItem onClick={c.onManageCrypto}>Kľúče a certifikáty…</MenuItem>
+                      </>
+                    );
+                  })()}
+                </MenuList>
+              </MenuPopover>
+            </Menu>
           </>
         ) : c && p.tab === 'insert' ? (
           <>
