@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { MailApi, WebEvent } from './core/api';
 
 const inv = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args);
@@ -21,6 +21,9 @@ const api: MailApi = {
   deleteMessages: (id, folder, uids) => inv('mail:delete', id, folder, uids),
   moveMessages: (id, folder, uids, dest) => inv('mail:move', id, folder, uids, dest),
   unreadCount: (id) => inv('mail:unread', id),
+  saveDraft: (id, msg, prev) => inv('mail:saveDraft', id, msg, prev),
+  deleteDraft: (id, d) => inv('mail:deleteDraft', id, d),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   archiveMessages: (id, folder, uids) => inv('mail:archive', id, folder, uids),
   openAttachment: (id, folder, uid, index) => inv('mail:attachment-open', id, folder, uid, index),
   saveAttachment: (id, folder, uid, index) => inv('mail:attachment-save', id, folder, uid, index),

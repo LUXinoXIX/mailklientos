@@ -44,6 +44,19 @@ export interface SendInput {
   /** Message-ID správy, na ktorú sa odpovedá (vlákna v klientoch). */
   replyMessageId?: string;
   attachments?: { path: string; filename?: string }[];
+  bcc?: string;
+  /** Formátovaný obsah (HTML z editora); text je verzia v čistom texte. */
+  html?: string;
+  priority?: 'high' | 'normal' | 'low';
+  /** Žiadosť o potvrdenie o prečítaní. */
+  readReceipt?: boolean;
+  /** Koncept, ktorý sa po odoslaní zmaže. */
+  draft?: DraftRef;
+}
+
+export interface DraftRef {
+  folder: string;
+  uid: number;
 }
 
 export interface AccountTestResult {
@@ -106,6 +119,11 @@ export interface MailApi {
   deleteMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string | null }>>;
   moveMessages(accountId: string, folder: string, uids: number[], dest: string): Promise<Result<true>>;
   unreadCount(accountId: string): Promise<Result<number>>;
+  /** Uloží koncept do priečinka Koncepty (nahradí predchádzajúcu verziu). */
+  saveDraft(accountId: string, msg: SendInput, prev?: DraftRef): Promise<Result<DraftRef | null>>;
+  deleteDraft(accountId: string, draft: DraftRef): Promise<Result<true>>;
+  /** Cesta k súboru pretiahnutému z Prieskumníka. */
+  pathForFile(file: File): string;
   archiveMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string }>>;
   openAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<true>>;
   saveAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<string | null>>;
