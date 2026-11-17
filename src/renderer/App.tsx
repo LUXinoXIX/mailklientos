@@ -16,7 +16,7 @@ import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
 import { CryptoDialog } from './components/CryptoDialog';
-import { AboutDialog } from './components/AboutDialog';
+import { AboutDialog, ShortcutsDialog } from './components/AboutDialog';
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
@@ -67,6 +67,7 @@ type Dialogs =
   | { kind: 'themes' }
   | { kind: 'crypto' }
   | { kind: 'about' }
+  | { kind: 'shortcuts' }
   | { kind: 'zimbra'; tab?: ZimbraTab };
 
 const splitAddrs = (s: string) =>
@@ -116,6 +117,8 @@ export function App() {
   // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
   const [undo, setUndo] = useState<OutboxItem | null>(null);
   const [updateReady, setUpdateReady] = useState<string | null>(null);
+  const [followupEv, setFollowupEv] = useState<{ subject: string; to: string; accountId: string } | null>(null);
+  const [searchAll, setSearchAll] = useState(false);
   const [outboxTick, setOutboxTick] = useState(0);
   const [scheduled, setScheduled] = useState<OutboxItem[]>([]);
   const [status, setStatus] = useState('');
@@ -158,6 +161,8 @@ export function App() {
       } else if (ev.type === 'update') {
         if (ev.state === 'ready') setUpdateReady(ev.version || 'nová verzia');
         else if (ev.state === 'downloading') setStatus('Sťahujem novú verziu MailKlienta na pozadí…');
+      } else if (ev.type === 'followup') {
+        setFollowupEv(ev);
       } else if (ev.type === 'progress') {
         setStatus(ev.text);
       } else if (ev.type === 'outbox-changed') {
@@ -335,7 +340,7 @@ export function App() {
       if (fromCache.length && !mailTick) setMessages(fromCache);
       if (!mailTick || !messages.length) setListState({ loading: true });
       // 2) aktuálny stav zo servera (uloží sa aj do cache)
-      const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50)));
+      const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50, !!settings.previewLine)));
       if (cancelled) return;
       const errors = results.flatMap((r, i) => (r.ok ? [] : [`${accounts.find((a) => a.id === targets[i]!.id)?.name}: ${r.error}`]));
       const all = results.flatMap((r, i) => (r.ok ? r.data : cached[i]?.ok ? cached[i].data : [])).sort(byDate);
@@ -657,9 +662,94 @@ export function App() {
     onToggleTask: (t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }),
   };
 
+  // pripomenutie bez odpovede → úloha na dnes
+  useEffect(() => {
+    if (!followupEv) return;
+    const t: Task = { id: Math.random().toString(36).slice(2, 10), title: `Bez odpovede: ${followupEv.subject} (${followupEv.to})`, due: todayIso(), done: false, created: new Date().toISOString() };
+    saveSettings({ ...settings, tasks: [...(settings.tasks ?? []), t] });
+    setStatus(`${followupEv.to} neodpovedal(a) na „${followupEv.subject}“ – pridaná úloha na dnes.`);
+    setFollowupEv(null);
+  }, [followupEv]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // počet neprečítaných: ikona pri hodinách a odznak na paneli úloh
+  const totalUnread = Object.values(unread).reduce((a, b) => a + (b || 0), 0);
+  useEffect(() => {
+    if (!api || POP_COMPOSE) return;
+    let badge: string | undefined;
+    if (totalUnread > 0) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 32;
+      const x = c.getContext('2d');
+      if (x) {
+        x.fillStyle = '#c50f1f';
+        x.beginPath();
+        x.arc(16, 16, 15, 0, Math.PI * 2);
+        x.fill();
+        x.fillStyle = '#fff';
+        x.font = `bold ${totalUnread > 99 ? 13 : 18}px Segoe UI, Arial`;
+        x.textAlign = 'center';
+        x.textBaseline = 'middle';
+        x.fillText(totalUnread > 99 ? '99+' : String(totalUnread), 16, 17);
+        badge = c.toDataURL('image/png');
+      }
+    }
+    void api.setUnread(totalUnread, badge);
+  }, [api, totalUnread]);
+
+  // klávesové skratky ako v Outlooku
+  const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keys.current = (e: KeyboardEvent) => {
+    const t = e.target as HTMLElement | null;
+    const typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    const ctrl = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    if (ctrl && e.key === 'Enter' && composeView) return e.preventDefault(), composerRef.current?.send();
+    if (ctrl && k === 'e') return e.preventDefault(), document.querySelector<HTMLInputElement>('.topbar-search input')?.focus();
+    if (typing || dialog.kind !== 'none') return;
+    if (ctrl && k === 'n') return e.preventDefault(), compose('new');
+    if (ctrl && e.shiftKey && k === 'r') return e.preventDefault(), full.msg && compose('replyAll');
+    if (ctrl && k === 'r') return e.preventDefault(), full.msg && compose('reply');
+    if (ctrl && k === 'f') return e.preventDefault(), full.msg && compose('forward');
+    if (ctrl && k === 'q') return e.preventDefault(), current && !current.seen && void toggleSeen();
+    if (ctrl && k === 'u') return e.preventDefault(), current && current.seen && void toggleSeen();
+    if (ctrl && k === 'p') return e.preventDefault(), current && void api?.printMessage(current.accountId, current.folder, current.uid, false);
+    if (e.key === 'Insert') return e.preventDefault(), current && void toggleFlag();
+    if (e.key === 'Delete' && current) return e.preventDefault(), void del();
+    if (ctrl && e.shiftKey && k === 'v') return e.preventDefault(), setStatus('Presun: použite Domov → Presunúť alebo pretiahnite správu na priečinok.');
+    if (e.key === 'F9') return e.preventDefault(), setRefreshKey((x) => x + 1);
+    if (ctrl && ['1', '2', '3', '4'].includes(e.key) && activeImap) {
+      e.preventDefault();
+      const mod = (['mail', 'calendar', 'contacts', 'tasks'] as ImapModule[])[Number(e.key) - 1]!;
+      setImapModule((x) => ({ ...x, [activeImap.id]: mod }));
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
   /** Export a import pošty, aktualizácie (karta Domov → Súbor). */
-  async function runIo(k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update') {
+  async function runIo(k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update' | 'print' | 'pdf' | 'backup' | 'restore' | 'shortcuts') {
     if (!api) return;
+    if (k === 'shortcuts') return openDialog({ kind: 'shortcuts' });
+    if (k === 'backup') {
+      const r = await api.backupExport();
+      return setStatus(r.ok ? (r.data ? `Záloha uložená: ${r.data} (bez hesiel).` : '') : r.error);
+    }
+    if (k === 'restore') {
+      const r = await api.backupImport();
+      if (!r.ok) return setStatus(r.error);
+      if (!r.data.restored) return;
+      await loadAccounts();
+      void api.getSettings().then((x) => x.ok && setSettings(x.data));
+      return setStatus(`Nastavenia obnovené${r.data.accounts ? `, pridané kontá: ${r.data.accounts} – zadajte k nim heslá (Nastavenia konta)` : ''}.`);
+    }
+    if (k === 'print' || k === 'pdf') {
+      if (!current || current.accountId === DEMO_ID) return setStatus('Vyberte správu.');
+      const r = await api.printMessage(current.accountId, current.folder, current.uid, k === 'pdf');
+      return setStatus(r.ok ? (k === 'pdf' && r.data ? `PDF uložené: ${r.data}` : '') : r.error);
+    }
     const accId = current?.accountId ?? activeImap?.id;
     if (k === 'update') {
       const r = await api.updateCheck();
@@ -771,7 +861,7 @@ export function App() {
 
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
-  const searchScope = selection.accountId === ALL ? undefined : selection.accountId;
+  const searchScope = selection.accountId === ALL || searchAll ? undefined : selection.accountId;
   useEffect(() => {
     const q = search.trim();
     if (!api || demo || q.length < 2) {
@@ -984,6 +1074,15 @@ export function App() {
               onOrganize={(tab) => openDialog({ kind: 'organize', tab })}
               conversations={!!settings.conversations}
               onConversations={(v) => saveSettings({ ...settings, conversations: v })}
+              density={settings.density ?? 'comfortable'}
+              onDensity={(d) => saveSettings({ ...settings, density: d })}
+              previewLine={!!settings.previewLine}
+              onPreviewLine={(v) => {
+                saveSettings({ ...settings, previewLine: v });
+                setRefreshKey((x) => x + 1);
+              }}
+              runInBackground={settings.runInBackground !== false}
+              onRunInBackground={(v) => saveSettings({ ...settings, runInBackground: v })}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
@@ -1068,6 +1167,7 @@ export function App() {
                     })
                   }
                   onEditAccount={() => editAccount(a)}
+                  onUnread={(n) => setUnread((u) => (u[a.id] === n ? u : { ...u, [a.id]: n }))}
                 />
               ))}
               {activeM365 ? null : showMail ? (
@@ -1104,6 +1204,9 @@ export function App() {
                           <button className="link small" disabled={found.server === 'loading'} onClick={() => void searchOnServer()}>
                             {found.server === 'loading' ? 'Hľadám na serveri…' : found.server === 'done' ? 'Prehľadané aj na serveri' : `Nájdené: ${found.list.length} · hľadať aj na serveri`}
                           </button>
+                          {selection.accountId !== ALL && (
+                            <button className="link small" onClick={() => setSearchAll(!searchAll)}>{searchAll ? 'len toto konto' : 'vo všetkých kontách'}</button>
+                          )}
                           {!(settings.savedSearches ?? []).some((x) => x.query === found.q) && (
                             <button className="link small" onClick={saveCurrentSearch}>uložiť hľadanie</button>
                           )}
@@ -1113,6 +1216,8 @@ export function App() {
                     messages={filtered}
                     categories={categoriesOf(settings)}
                     conversations={!!settings.conversations && !found}
+                    density={settings.density ?? 'comfortable'}
+                    previewLine={!!settings.previewLine}
                     loading={listState.loading}
                     error={listState.error}
                     selected={current}
@@ -1157,6 +1262,16 @@ export function App() {
                             const m = full.msg!;
                             const r = await api!.zimbraBlock(m.accountId, m.fromAddress);
                             setStatus(r.ok ? `${m.fromAddress} je blokovaný – ďalšia pošta od neho pôjde do spamu.` : r.error);
+                          }
+                        : undefined
+                    }
+                    onPrint={(pdf) => void runIo(pdf ? 'pdf' : 'print')}
+                    onUnsubscribe={
+                      full.msg?.unsubscribe && full.msg.accountId !== DEMO_ID
+                        ? async () => {
+                            const m = full.msg!;
+                            const r = await api!.unsubscribe(m.accountId, m.unsubscribe!);
+                            setStatus(r.ok ? r.data : r.error);
                           }
                         : undefined
                     }
@@ -1256,6 +1371,7 @@ export function App() {
         />
       )}
       {dialog.kind === 'about' && <AboutDialog onClose={closeDialog} />}
+      {dialog.kind === 'shortcuts' && <ShortcutsDialog onClose={closeDialog} />}
       {dialog.kind === 'crypto' && <CryptoDialog accounts={accounts.filter(isImap)} onClose={closeDialog} />}
       {dialog.kind === 'themes' && (
         <ThemeDialog

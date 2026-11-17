@@ -54,6 +54,9 @@ function prepareSession(partition: string) {
   // Oznámenia (nová pošta), mikrofón a kamera (Teams), schránka, celá obrazovka.
   const allowed = new Set(['notifications', 'media', 'clipboard-sanitized-write', 'clipboard-read', 'fullscreen', 'display-capture']);
   ses.setPermissionRequestHandler((_wc, perm, cb) => cb(allowed.has(perm)));
+  // Outlook na webe a Teams sa pred zobrazením upozornenia pýtajú na stav povolenia – odpovedať „povolené“,
+  // upozornenia z webu potom Electron zobrazí ako upozornenia Windows
+  ses.setPermissionCheckHandler((_wc, perm) => allowed.has(perm));
   ses.setPermissionCheckHandler((_wc, perm) => allowed.has(perm));
   return ses;
 }

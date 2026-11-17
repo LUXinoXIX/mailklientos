@@ -6,6 +6,8 @@ import { registerIpc, setComposeWindowFactory } from './main/ipc';
 import { startOutbox } from './main/outbox';
 import { startUpdater } from './main/updater';
 import { showSplash } from './main/splash';
+import { isQuitting, markQuitting, setupTray, startFollowUps } from './main/extras';
+import { loadSettings } from './main/settings';
 import { closeAllConnections } from './main/mail';
 import { startSnoozeTimer } from './main/snooze';
 import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
@@ -61,6 +63,14 @@ const createWindow = (query?: Record<string, string>) => {
     else win.show();
   });
   win.on('unresponsive', () => log('okno neodpovedá'));
+  // zatvorenie hlavného okna: aplikácia beží ďalej pri hodinách (pošta, upozornenia, odloženie, plánované odoslanie)
+  if (!compose) {
+    win.on('close', (e) => {
+      if (isQuitting() || SMOKE || loadSettings().runInBackground === false) return;
+      e.preventDefault();
+      win.hide();
+    });
+  }
   attachWindow(win);
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.
@@ -90,6 +100,7 @@ app.on('second-instance', () => {
   const win = BrowserWindow.getAllWindows()[0];
   if (!win) return;
   if (win.isMinimized()) win.restore();
+  win.show();
   win.focus();
 });
 
@@ -113,6 +124,14 @@ app.whenReady().then(() => {
   syncWatchers();
   startSnoozeTimer();
   startOutbox();
+  startFollowUps();
+  setupTray(() => {
+    const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed() && !x.getTitle().startsWith('Nová správa'));
+    if (!w) return createWindow();
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
+  });
   if (!squirrelEvent) startUpdater();
   powerMonitor.on('resume', () => reconnectWatchers());
   app.on('activate', () => {
@@ -121,6 +140,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  markQuitting();
   stopAllWatchers();
   closeAllConnections();
 });

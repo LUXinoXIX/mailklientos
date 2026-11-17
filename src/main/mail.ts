@@ -235,7 +235,51 @@ const addr = (a: any) => ({ name: a?.name || a?.address || '', address: a?.addre
 
 const SYSTEM_FLAGS = new Set(['\\Seen', '\\Flagged', '\\Answered', '\\Deleted', '\\Draft', '\\Recent']);
 
-export async function listMessages(acc: AccountConfig, folder: string, limit = 50): Promise<MessageSummary[]> {
+/** Krátky náhľad textu z prvých bajtov tela správy (text/plain, inak HTML bez značiek). */
+export function previewFrom(head: string, chunk: Buffer): string {
+  const decode = (enc: string, body: string, charset: string) => {
+    let buf: Buffer;
+    if (/base64/i.test(enc)) buf = Buffer.from(body.replace(/[^A-Za-z0-9+/=]/g, '').replace(/=+[^=]*$/, (m) => m.replace(/[^=]/g, '')), 'base64');
+    else if (/quoted-printable/i.test(enc)) buf = Buffer.from(body.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16))), 'latin1');
+    else buf = Buffer.from(body, 'latin1');
+    try {
+      return new TextDecoder(charset || 'utf-8').decode(buf);
+    } catch {
+      return buf.toString('utf8');
+    }
+  };
+  const clean = (t: string, html: boolean) =>
+    (html ? t.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z]+;/gi, ' ') : t)
+      .replace(/^>.*$/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160);
+  const raw = chunk.toString('latin1');
+  const ct = /content-type:\s*([^;\r\n]+)([^\r\n]*(?:\r?\n[ \t][^\r\n]*)*)/i.exec(head);
+  const type = (ct?.[1] ?? 'text/plain').toLowerCase();
+  const charset = /charset="?([\w-]+)/i.exec(ct?.[2] ?? '')?.[1] ?? 'utf-8';
+  if (type.startsWith('multipart/')) {
+    // prvá textová časť
+    const parts = raw.split(/\r?\n--[^\r\n]+\r?\n/);
+    let html = '';
+    for (const p of parts) {
+      const i = p.search(/\r?\n\r?\n/);
+      if (i < 0) continue;
+      const ph = p.slice(0, i);
+      const pb = p.slice(i).replace(/^\r?\n\r?\n/, '');
+      const pt = /content-type:\s*([^;\r\n]+)/i.exec(ph)?.[1]?.toLowerCase() ?? '';
+      const enc = /content-transfer-encoding:\s*([\w-]+)/i.exec(ph)?.[1] ?? '';
+      const cs = /charset="?([\w-]+)/i.exec(ph)?.[1] ?? 'utf-8';
+      if (pt === 'text/plain') return clean(decode(enc, pb, cs), false);
+      if (pt === 'text/html' && !html) html = clean(decode(enc, pb, cs), true);
+    }
+    return html;
+  }
+  const enc = /content-transfer-encoding:\s*([\w-]+)/i.exec(head)?.[1] ?? '';
+  return clean(decode(enc, raw, charset), type === 'text/html');
+}
+
+export async function listMessages(acc: AccountConfig, folder: string, limit = 50, preview = false): Promise<MessageSummary[]> {
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
     try {
@@ -248,7 +292,10 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
       const from = Math.max(1, total - limit + 1);
       const out: MessageSummary[] = [];
       const recipients = new Map<number, string>();
-      for await (const m of c.fetch(`${from}:*`, { uid: true, envelope: true, flags: true, internalDate: true })) {
+      const q = preview
+        ? { uid: true, envelope: true, flags: true, internalDate: true, headers: ['content-type', 'content-transfer-encoding'], bodyParts: [{ key: 'TEXT', maxLength: 3000 }] }
+        : { uid: true, envelope: true, flags: true, internalDate: true };
+      for await (const m of c.fetch(`${from}:*`, q)) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
         const flags: Set<string> = m.flags ?? new Set();
@@ -266,6 +313,7 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           messageId: m.envelope?.messageId || undefined,
           inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
+          preview: preview ? previewFrom(m.headers ? m.headers.toString('latin1') : '', (m.bodyParts?.get('text') ?? m.bodyParts?.get('TEXT') ?? Buffer.alloc(0)) as Buffer) || undefined : undefined,
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rc = [...(m.envelope?.to ?? []), ...(m.envelope?.cc ?? [])].map((x: any) => `${x.name ?? ''} ${x.address ?? ''}`).join(' ');
@@ -403,6 +451,21 @@ function authOf(p: any): MessageFull['auth'] {
   return { spf, dkim, dmarc, verified, warnings };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unsubscribeOf(p: any): MessageFull['unsubscribe'] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const line = (p.headerLines ?? []).find((h: any) => h.key === 'list-unsubscribe')?.line as string | undefined;
+  if (!line) return undefined;
+  const v = line.replace(/^list-unsubscribe:\s*/i, '').replace(/\r?\n[ \t]+/g, ' ');
+  const items = [...v.matchAll(/<([^>]+)>/g)].map((m) => m[1]!.trim());
+  const url = items.find((x) => /^https:\/\//i.test(x));
+  const mailto = items.find((x) => /^mailto:/i.test(x));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const post = (p.headerLines ?? []).find((h: any) => h.key === 'list-unsubscribe-post')?.line as string | undefined;
+  if (!url && !mailto) return undefined;
+  return { url, mailto, oneClick: !!post && /one-click/i.test(post) };
+}
+
 async function parseFull(acc: AccountConfig, folder: string, uid: number, source: Buffer, flagged: boolean): Promise<MessageFull> {
   // šifrovaná alebo podpísaná správa (PGP/MIME, S/MIME): dešifrovať a overiť podpis
   const sec = await secure.unwrap(source).catch(() => ({ source, info: undefined }));
@@ -434,6 +497,7 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     text: p.text ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invite: inviteOf(p),
+    unsubscribe: unsubscribeOf(p),
     auth: authOf(p),
     attachments: (p.attachments ?? []).filter((a: any) => !/^text\/calendar/i.test(a.contentType ?? '')).map((a: any) => ({
       filename: a.filename || 'príloha',

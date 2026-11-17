@@ -6,6 +6,8 @@ export interface WebSlotHandle {
   back(): void;
   reload(): void;
   url(): string;
+  /** spustí skript v stránke (napr. zistenie počtu neprečítaných) */
+  exec<T = unknown>(js: string): Promise<T | null>;
 }
 
 interface WebviewElement extends HTMLElement {
@@ -13,6 +15,7 @@ interface WebviewElement extends HTMLElement {
   goBack(): void;
   reload(): void;
   getURL(): string;
+  executeJavaScript(js: string): Promise<unknown>;
 }
 
 export const WebSlot = forwardRef<
@@ -32,6 +35,14 @@ export const WebSlot = forwardRef<
       if (ready.current) el.current?.reload();
     },
     url: () => (ready.current ? el.current?.getURL() ?? props.url : props.url),
+    exec: async <T,>(js: string) => {
+      if (!ready.current || !el.current) return null;
+      try {
+        return (await el.current.executeJavaScript(js)) as T;
+      } catch {
+        return null;
+      }
+    },
   }));
 
   useEffect(() => {
