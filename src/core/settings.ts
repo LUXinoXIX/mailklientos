@@ -17,7 +17,19 @@ export interface LauncherItem {
 export interface Signature {
   id: string;
   name: string;
+  /** čistý text (záloha, staršie podpisy) */
   text: string;
+  /** formátovaný podpis (HTML, obrázky ako data: URL) */
+  html?: string;
+}
+
+const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Podpis ako HTML: formátovaný, alebo text s riadkami ako <br>. */
+export function signatureToHtml(sig: Signature | undefined): string {
+  if (!sig) return '';
+  if (sig.html && sig.html.replace(/<p><\/p>/g, '').trim()) return sig.html;
+  return sig.text ? `<p>${escHtml(sig.text).replace(/\n/g, '<br>')}</p>` : '';
 }
 
 /** Predvolené podpisy konta: pre nové správy a pre odpovede/preposlania. */

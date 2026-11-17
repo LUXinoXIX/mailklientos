@@ -12,7 +12,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { DraftRef, MessageFull, PickedFile, SendInput } from '../../core/api';
-import type { AppSettings } from '../../core/settings';
+import { signatureToHtml, type AppSettings } from '../../core/settings';
 import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
@@ -61,13 +61,12 @@ const textToHtml = (t: string) =>
     .map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
-/** Podpis ako HTML (podpisy sú zatiaľ text; riadky → <br>). */
+/** Predvolený podpis konta ako HTML. */
 function signatureHtml(s: AppSettings, accountId: string | undefined, kind: ComposeKind) {
   if (!accountId) return '';
   const d = s.signatureDefaults[accountId];
   const id = kind === 'new' ? d?.newMsg : d?.reply;
-  const sig = s.signatures.find((x) => x.id === id);
-  return sig?.text ? `<p>${esc(sig.text).replace(/\n/g, '<br>')}</p>` : '';
+  return signatureToHtml(s.signatures.find((x) => x.id === id));
 }
 
 /** Hlavička pôvodnej správy ako v Outlooku (Od / Odoslané / Komu / Kópia / Predmet) + jej obsah. */
@@ -97,7 +96,7 @@ function emailHtml(inner: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>p{margin:0}table{border-collapse:collapse}td,th{border:1px solid #c8c8c8;padding:4px 8px}</style></head><body><div style="font-family:Aptos,Calibri,Arial,sans-serif;font-size:11pt;color:#242424">${body}</div></body></html>`;
 }
 
-const readAsDataUrl = (f: File) =>
+export const readAsDataUrl = (f: File) =>
   new Promise<string>((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(String(r.result));
@@ -123,7 +122,7 @@ function Tb(props: { label: string; active?: boolean; onClick: () => void; child
   );
 }
 
-function FormatBar({ editor, onImage }: { editor: Editor; onImage: () => void }) {
+export function FormatBar({ editor, onImage, table = true }: { editor: Editor; onImage: () => void; table?: boolean }) {
   const [link, setLink] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const ts = editor.getAttributes('textStyle') as { fontFamily?: string; fontSize?: string };
@@ -201,7 +200,7 @@ function FormatBar({ editor, onImage }: { editor: Editor; onImage: () => void })
         </PopoverSurface>
       </Popover>
       <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={onImage}>Obrázok</button>
-      <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run()}>Tabuľka</button>
+      {table && <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run()}>Tabuľka</button>}
       <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().unsetAllMarks().clearNodes().run()}>Vymazať formát</button>
     </div>
   );
@@ -249,7 +248,7 @@ export const Composer = forwardRef<
       FontSize,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Image.configure({ inline: true, allowBase64: true }),
+      Image.configure({ inline: true, allowBase64: true, resize: { enabled: true, alwaysPreserveAspectRatio: true, minWidth: 16, minHeight: 16 } }),
       TableKit.configure({ table: { resizable: false } }),
       Placeholder.configure({ placeholder: 'Napíšte správu…' }),
     ],
@@ -389,7 +388,7 @@ export const Composer = forwardRef<
     insertDate: () => editorRef.current?.chain().focus().insertContent(esc(new Date().toLocaleString('sk-SK'))).run(),
     setSignature: (id) => {
       const s = props.settings.signatures.find((x) => x.id === id);
-      const next = s?.text ? `<p>${esc(s.text).replace(/\n/g, '<br>')}</p>` : '';
+      const next = signatureToHtml(s);
       const ed = editorRef.current;
       if (!ed) return;
       if (sig.current && ed.getHTML().includes(sig.current)) ed.commands.setContent(ed.getHTML().replace(sig.current, next), { emitUpdate: true });

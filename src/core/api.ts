@@ -135,7 +135,7 @@ export interface MailApi {
   getSettings(): Promise<Result<AppSettings>>;
   saveSettings(s: AppSettings): Promise<Result<AppSettings>>;
   /** Podpisy klasického Outlooku na tomto počítači (len Windows). */
-  outlookSignatures(): Promise<Result<Array<{ name: string; text: string }>>>;
+  outlookSignatures(): Promise<Result<Array<{ name: string; text: string; html?: string }>>>;
   pickProgram(): Promise<Result<{ target: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
@@ -147,7 +147,6 @@ export interface MailApi {
   /** Vynúti grafickú kartu napriek zoznamu blokovaných ovládačov; reštart. */
   setGpuForced(on: boolean): Promise<void>;
   openLog(): Promise<void>;
-  blinkTest(kind: 'bare' | 'prefs' | 'webview' | 'app-noweb' | 'app-noframe' | 'app-nodiag' | 'app-demo' | 'app-min'): Promise<void>;
   logError(msg: string): Promise<void>;
   onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
   // vložené weby
