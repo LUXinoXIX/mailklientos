@@ -88,7 +88,6 @@ export function Ribbon(props: {
   gpuOff: boolean;
   onToggleGpu: () => void;
   onOpenLog: () => void;
-  onBlinkTest: () => void;
   composer?: RibbonComposer;
 }) {
   const p = props;
@@ -192,7 +191,6 @@ export function Ribbon(props: {
             <ToolbarButton onClick={() => p.onCompact(!p.compact)}>{p.compact ? 'Plný ribbon' : 'Kompaktný ribbon'}</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton onClick={p.onToggleGpu}>{p.gpuOff ? 'Zapnúť hardvérovú akceleráciu' : 'Vypnúť hardvérovú akceleráciu'}</ToolbarButton>
-            <ToolbarButton onClick={p.onBlinkTest}>Test blikania</ToolbarButton>
             <ToolbarButton onClick={p.onOpenLog}>Záznam chýb</ToolbarButton>
           </>
         )}

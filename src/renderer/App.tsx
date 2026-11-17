@@ -527,7 +527,7 @@ export function App() {
           gpuForced={gpuForced}
           onToggleGpuForced={() => void api?.setGpuForced(!gpuForced)}
           onOpenLog={() => void api?.openLog()}
-              onBlinkTest={() => void api?.blinkTest()}
+              onBlinkTest={(k) => void api?.blinkTest(k)}
           onMenuOpen={setMenuOverlay}
         />
         <div className="workspace">
@@ -570,7 +570,6 @@ export function App() {
               gpuOff={gpuOff}
               onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
               onOpenLog={() => void api?.openLog()}
-              onBlinkTest={() => void api?.blinkTest()}
               composer={
                 composeView
                   ? { state: composerState, signatures: settings.signatures, run: (fn) => composerRef.current && fn(composerRef.current) }
