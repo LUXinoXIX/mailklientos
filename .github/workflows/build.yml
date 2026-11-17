@@ -46,6 +46,18 @@ jobs:
           $cmd --no-audit --no-fund 2>&1 | tee ci/install.log
           exit ${PIPESTATUS[0]}
 
+      # Balík závislostí (bez binárky Electronu) pre kontrolu typov v prostredí Claude.
+      - name: Balík závislostí pre vývoj
+        if: matrix.label == 'linux'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar --exclude='node_modules/electron/dist' -czf "$RUNNER_TEMP/node_modules.tgz" node_modules
+          ls -la "$RUNNER_TEMP/node_modules.tgz"
+          gh release view dev-deps >/dev/null 2>&1 || gh release create dev-deps --prerelease --title "Závislosti pre vývoj (nie pre používateľa)" --notes "Pomocný balík pre kontrolu typov."
+          gh release upload dev-deps "$RUNNER_TEMP/node_modules.tgz" --clobber
+
       - name: Kontrola typov
         continue-on-error: true
         run: |
