@@ -7,7 +7,6 @@ import { closeAllConnections } from './main/mail';
 import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
-import { mainWindowOptions, setAppWindowFactory } from './main/blinktest';
 
 // Dymový test v CI (MAILKLIENT_SMOKE=m365): dočasné dáta s ukážkovým kontom M365 a otvoreným pravým panelom.
 const SMOKE_MODE = process.env.MAILKLIENT_SMOKE ?? '';
@@ -30,9 +29,18 @@ applyRenderingSwitches();
 // Windows inštalátor Squirrel: pri inštalácii len vytvoriť zástupcov a skončiť.
 const squirrelEvent = handleSquirrelEvent();
 
-const createWindow = (query?: Record<string, string>) => {
+const createWindow = () => {
   const win = new BrowserWindow({
-    ...mainWindowOptions(),
+    autoHideMenuBar: true,
+    backgroundColor: '#f5f5f5',
+    webPreferences: {
+      backgroundThrottling: false,
+      webviewTag: true,
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
     width: 1440,
     height: 900,
     minWidth: 960,
@@ -58,12 +66,9 @@ const createWindow = (query?: Record<string, string>) => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL + (SMOKE ? `?smoke=${SMOKE_MODE}` : ''));
   } else {
-    const q = { ...(SMOKE ? { smoke: SMOKE_MODE } : {}), ...query };
-    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), Object.keys(q).length ? { query: q } : undefined);
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), SMOKE ? { query: { smoke: SMOKE_MODE } } : undefined);
   }
-  return win;
 };
-setAppWindowFactory(createWindow);
 
 if (!squirrelEvent && !app.requestSingleInstanceLock()) app.quit();
 

@@ -87,22 +87,67 @@ export async function programIcon(target: string): Promise<string | null> {
   }
 }
 
-/** Podpisy klasického Outlooku na tomto počítači (%APPDATA%\\Microsoft\\Signatures\\*.txt). */
-export function outlookSignatures(): Array<{ name: string; text: string }> {
+/** Text súboru podpisu Outlooku: UTF-16 s BOM, UTF-8 s BOM, inak kódovanie z <meta charset> (zvyčajne windows-1250). */
+function decodeOutlook(buf: Buffer, html: boolean): string {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return buf.subarray(3).toString('utf8');
+  const head = buf.subarray(0, 2048).toString('latin1');
+  const cs = html ? /charset=["']?([\w-]+)/i.exec(head)?.[1] : undefined;
+  try {
+    return new TextDecoder(cs ?? 'utf-8').decode(buf);
+  } catch {
+    return buf.toString('utf8');
+  }
+}
+
+const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
+
+/** Podpisy klasického Outlooku z %APPDATA%\Microsoft\Signatures: .htm (formát a obrázky ako data: URL) + .txt (text). */
+export function outlookSignatures(): Array<{ name: string; text: string; html?: string }> {
   if (process.platform !== 'win32' || !process.env.APPDATA) return [];
   const dir = path.join(process.env.APPDATA, 'Microsoft', 'Signatures');
+  let files: string[];
   try {
-    return fs
-      .readdirSync(dir)
-      .filter((f) => f.toLowerCase().endsWith('.txt'))
-      .map((f) => {
-        const buf = fs.readFileSync(path.join(dir, f));
-        // Outlook ukladá .txt ako UTF-16 LE s BOM alebo v kódovaní Windows; UTF-8 ako záloha.
-        const text = buf[0] === 0xff && buf[1] === 0xfe ? buf.subarray(2).toString('utf16le') : buf.toString('utf8');
-        return { name: f.replace(/\.txt$/i, ''), text: text.replace(/\r\n/g, '\n').trim() };
-      })
-      .filter((x) => x.text);
+    files = fs.readdirSync(dir);
   } catch {
     return [];
   }
+  const names = new Set(files.filter((f) => /\.(htm|html|txt)$/i.test(f)).map((f) => f.replace(/\.(htm|html|txt)$/i, '')));
+  const out: Array<{ name: string; text: string; html?: string }> = [];
+  for (const name of names) {
+    const find = (ext: string) => files.find((f) => f.toLowerCase() === `${name}${ext}`.toLowerCase());
+    let text = '';
+    let html: string | undefined;
+    const txt = find('.txt');
+    if (txt) {
+      try {
+        text = decodeOutlook(fs.readFileSync(path.join(dir, txt)), false).replace(/\r\n/g, '\n').trim();
+      } catch {
+        /* nečitateľný súbor */
+      }
+    }
+    const htm = find('.htm') ?? find('.html');
+    if (htm) {
+      try {
+        html = decodeOutlook(fs.readFileSync(path.join(dir, htm)), true);
+        // obrázky z priečinka „<názov>_files“ vložiť priamo (data: URL), aby podpis fungoval aj bez súborov
+        html = html.replace(/(<img[^>]*?\ssrc=)(["'])([^"']+)\2/gi, (m, pre: string, q: string, src: string) => {
+          if (/^(data|https?|cid):/i.test(src)) return m;
+          const file = path.join(dir, decodeURIComponent(src).replace(/\//g, path.sep));
+          const mime = MIME[path.extname(file).toLowerCase()];
+          if (!mime || !file.startsWith(dir)) return m;
+          try {
+            return `${pre}${q}data:${mime};base64,${fs.readFileSync(file).toString('base64')}${q}`;
+          } catch {
+            return m;
+          }
+        });
+        // VML náhrady obrázkov (v:imagedata) sú len pre Word; HTML <img> stačí
+      } catch {
+        html = undefined;
+      }
+    }
+    if (text || html) out.push({ name, text, html });
+  }
+  return out;
 }

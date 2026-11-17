@@ -42,7 +42,6 @@ const api: MailApi = {
   setGpuForced: (on) => inv('diag:setGpuForced', on),
   setGpuDisabled: (off) => inv('diag:setGpuDisabled', off),
   openLog: () => inv('diag:openLog'),
-  blinkTest: (kind) => inv('diag:blinkTest', kind),
   logError: (msg) => inv('diag:log', msg),
   onAppEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, ev: { type: 'gpu-crash'; count: number }) => cb(ev);

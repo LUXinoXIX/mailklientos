@@ -12,7 +12,6 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
-import { openBlinkTest, type BlinkTestKind } from './blinktest';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -126,7 +125,6 @@ export function registerIpc() {
   on('diag:setGpuForced', (on: boolean) => diag.setGpuForced(on));
   on('diag:setGpuDisabled', (off: boolean) => diag.setGpuDisabled(off));
   on('diag:openLog', () => diag.openLog());
-  on('diag:blinkTest', (kind: BlinkTestKind) => openBlinkTest(kind));
   on('diag:log', (msg: string) => diag.log('renderer:', String(msg).slice(0, 2000)));
 
   // vložené weby

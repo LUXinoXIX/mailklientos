@@ -2,9 +2,6 @@
 // Ovládanie (späť, obnoviť, adresa) cez ref; názov stránky a chyby načítania cez udalosti prvku.
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
-// Test blikania 4: okno MailKlienta bez vložených webov (?noweb=1)
-const NO_WEB = new URLSearchParams(window.location.search).get('noweb') === '1';
-
 export interface WebSlotHandle {
   back(): void;
   reload(): void;
@@ -55,10 +52,10 @@ export const WebSlot = forwardRef<
   // src sa nastaví len raz: ďalej si stránka drží vlastnú navigáciu (zmena src by ju načítala znova)
   const src = useRef(props.url);
 
-  if (!window.mailApi || NO_WEB) {
+  if (!window.mailApi) {
     return (
       <div className={`webslot ${props.className ?? ''}`} style={props.visible === false ? { display: 'none' } : undefined}>
-        <div className="webslot-hint">{NO_WEB ? 'Test blikania: vložené weby sú v tomto okne vypnuté.' : 'Vložený web sa zobrazí v aplikácii.'}</div>
+        <div className="webslot-hint">Vložený web sa zobrazí v aplikácii.</div>
       </div>
     );
   }
