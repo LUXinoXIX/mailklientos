@@ -34,7 +34,7 @@ export function AccountRail(props: {
   gpuForced: boolean;
   onToggleGpuForced: () => void;
   onOpenLog: () => void;
-  onBlinkTest: () => void;
+  onBlinkTest: (kind: 'bare' | 'prefs' | 'webview' | 'app-noweb') => void;
   /** Ponuka je otvorená: vložené weby sa musia skryť, inak by ju prekryli. */
   onMenuOpen: (open: boolean) => void;
 }) {
@@ -127,7 +127,10 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleGpuForced}>
               {props.gpuForced ? 'Zrušiť vynútenie grafickej karty (reštart)' : 'Vynútiť grafickú kartu bez sandboxu – test proti blikaniu (reštart)'}
             </MenuItem>
-            <MenuItem onClick={props.onBlinkTest}>Test blikania – holé okno</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('prefs')}>Test blikania 2 – nastavenia okna</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('webview')}>Test blikania 3 – s vloženým webom</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('app-noweb')}>Test blikania 4 – MailKlient bez webov</MenuItem>
+            <MenuItem onClick={() => props.onBlinkTest('bare')}>Test blikania – holé okno</MenuItem>
             <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
           </MenuList>
         </MenuPopover>
