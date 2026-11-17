@@ -1,15 +1,15 @@
 // Ukážkové dáta, kým nie je pridané žiadne konto (aby bolo rozloženie hneď vidieť).
-import type { AccountPublic } from '../core/account';
+import type { ImapAccountPublic } from '../core/account';
 import type { FolderInfo, MessageFull } from '../core/api';
 
 export const DEMO_ID = 'demo';
 
-export const demoAccount: AccountPublic = {
+export const demoAccount: ImapAccountPublic = {
   id: DEMO_ID,
   kind: 'imap',
   name: 'Ukážka',
   email: 'ukazka@firma.sk',
-  color: '#14b8a6',
+  color: '#2F6F5E',
   username: 'ukazka',
   hasPassword: false,
   imap: { host: 'mail.firma.sk', port: 993, security: 'ssl', tls: { certMode: 'strict', legacy: false } },

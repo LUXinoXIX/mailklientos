@@ -6,7 +6,7 @@ import {
 } from '@fluentui/react-components';
 import { useState } from 'react';
 import {
-  DEFAULT_PORTS, strictPolicy, type AccountConfig, type AccountPublic, type CertMode, type Security, type ServerConfig,
+  DEFAULT_PORTS, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
 } from '../../core/account';
 import type { AccountTestResult } from '../../core/api';
 import type { ProbeResult, Protocol } from '../../core/tls-types';
@@ -156,7 +156,7 @@ function ServerSection(props: {
 
 export function AccountDialog(props: {
   open: boolean;
-  edit?: AccountPublic;
+  edit?: ImapAccountPublic;
   usedColors: string[];
   onClose: () => void;
   onSaved: (a: AccountPublic) => void;

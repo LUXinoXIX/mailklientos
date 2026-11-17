@@ -160,6 +160,7 @@ export async function getMessage(acc: AccountConfig, folder: string, uid: number
         date: p.date ? p.date.toISOString() : null,
         seen: true,
         flagged: !!msg.flags?.has('\\Flagged'),
+        messageId: p.messageId || undefined,
         to: addrText(p.to),
         cc: addrText(p.cc),
         html: typeof p.html === 'string' ? p.html : null,
@@ -186,6 +187,9 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
     cc: input.cc || undefined,
     subject: input.subject,
     text: input.text,
+    attachments: input.attachments?.map((a) => ({ path: a.path, filename: a.filename })),
+    inReplyTo: input.replyMessageId || undefined,
+    references: input.replyMessageId || undefined,
   };
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),
@@ -233,4 +237,109 @@ export async function testAccount(acc: AccountConfig, password?: string): Promis
     }
   }
   return res;
+}
+
+// ---------------------------------------------------------------------------
+// Štandardné operácie so správami: príznaky, mazanie, presun, prílohy.
+
+const uidSet = (uids: number[]) => uids.map(String).join(',');
+
+/** Nastaví príznaky Prečítané / Označené (vlajka). */
+export async function setFlags(acc: AccountConfig, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) {
+  if (!uids.length) return true;
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const set = uidSet(uids);
+      if (flags.seen === true) await c.messageFlagsAdd(set, ['\\Seen'], { uid: true });
+      if (flags.seen === false) await c.messageFlagsRemove(set, ['\\Seen'], { uid: true });
+      if (flags.flagged === true) await c.messageFlagsAdd(set, ['\\Flagged'], { uid: true });
+      if (flags.flagged === false) await c.messageFlagsRemove(set, ['\\Flagged'], { uid: true });
+      return true;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+async function findSpecial(c: Client, use: string, names: RegExp): Promise<string | undefined> {
+  const list: Array<{ path: string; specialUse?: string }> = await c.list();
+  return (list.find((m) => m.specialUse === use) ?? list.find((m) => names.test(m.path)))?.path;
+}
+
+/** Odstráni správy: presun do Odstránených; ak už sú v Odstránených (alebo kôš neexistuje), zmaže natrvalo. */
+export async function deleteMessages(acc: AccountConfig, folder: string, uids: number[]) {
+  if (!uids.length) return { movedTo: null as string | null };
+  return withImap(acc, async (c) => {
+    const trash = await findSpecial(c, '\\Trash', /^(trash|deleted|odstr|kôš|kos|inbox[./]trash)/i);
+    const lock = await c.getMailboxLock(folder);
+    try {
+      if (trash && trash !== folder) {
+        await c.messageMove(uidSet(uids), trash, { uid: true });
+        return { movedTo: trash as string | null };
+      }
+      await c.messageDelete(uidSet(uids), { uid: true });
+      return { movedTo: null as string | null };
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Presunie správy do iného priečinka. */
+export async function moveMessages(acc: AccountConfig, folder: string, uids: number[], dest: string) {
+  if (!uids.length || dest === folder) return true;
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      await c.messageMove(uidSet(uids), dest, { uid: true });
+      return true;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Archivovať: presun do priečinka Archív (vytvorí ho, ak neexistuje). */
+export async function archiveMessages(acc: AccountConfig, folder: string, uids: number[]) {
+  if (!uids.length) return { movedTo: '' };
+  return withImap(acc, async (c) => {
+    let archive = await findSpecial(c, '\\Archive', /^(archive|archív|archiv)$/i);
+    if (!archive) {
+      await c.mailboxCreate('Archive').catch((): void => undefined);
+      archive = 'Archive';
+    }
+    const lock = await c.getMailboxLock(folder);
+    try {
+      await c.messageMove(uidSet(uids), archive, { uid: true });
+      return { movedTo: archive };
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Obsah prílohy podľa poradia v správe. */
+export async function getAttachment(acc: AccountConfig, folder: string, uid: number, index: number) {
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const msg = await c.fetchOne(String(uid), { source: true }, { uid: true });
+      if (!msg?.source) throw new UserError('Správa sa nenašla.');
+      const p = await simpleParser(msg.source);
+      const a = p.attachments?.[index];
+      if (!a) throw new UserError('Príloha sa nenašla.');
+      return { filename: (a.filename as string) || `priloha-${index + 1}`, content: a.content as Buffer };
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Počet neprečítaných v Doručenej pošte (pre pás kont). */
+export async function unreadCount(acc: AccountConfig): Promise<number> {
+  return withImap(acc, async (c) => {
+    const st = await c.status('INBOX', { unseen: true });
+    return Number(st?.unseen ?? 0);
+  });
 }
