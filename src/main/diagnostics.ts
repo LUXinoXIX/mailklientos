@@ -88,7 +88,18 @@ export function watchProcesses() {
   app.on('render-process-gone', (_e, wc, d) => {
     log('pád stránky', { url: wc.getURL().slice(0, 120), reason: d.reason, exitCode: d.exitCode });
   });
+  // udalosti okien: pri bliknutí ukážu, či vzniklo iné okno, či sa okno skrylo/stratilo zameranie a pod.
+  app.on('browser-window-created', (_e, w) => {
+    log('okno vytvorené', { id: w.id, title: w.getTitle(), bounds: w.getBounds() });
+    for (const ev of ['show', 'hide', 'focus', 'blur', 'minimize', 'restore', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'closed'] as const) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (w as any).on(ev, () => log(`okno ${w.id}: ${ev}`));
+    }
+    w.webContents.on('did-start-loading', () => log(`okno ${w.id}: stránka sa načítava`, w.webContents.getURL().slice(0, 80)));
+  });
   app.on('web-contents-created', (_e, wc) => {
+    wc.on('did-create-window', (child, d) => log('nové okno zo stránky', { url: d.url.slice(0, 120), id: child.id }));
+    wc.on('focus', () => log(`obsah ${wc.id} (${wc.getType()}): zameranie`));
     wc.on('unresponsive', () => log('stránka neodpovedá', wc.getURL().slice(0, 120)));
     wc.on('responsive', () => log('stránka opäť odpovedá', wc.getURL().slice(0, 120)));
   });
