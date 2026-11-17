@@ -1,7 +1,7 @@
 {
   "name": "mailklient",
   "productName": "MailKlient",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Rich e-mailový klient (IMAP/SMTP, voliteľne MS365)",
   "main": ".vite/build/main.js",
   "private": true,
@@ -39,7 +39,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "dompurify": "^3.1.6",
-    "electron": "^37.0.0",
+    "electron": "^45.3.3",
     "imapflow": "^1.0.160",
     "mailparser": "^3.7.1",
     "nodemailer": "^6.9.14",

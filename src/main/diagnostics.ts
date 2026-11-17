@@ -154,3 +154,35 @@ export function openLog() {
   if (!fs.existsSync(logFile())) log('záznam vytvorený');
   shell.showItemInFolder(logFile());
 }
+
+/**
+ * Test blikania: úplne holé okno Electronu (bez Reactu, Fluent UI, vložených webov a preloadu).
+ * Ak bliká aj toto, problém je v Electrone na danom počítači, nie v kóde MailKlienta.
+ */
+export function openBlinkTest() {
+  const w = new BrowserWindow({ width: 640, height: 460, title: 'MailKlient – test blikania', autoHideMenuBar: true });
+  let blurs = 0;
+  const report = () => w.webContents.executeJavaScript(`window.setBlurs && window.setBlurs(${blurs})`).catch(() => undefined);
+  w.on('blur', () => {
+    blurs++;
+    log('test blikania: blur');
+    report();
+  });
+  w.on('focus', () => log('test blikania: focus'));
+  w.webContents.on('did-finish-load', report);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Test blikania</title>
+<style>body{font:15px Segoe UI,sans-serif;margin:24px;background:#fff;color:#222}
+button{font-size:15px;padding:10px 18px;margin:6px;border:1px solid #888;border-radius:4px;background:#f3f3f3}
+#b{font-size:18px;font-weight:600}</style></head><body>
+<h2>Test blikania</h2>
+<p>Toto je holé okno Electronu, bez kódu MailKlienta. Kliknite niekoľkokrát na tlačidlá a do textu.</p>
+<p>Bliká toto okno rovnako ako MailKlient?</p>
+<button>Tlačidlo 1</button><button>Tlačidlo 2</button><button>Tlačidlo 3</button>
+<p><input style="font-size:15px;padding:6px;width:300px" placeholder="sem niečo napíšte"></p>
+<p>Kliknutia: <span id="c">0</span> &nbsp; · &nbsp; Okno stratilo zameranie (blur): <span id="b">0</span></p>
+<script>let c=0;document.addEventListener('mousedown',()=>{document.getElementById('c').textContent=++c});
+window.setBlurs=n=>{const e=document.getElementById('b');e.textContent=n;e.style.color=n?'#c00':'#222'};</script>
+</body></html>`;
+  void w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  log('test blikania: okno otvorené, Electron', process.versions.electron, 'Chromium', process.versions.chrome);
+}
