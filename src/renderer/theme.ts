@@ -32,5 +32,12 @@ export function getTheme(key: ThemeKey): Theme {
   return cache.get(key)!;
 }
 
-/** Farby kont (bodky, avatary). */
-export const ACCOUNT_COLORS = ['#14b8a6', '#8b5cf6', '#3b82f6', '#f59e0b', '#ef4444', '#10b981', '#ec4899'];
+/** Farby kont (pás kont, avatary, horný pruh). Tmavšie odtiene, aby biely text mal dobrý kontrast. */
+export const ACCOUNT_COLORS = ['#2F6F5E', '#1d4ed8', '#6d28d9', '#b45309', '#be123c', '#0e7490', '#4B5563', '#3f6212'];
+
+/** Staré svetlé farby z kroku 2 premapované na nové tmavšie (tyrkysová → sivozelená). */
+const LEGACY: Record<string, string> = {
+  '#14b8a6': '#2F6F5E', '#8b5cf6': '#6d28d9', '#3b82f6': '#1d4ed8', '#f59e0b': '#b45309',
+  '#ef4444': '#be123c', '#10b981': '#2F6F5E', '#ec4899': '#be123c',
+};
+export const accountColor = (c: string | undefined) => (c ? LEGACY[c.toLowerCase()] ?? c : '#4B5563');

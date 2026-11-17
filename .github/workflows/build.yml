@@ -82,6 +82,13 @@ jobs:
           sleep 20
           import -window root ci/screenshot.png || true
           if kill -0 $pid 2>/dev/null; then echo "beží" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA" | tee -a ci/smoke.log; exit 1; fi
+          sleep 2
+          # druhý beh: ukážkové konto M365 (vložený Outlook na webe) a pravý panel
+          MAILKLIENT_SMOKE=m365 ./out/MailKlient-linux-x64/MailKlient --no-sandbox --enable-logging=stderr > ci/smoke-m365.log 2>&1 &
+          pid=$!
+          sleep 30
+          import -window root ci/screenshot-m365.png || true
+          if kill -0 $pid 2>/dev/null; then echo "beží (m365)" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA (m365)" | tee -a ci/smoke.log; exit 1; fi
 
       - name: Zoznam výstupov
         if: always()

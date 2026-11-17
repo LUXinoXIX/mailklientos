@@ -13,74 +13,88 @@ body { overflow: hidden; }
   color: var(--colorNeutralForeground1);
 }
 
-/* horný pruh */
-.topbar {
-  display: grid;
-  grid-template-columns: 220px 1fr 220px;
-  align-items: center;
-  gap: 12px;
-  height: 48px;
-  padding: 0 12px;
-  background: var(--colorBrandBackground);
-  color: var(--colorNeutralForegroundOnBrand);
-  -webkit-app-region: drag;
-}
-.topbar-title { font-weight: 600; font-size: 15px; }
-.topbar-search { max-width: 560px; width: 100%; justify-self: center; -webkit-app-region: no-drag; }
+/* rozloženie C: pás kont | (horný pruh, ribbon, pás modulov | obsah | pravý panel) */
+.app { --accRailBg: #e3e6ea; }
+.shell { flex: 1; min-height: 0; display: flex; }
+.workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* pás kont */
+.acc-rail { width: 72px; flex: none; background: var(--accRailBg); border-right: 1px solid #cfd4da; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 8px; overflow-y: auto; overflow-x: hidden; }
+.acc-btn { position: relative; width: 72px; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0; cursor: pointer; color: #374151; font: inherit; }
+.acc-btn:hover .acc-icon { filter: brightness(1.12); }
+.acc-btn.dragging { opacity: 0.4; }
+.acc-bar { position: absolute; left: 0; top: 8px; width: 4px; height: 36px; border-radius: 0 3px 3px 0; }
+.acc-icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; transition: border-radius 0.15s; }
+.acc-icon.all { background: #fff; color: var(--colorBrandForeground1); border: 1px solid #cfd4da; }
+.acc-btn.on .acc-icon.all { background: var(--colorBrandBackground); color: #fff; border-color: transparent; border-radius: 14px; }
+.acc-badge { position: absolute; top: 0; right: 8px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #c50f1f; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--accRailBg); }
+.acc-label { font-size: 11px; max-width: 66px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-btn.on .acc-label { color: #111827; font-weight: 600; }
+.acc-sep { width: 36px; height: 1px; background: #cfd4da; margin: 2px 0; }
+.acc-add { width: 44px; height: 44px; margin-top: 6px; border: 1px dashed #6b7280; border-radius: 50%; background: transparent; color: #374151; display: grid; place-items: center; cursor: pointer; }
+.acc-add:hover { background: #fff; }
+.acc-tool { width: 44px; height: 44px; border: 0; border-radius: 8px; background: transparent; color: #374151; display: grid; place-items: center; cursor: pointer; }
+.acc-tool:hover { background: #fff; }
+
+/* horný pruh (farba konta) */
+.topbar { display: grid; grid-template-columns: minmax(200px, 300px) 1fr 120px; align-items: center; gap: 12px; height: 52px; padding: 0 16px; color: #fff; -webkit-app-region: drag; flex: none; }
+.topbar-title { min-width: 0; }
+.topbar-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-sub { font-size: 12px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-search { max-width: 520px; width: 100%; justify-self: center; -webkit-app-region: no-drag; }
 
 /* ribbon */
-.ribbon { background: var(--colorNeutralBackground1); border-bottom: 1px solid var(--colorNeutralStroke2); padding: 0 8px; }
+.ribbon { background: var(--colorNeutralBackground1); border-bottom: 1px solid var(--colorNeutralStroke2); padding: 0 8px; flex: none; }
 .ribbon-bar { min-height: 52px; gap: 2px; flex-wrap: wrap; }
 .ribbon-compact .ribbon-bar { min-height: 36px; }
 .ribbon-label { color: var(--colorNeutralForeground3); margin: 0 6px; }
 
-.banner { padding: 6px 14px; background: var(--colorBrandBackground2); border-bottom: 1px solid var(--colorNeutralStroke2); }
+.banner { padding: 6px 14px; background: var(--colorBrandBackground2); border-bottom: 1px solid var(--colorNeutralStroke2); flex: none; }
 .banner.warn { background: #fff4ce; }
 .link { background: none; border: 0; padding: 0; color: var(--colorBrandForeground1); text-decoration: underline; cursor: pointer; font: inherit; }
 
 /* hlavná plocha */
-.body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 48px 230px minmax(280px, 360px) 1fr;
-}
-.body.with-web { grid-template-columns: 48px 230px minmax(280px, 340px) 1fr minmax(320px, 400px); }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 68px minmax(0, 1fr); }
+.body.with-right { grid-template-columns: 68px minmax(0, 1fr) minmax(320px, 380px); }
+.content { min-width: 0; min-height: 0; display: flex; }
+.mail { flex: 1; min-width: 0; display: grid; grid-template-columns: 230px minmax(260px, 360px) minmax(0, 1fr); }
 
-.rail { background: var(--colorNeutralBackground3); border-right: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; align-items: center; padding-top: 6px; }
-.rail-btn { width: 40px; height: 40px; margin: 2px 0; border: 0; border-radius: 6px; background: transparent; color: var(--colorNeutralForeground2); cursor: pointer; display: grid; place-items: center; }
+/* pás modulov */
+.rail { background: var(--colorNeutralBackground3); border-right: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; align-items: center; padding-top: 6px; overflow-y: auto; }
+.rail-btn { width: 60px; min-height: 52px; margin: 1px 0; border: 0; border-radius: 6px; background: transparent; color: var(--colorNeutralForeground2); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: inherit; }
 .rail-btn:hover { background: var(--colorNeutralBackground1Hover); }
-.rail-btn.active { background: var(--colorBrandBackground2); color: var(--colorBrandForeground1); box-shadow: inset 3px 0 0 var(--colorBrandBackground); }
-.rail-sep { width: 24px; height: 1px; background: var(--colorNeutralStroke2); margin: 6px auto; }
+.rail-btn.active { background: var(--colorNeutralBackground1); font-weight: 600; }
+.rail-label { font-size: 11px; line-height: 1.1; }
+.rail-sep { width: 32px; height: 1px; background: var(--colorNeutralStroke2); margin: 6px auto; }
 
-/* panel kont */
-.accounts { background: var(--colorNeutralBackground1); border-right: 1px solid var(--colorNeutralStroke2); overflow: auto; padding: 8px 0; }
-.account { margin-top: 6px; }
-.account-head { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; color: inherit; }
-.account-name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chev { color: var(--colorNeutralForeground3); }
+/* priečinky */
+.accounts { background: var(--colorNeutralBackground1); border-right: 1px solid var(--colorNeutralStroke2); overflow: auto; padding: 0 0 8px; min-height: 0; }
+.pane-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; border-bottom: 1px solid var(--colorNeutralStroke3); margin-bottom: 6px; }
+.pane-head-text { display: flex; flex-direction: column; min-width: 0; }
+.pane-head-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.folder { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 6px 12px 6px 20px; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.folder { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 7px 14px; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder:hover { background: var(--colorNeutralBackground1Hover); }
 .folder.active { background: var(--colorBrandBackground2); font-weight: 600; }
-.folder.all { padding-left: 12px; font-weight: 600; }
+.count { font-size: 12px; font-weight: 600; color: var(--colorBrandForeground1); flex: none; }
 
 /* zoznam správ */
-.list { background: var(--colorNeutralBackground1); border-right: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; min-height: 0; }
+.list { background: var(--colorNeutralBackground1); border-right: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .list-head { padding: 10px 12px 0; border-bottom: 1px solid var(--colorNeutralStroke2); }
 .list-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-.list-body { overflow: auto; flex: 1; }
+.list-body { overflow: auto; flex: 1; outline: none; }
 .msg { display: flex; gap: 10px; width: 100%; border: 0; border-bottom: 1px solid var(--colorNeutralStroke3); background: none; padding: 10px 12px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .msg:hover { background: var(--colorNeutralBackground1Hover); }
 .msg.selected { background: var(--colorBrandBackground2); }
 .msg.unread { box-shadow: inset 3px 0 0 var(--colorBrandBackground); }
 .msg.unread .msg-from, .msg.unread .msg-subject { font-weight: 600; }
 .msg-main { flex: 1; min-width: 0; }
-.msg-row { display: flex; justify-content: space-between; gap: 8px; }
+.msg-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .msg-from, .msg-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-date { color: var(--colorNeutralForeground3); font-size: 12px; flex: none; }
 .msg-subject { color: var(--colorNeutralForeground2); font-size: 13px; }
+.flag { color: #c50f1f; flex: none; }
 .avatar { border-radius: 50%; color: #fff; display: inline-grid; place-items: center; font-weight: 600; flex: none; }
 
 /* čítací panel */
@@ -88,22 +102,63 @@ body { overflow: hidden; }
 .read-subject { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
 .read-head { display: flex; gap: 12px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid var(--colorNeutralStroke2); }
 .read-meta { flex: 1; min-width: 0; line-height: 1.5; }
+.read-actions { display: flex; gap: 4px; flex: none; }
 .read-body { flex: 1; min-height: 0; padding-top: 12px; display: flex; }
 .mail-frame { flex: 1; border: 0; width: 100%; background: #fff; }
 .plain { white-space: pre-wrap; font-family: inherit; margin: 0; overflow: auto; flex: 1; }
 .attachments { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
-.attachment { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; padding: 4px 8px; }
+.attachment { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; padding: 2px 4px 2px 8px; }
+.attachment-open { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 2px 0; }
+.attachment-open:hover { text-decoration: underline; }
+.icon-x { border: 0; background: none; cursor: pointer; display: grid; place-items: center; padding: 2px; color: var(--colorNeutralForeground3); }
 .images-bar { margin-top: 8px; padding: 4px 8px; background: var(--colorNeutralBackground3); border-radius: 4px; font-size: 13px; }
 
-/* 4. stĺpec */
-.web { background: var(--colorNeutralBackground1); border-left: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; min-width: 0; }
-.web-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--colorNeutralStroke2); }
-.web-placeholder { padding: 20px; }
+/* vložené weby */
+.webslot { flex: 1; min-height: 0; min-width: 0; position: relative; background: #fff; }
+.webslot-hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--colorNeutralForeground3); }
 
-.placeholder { grid-column: 2 / -1; padding: 24px; background: var(--colorNeutralBackground1); }
-.body.with-web .placeholder { grid-column: 2 / 5; }
+/* konto M365: karty + vložený Outlook */
+.m365 { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--colorNeutralBackground1); }
+.m365-bar { flex: none; display: flex; align-items: stretch; gap: 8px; height: 38px; padding: 0 8px; border-bottom: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground2); }
+.m365-tabs { flex: 1; min-width: 0; display: flex; align-items: stretch; overflow-x: auto; }
+.m365-tab { display: flex; align-items: center; border-right: 1px solid var(--colorNeutralStroke3); }
+.m365-tab.on { background: var(--colorNeutralBackground1); }
+.m365-tab-btn { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0 12px; height: 100%; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m365-tab.on .m365-tab-btn { font-weight: 600; }
+.m365-tab-x { border: 0; background: none; cursor: pointer; padding: 4px; margin-right: 4px; border-radius: 4px; display: grid; place-items: center; color: var(--colorNeutralForeground3); }
+.m365-tab-x:hover { background: var(--colorNeutralBackground3); }
+.m365-tools { display: flex; align-items: center; gap: 2px; flex: none; }
 
-.statusbar { height: 24px; padding: 0 12px; font-size: 12px; display: flex; align-items: center; background: var(--colorNeutralBackground3); border-top: 1px solid var(--colorNeutralStroke2); color: var(--colorNeutralForeground2); }
+/* pravý panel */
+.right { background: var(--colorNeutralBackground1); border-left: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.right-tabs { flex: none; display: flex; align-items: center; gap: 2px; padding: 4px 6px 0; border-bottom: 1px solid var(--colorNeutralStroke2); flex-wrap: wrap; }
+.right-tab { display: flex; align-items: center; }
+.right-tab > button:first-child { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 7px 8px; }
+.right-tab.on > button:first-child { font-weight: 600; box-shadow: inset 0 -2px 0 var(--colorBrandBackground); }
+.right-tab-x { border: 0; background: none; cursor: pointer; display: grid; place-items: center; padding: 2px; color: var(--colorNeutralForeground3); }
+.right-url { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 12px; color: var(--colorNeutralForeground2); }
+.right-web { margin: 0 6px; border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; }
+.launchers { flex: none; padding: 10px 8px; border-top: 1px solid var(--colorNeutralStroke2); display: flex; flex-direction: column; gap: 8px; }
+.launchers-title { font-size: 12px; font-weight: 600; color: var(--colorNeutralForeground2); }
+.launchers-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.launcher { position: relative; }
+.launcher-btn, .launcher-add { width: 100%; height: 64px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; font: inherit; font-size: 11px; color: inherit; padding: 4px; }
+.launcher-btn span, .launcher-add span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launcher-btn:hover, .launcher-add:hover { background: var(--colorNeutralBackground1Hover); }
+.launcher-add { border-style: dashed; background: transparent; }
+.launcher-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--colorNeutralStroke1); background: #fff; display: grid; place-items: center; cursor: pointer; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.placeholder { flex: 1; padding: 24px; background: var(--colorNeutralBackground1); }
+
+.statusbar { height: 24px; padding: 0 12px; font-size: 12px; display: flex; align-items: center; background: var(--colorNeutralBackground3); border-top: 1px solid var(--colorNeutralStroke2); color: var(--colorNeutralForeground2); flex: none; }
+
+/* výber typu konta */
+.chooser-dialog { max-width: 560px; }
+.chooser { display: flex; flex-direction: column; gap: 10px; }
+.chooser-card { display: flex; gap: 14px; align-items: flex-start; text-align: left; padding: 14px 16px; border: 1px solid var(--colorNeutralStroke1); border-radius: 8px; background: var(--colorNeutralBackground1); cursor: pointer; font: inherit; color: inherit; }
+.chooser-card:hover { border-color: var(--colorBrandStroke1); background: var(--colorBrandBackground2); }
+.chooser-card > span { display: flex; flex-direction: column; gap: 4px; }
 
 /* spoločné */
 .muted { color: var(--colorNeutralForeground3); }

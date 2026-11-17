@@ -3,7 +3,7 @@
 import { app, safeStorage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AccountConfig, AccountPublic } from '../core/account';
+import type { AccountConfig, AccountPublic, AnyAccount } from '../core/account';
 
 const dir = () => app.getPath('userData');
 const accountsFile = () => path.join(dir(), 'accounts.json');
@@ -34,13 +34,21 @@ export function canStoreSecrets(): boolean {
   return !(process.platform === 'linux' && backend === 'basic_text');
 }
 
-export function loadAccounts(): AccountConfig[] {
-  return readJson<AccountConfig[]>(accountsFile(), []);
+export function loadAccounts(): AnyAccount[] {
+  // Staršie záznamy (krok 2) nemali kind = vždy IMAP.
+  return readJson<AnyAccount[]>(accountsFile(), []).map((a) => ({ ...a, kind: a.kind ?? 'imap' }) as AnyAccount);
 }
 
-export function getAccount(id: string): AccountConfig {
+export function getAccount(id: string): AnyAccount {
   const a = loadAccounts().find((x) => x.id === id);
   if (!a) throw new Error('Konto neexistuje.');
+  return a;
+}
+
+/** IMAP konto (pre poštové operácie). */
+export function getImap(id: string): AccountConfig {
+  const a = getAccount(id);
+  if (a.kind !== 'imap') throw new Error('Toto konto nie je IMAP.');
   return a;
 }
 
@@ -65,20 +73,31 @@ function setPassword(id: string, password: string) {
   writeJson(secretsFile(), s);
 }
 
-export const toPublic = (a: AccountConfig): AccountPublic => ({ ...a, hasPassword: !!getPassword(a.id) });
+export const toPublic = (a: AnyAccount): AccountPublic =>
+  a.kind === 'imap' ? { ...a, hasPassword: !!getPassword(a.id) } : { ...a, hasPassword: false };
 
 export function publicAccounts(): AccountPublic[] {
   return loadAccounts().map(toPublic);
 }
 
-export function saveAccount(acc: AccountConfig, password?: string): AccountPublic {
+export function saveAccount(acc: AnyAccount, password?: string): AccountPublic {
   const list = loadAccounts();
   const i = list.findIndex((x) => x.id === acc.id);
   if (i >= 0) list[i] = acc;
   else list.push(acc);
   writeJson(accountsFile(), list);
-  if (password) setPassword(acc.id, password);
+  if (password && acc.kind === 'imap') setPassword(acc.id, password);
   return toPublic(acc);
+}
+
+/** Nové poradie kont v páse kont (podľa zoznamu id). */
+export function reorderAccounts(ids: string[]) {
+  const list = loadAccounts();
+  const rank = (id: string) => {
+    const i = ids.indexOf(id);
+    return i < 0 ? 999 : i;
+  };
+  writeJson(accountsFile(), [...list].sort((a, b) => rank(a.id) - rank(b.id)));
 }
 
 export function deleteAccount(id: string) {

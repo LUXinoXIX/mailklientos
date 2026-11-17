@@ -41,8 +41,32 @@ export interface AccountConfig {
   smtp: ServerConfig;
 }
 
-/** Konto tak, ako ide do rendereru (bez hesla). */
-export type AccountPublic = AccountConfig & { hasPassword: boolean };
+/**
+ * Konto Microsoft 365 / Outlook.com: vložený Outlook na webe ako celé okno.
+ * Aplikácia nedrží heslo ani token; prihlásenie si pamätá webová relácia konta.
+ */
+export interface M365Account {
+  id: string;
+  kind: 'm365';
+  name: string;
+  email: string;
+  color: string;
+  /** Adresa Outlooku: outlook.office.com (firemné M365) alebo outlook.live.com (osobné). */
+  host?: 'office' | 'live';
+}
+
+export type AnyAccount = AccountConfig | M365Account;
+
+/** IMAP konto tak, ako ide do rendereru (bez hesla). */
+export type ImapAccountPublic = AccountConfig & { hasPassword: boolean };
+/** Ľubovoľné konto pre renderer. */
+export type AccountPublic = ImapAccountPublic | (M365Account & { hasPassword: false });
+
+export const isImap = (a: { kind: string }): a is ImapAccountPublic => a.kind === 'imap';
+export const isM365 = (a: { kind: string }): a is M365Account & { hasPassword: false } => a.kind === 'm365';
+
+/** Webová relácia (cookies, prihlásenie) konta M365. */
+export const accountPartition = (id: string) => `persist:acc-${id}`;
 
 export const DEFAULT_PORTS: Record<'imap' | 'smtp', Record<Security, number>> = {
   imap: { ssl: 993, starttls: 143, none: 143 },

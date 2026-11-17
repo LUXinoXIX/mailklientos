@@ -1,13 +1,23 @@
+// Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
 import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AccountPublic } from '../core/account';
+import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary } from '../core/api';
+import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
+import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
 import { ComposeDialog, type ComposeInit } from './components/ComposeDialog';
-import { AccountPane, MessageList, ReadingPane, WebColumn, type Selection, type WebKey } from './components/MailPanes';
-import { ModuleRail, Ribbon, TopBar, type ModuleKey, type RibbonTab } from './components/Shell';
+import {
+  M365View, MODULE_TITLES, baseKey, initialTabs, moduleUrl, tabTitle, type TabsState,
+} from './components/M365View';
+import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
+import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
+import { RightPanel } from './components/RightPanel';
+import {
+  IMAP_MODULES, M365_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+} from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
-import { getTheme, type ThemeKey } from './theme';
+import { THEMES, accountColor, getTheme, type ThemeKey } from './theme';
 
 declare global {
   interface Window {
@@ -35,20 +45,43 @@ function usePersisted<T>(key: string, initial: T) {
 }
 
 type FolderState = FolderInfo[] | 'loading' | { error: string };
+type Dialogs =
+  | { kind: 'none' }
+  | { kind: 'chooser' }
+  | { kind: 'imap'; edit?: ImapAccountPublic }
+  | { kind: 'm365'; edit?: M365Account }
+  | { kind: 'compose'; init: ComposeInit };
+
+const quote = (m: MessageFull) =>
+  `\n\n${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}, ${m.fromName || m.fromAddress} napísal(a):\n${m.text
+    .split('\n')
+    .map((l) => `> ${l}`)
+    .join('\n')}`;
+
+const splitAddrs = (s: string) =>
+  s
+    .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 
 export function App() {
   const api = window.mailApi;
   const [theme, setTheme] = usePersisted<ThemeKey>('theme', 'blue');
-  const [webOpen, setWebOpen] = usePersisted('webOpen', false);
-  const [webService, setWebService] = usePersisted<WebKey>('webService', 'copilot');
   const [compact, setCompact] = usePersisted('ribbonCompact', false);
+  const [rightOpen, setRightOpen] = usePersisted('rightOpen', false);
+  const [rightActive, setRightActive] = usePersisted('rightActive', 'copilot');
+  const [activeId, setActiveId] = usePersisted<string>('activeAccount', '');
   const [ribbonTab, setRibbonTab] = useState<RibbonTab>('home');
-  const [module, setModule] = useState<ModuleKey>('mail');
+  const [imapModule, setImapModule] = useState<Record<string, ImapModule>>({});
+  const [tabs, setTabs] = useState<Record<string, TabsState>>({});
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   const [accounts, setAccounts] = useState<AccountPublic[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [secretsWarning, setSecretsWarning] = useState(false);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [folders, setFolders] = useState<Record<string, FolderState>>({});
-  const [selection, setSelection] = useState<Selection>({ accountId: 'all', folder: 'INBOX' });
+  const [selection, setSelection] = useState<Selection>({ accountId: ALL, folder: 'INBOX' });
   const [messages, setMessages] = useState<MessageSummary[]>([]);
   const [listState, setListState] = useState<{ loading: boolean; error?: string }>({ loading: false });
   const [current, setCurrent] = useState<MessageSummary | undefined>();
@@ -56,51 +89,151 @@ export function App() {
   const [search, setSearch] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [status, setStatus] = useState('');
-  const [accDialog, setAccDialog] = useState<{ open: boolean; edit?: AccountPublic; key: number }>({ open: false, key: 0 });
-  const [compose, setCompose] = useState<{ open: boolean; init: ComposeInit; key: number }>({ open: false, init: {}, key: 0 });
+  const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
+  const [dialogKey, setDialogKey] = useState(0);
+  const [panelOverlay, setPanelOverlay] = useState(false);
 
-  const demo = accounts.length === 0;
-  const shown = demo ? [demoAccount] : accounts;
-  const colorOf = useCallback((id: string) => shown.find((a) => a.id === id)?.color ?? '#888', [shown]);
+  const demo = loaded && accounts.length === 0;
+  const railAccounts: AccountPublic[] = demo ? [demoAccount] : accounts;
+  const imapAccounts = useMemo(() => (demo ? [demoAccount] : accounts.filter(isImap)), [accounts, demo]);
+  const overlay = dialog.kind !== 'none' || panelOverlay;
 
-  // kontá
+  // aktívne konto (alebo „Všetky“)
+  const active: AccountPublic | null = railAccounts.find((a) => a.id === activeId) ?? null;
+  const activeKey = active ? active.id : imapAccounts.length > 1 && activeId === ALL ? ALL : railAccounts[0]?.id ?? ALL;
+  const activeAcc = railAccounts.find((a) => a.id === activeKey) ?? null;
+  const activeImap = activeAcc && isImap(activeAcc) ? activeAcc : null;
+  const activeM365 = activeAcc && isM365(activeAcc) ? activeAcc : null;
+  const colorOf = useCallback((id: string) => accountColor(railAccounts.find((a) => a.id === id)?.color), [railAccounts]);
+
+  const openDialog = (d: Dialogs) => {
+    setDialog(d);
+    setDialogKey((k) => k + 1);
+  };
+  const closeDialog = () => setDialog({ kind: 'none' });
+
+  // kontá a nastavenia
   const loadAccounts = useCallback(async () => {
-    if (!api) return;
+    if (!api) {
+      setLoaded(true);
+      return;
+    }
     const r = await api.listAccounts();
     if (r.ok) {
       setAccounts(r.data.accounts);
-      setSecretsWarning(!r.data.canStoreSecrets);
+      setSecretsWarning(!r.data.canStoreSecrets && r.data.accounts.some(isImap));
     } else setStatus(r.error);
+    setLoaded(true);
   }, [api]);
   useEffect(() => {
     void loadAccounts();
-  }, [loadAccounts]);
+    void api?.getSettings().then((r) => r.ok && setSettings(r.data));
+  }, [loadAccounts, api]);
 
-  // priečinky
+  const saveSettings = (s: AppSettings) => {
+    setSettings(s);
+    void api?.saveSettings(s);
+  };
+
+  // pri zmene konta: výber priečinka
+  useEffect(() => {
+    if (activeImap) setSelection({ accountId: activeImap.id, folder: 'INBOX' });
+    else if (activeKey === ALL) setSelection({ accountId: ALL, folder: 'INBOX' });
+    setCurrent(undefined);
+    setFull({ loading: false });
+  }, [activeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // karty kont M365
+  useEffect(() => {
+    if (activeM365 && !tabs[activeM365.id]) setTabs((t) => ({ ...t, [activeM365.id]: initialTabs(activeM365) }));
+  }, [activeM365, tabs]);
+
+  // udalosti vložených webov: nová karta z Outlooku (Office aplikácie), názvy stránok
+  useEffect(() => {
+    if (!api) return;
+    return api.onWebEvent((ev) => {
+      if (ev.type === 'tab-opened') {
+        const accId = ev.group.replace(/^acc-/, '');
+        let host = 'Office';
+        try {
+          host = new URL(ev.url).hostname.replace(/^www\./, '');
+        } catch {
+          /* nič */
+        }
+        setTabs((all) => {
+          const st = all[accId];
+          if (!st) return all;
+          return { ...all, [accId]: { tabs: [...st.tabs, { key: ev.key, title: host, url: ev.url }], active: ev.key } };
+        });
+        setActiveId(accId);
+      } else if (ev.type === 'title') {
+        setTabs((all) => {
+          let changed = false;
+          const next: Record<string, TabsState> = {};
+          for (const [id, st] of Object.entries(all)) {
+            next[id] = {
+              ...st,
+              tabs: st.tabs.map((t) => {
+                if (t.key !== ev.key) return t;
+                changed = true;
+                return { ...t, title: tabTitle(ev.title, t.module ? MODULE_TITLES[t.module] : t.title) };
+              }),
+            };
+          }
+          return changed ? next : all;
+        });
+      }
+    });
+  }, [api, setActiveId]);
+
+  // neprečítané pre pás kont (každé 2 minúty)
+  useEffect(() => {
+    if (!api || demo) return;
+    let alive = true;
+    const run = () => {
+      for (const a of accounts.filter(isImap))
+        void api.unreadCount(a.id).then((r) => alive && r.ok && setUnread((u) => ({ ...u, [a.id]: r.data })));
+    };
+    run();
+    const t = window.setInterval(run, 120_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [api, accounts, demo, refreshKey]);
+
+  // priečinky aktívneho IMAP konta
   useEffect(() => {
     if (demo) {
       setFolders({ [DEMO_ID]: demoFolders });
       return;
     }
-    for (const a of accounts) {
-      setFolders((f) => ({ ...f, [a.id]: 'loading' }));
-      void api!.listFolders(a.id).then((r) =>
-        setFolders((f) => ({ ...f, [a.id]: r.ok ? r.data : { error: r.error } })),
-      );
-    }
-  }, [accounts, demo, api, refreshKey]);
+    if (!activeImap || !api) return;
+    const id = activeImap.id;
+    setFolders((f) => (Array.isArray(f[id]) ? f : { ...f, [id]: 'loading' }));
+    void api.listFolders(id).then((r) => setFolders((f) => ({ ...f, [id]: r.ok ? r.data : { error: r.error } })));
+  }, [activeImap?.id, demo, api, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // správy
+  const showMail = !activeM365 && (activeImap ? (imapModule[activeImap.id] ?? 'mail') === 'mail' : true);
   useEffect(() => {
+    if (!showMail) return;
     let cancelled = false;
     (async () => {
       if (demo) {
         setMessages(selection.folder === 'INBOX' ? demoMessages : []);
         return;
       }
+      if (!api) return;
+      const ids = accounts.filter(isImap).map((a) => a.id);
+      const targets =
+        selection.accountId === ALL ? ids.map((id) => ({ id, folder: 'INBOX' })) : ids.includes(selection.accountId) ? [{ id: selection.accountId, folder: selection.folder }] : [];
+      if (!targets.length) {
+        setMessages([]);
+        return;
+      }
       setListState({ loading: true });
-      const targets = selection.accountId === 'all' ? accounts.map((a) => ({ id: a.id, folder: 'INBOX' })) : [{ id: selection.accountId, folder: selection.folder }];
-      const results = await Promise.all(targets.map((t) => api!.listMessages(t.id, t.folder, 50)));
+      const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50)));
       if (cancelled) return;
       const errors = results.flatMap((r, i) => (r.ok ? [] : [`${accounts.find((a) => a.id === targets[i]!.id)?.name}: ${r.error}`]));
       const all = results.flatMap((r) => (r.ok ? r.data : []));
@@ -111,7 +244,14 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [selection, accounts, demo, api, refreshKey]);
+  }, [selection, accounts, demo, api, refreshKey, showMail]);
+
+  const patchMsg = (m: MessageSummary, patch: Partial<MessageSummary>) => {
+    const same = (x: MessageSummary) => x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder;
+    setMessages((list) => list.map((x) => (same(x) ? { ...x, ...patch } : x)));
+    setCurrent((c) => (c && same(c) ? { ...c, ...patch } : c));
+    setFull((f) => (f.msg && same(f.msg) ? { ...f, msg: { ...f.msg, ...patch } } : f));
+  };
 
   async function open(m: MessageSummary) {
     setCurrent(m);
@@ -122,7 +262,98 @@ export function App() {
     setFull({ loading: true });
     const r = await api!.getMessage(m.accountId, m.folder, m.uid);
     setFull(r.ok ? { loading: false, msg: r.data } : { loading: false, error: `${r.error}${r.hint ? ` ${r.hint}` : ''}` });
-    if (r.ok) setMessages((list) => list.map((x) => (x === m ? { ...x, seen: true } : x)));
+    if (r.ok && !m.seen) {
+      patchMsg(m, { seen: true });
+      setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 1) - 1) }));
+    }
+  }
+
+  // operácie so správou
+  const removeFromList = (m: MessageSummary) => {
+    setMessages((list) => list.filter((x) => !(x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder)));
+    setCurrent(undefined);
+    setFull({ loading: false });
+  };
+  const guardDemo = (m: MessageSummary) => {
+    if (m.accountId === DEMO_ID) {
+      setStatus('V ukážkovom režime sa správy nemenia. Pridaj konto (+ v páse kont).');
+      return true;
+    }
+    return false;
+  };
+  async function del() {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.deleteMessages(m.accountId, m.folder, [m.uid]);
+    if (!r.ok) return setStatus(r.error);
+    removeFromList(m);
+    setStatus(r.data.movedTo ? 'Správa presunutá do Odstránených.' : 'Správa natrvalo odstránená.');
+  }
+  async function archive() {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.archiveMessages(m.accountId, m.folder, [m.uid]);
+    if (!r.ok) return setStatus(r.error);
+    removeFromList(m);
+    setStatus(`Správa archivovaná (${r.data.movedTo}).`);
+  }
+  async function move(dest: string) {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const r = await api.moveMessages(m.accountId, m.folder, [m.uid], dest);
+    if (!r.ok) return setStatus(r.error);
+    removeFromList(m);
+    setStatus('Správa presunutá.');
+  }
+  async function toggleSeen() {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const seen = !m.seen;
+    const r = await api.setFlags(m.accountId, m.folder, [m.uid], { seen });
+    if (!r.ok) return setStatus(r.error);
+    patchMsg(m, { seen });
+    setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 0) + (seen ? -1 : 1)) }));
+  }
+  async function toggleFlag() {
+    const m = current;
+    if (!m || !api || guardDemo(m)) return;
+    const flagged = !m.flagged;
+    const r = await api.setFlags(m.accountId, m.folder, [m.uid], { flagged });
+    if (!r.ok) return setStatus(r.error);
+    patchMsg(m, { flagged });
+  }
+
+  function compose(kind: 'new' | 'reply' | 'replyAll' | 'forward') {
+    const m = full.msg;
+    const accountId = m && m.accountId !== DEMO_ID ? m.accountId : activeImap && activeImap.id !== DEMO_ID ? activeImap.id : undefined;
+    if (kind === 'new' || !m) return openDialog({ kind: 'compose', init: { accountId } });
+    const me = (imapAccounts.find((a) => a.id === m.accountId)?.email ?? '').toLowerCase();
+    if (kind === 'forward')
+      return openDialog({
+        kind: 'compose',
+        init: {
+          accountId,
+          title: 'Preposlať',
+          subject: /^(fw|fwd):/i.test(m.subject) ? m.subject : `Fwd: ${m.subject}`,
+          text: `\n\n---------- Preposlaná správa ----------\nOd: ${m.fromName} <${m.fromAddress}>\nDátum: ${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}\nPredmet: ${m.subject}\nKomu: ${m.to}\n\n${m.text}`,
+        },
+      });
+    const cc =
+      kind === 'replyAll'
+        ? [...splitAddrs(m.to), ...splitAddrs(m.cc)].filter((a) => !a.toLowerCase().includes(me) && !a.toLowerCase().includes(m.fromAddress.toLowerCase())).join(', ')
+        : '';
+    openDialog({
+      kind: 'compose',
+      init: {
+        accountId,
+        title: kind === 'replyAll' ? 'Odpovedať všetkým' : 'Odpovedať',
+        to: m.fromAddress,
+        cc,
+        subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`,
+        text: quote(m),
+        replyMessageId: m.messageId,
+      },
+    });
   }
 
   const filtered = useMemo(() => {
@@ -131,118 +362,257 @@ export function App() {
     return messages.filter((m) => `${m.subject} ${m.fromName} ${m.fromAddress}`.toLowerCase().includes(q));
   }, [messages, search]);
 
-  const title = useMemo(() => {
-    if (selection.accountId === 'all') return 'Všetky doručené';
+  const folderList = activeImap && Array.isArray(folders[activeImap.id]) ? (folders[activeImap.id] as FolderInfo[]) : [];
+  const listTitle = useMemo(() => {
+    if (selection.accountId === ALL) return 'Všetky doručené';
     const fs = folders[selection.accountId];
     const f = Array.isArray(fs) ? fs.find((x) => x.path === selection.folder) : undefined;
-    return f?.name ?? selection.folder;
+    return f?.name ?? (selection.folder === 'INBOX' ? 'Doručená pošta' : selection.folder);
   }, [selection, folders]);
 
-  function reply() {
-    const m = full.msg;
-    if (!m) return;
-    const quoted = m.text
-      .split('\n')
-      .map((l) => `> ${l}`)
-      .join('\n');
-    setCompose({
-      open: true,
-      key: compose.key + 1,
-      init: {
-        accountId: m.accountId === DEMO_ID ? undefined : m.accountId,
-        to: m.fromAddress,
-        subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`,
-        text: `\n\n${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}, ${m.fromName} napísal(a):\n${quoted}`,
+  // modul M365: otvorí alebo prepne kartu
+  function selectM365Module(acc: M365Account, mod: M365Module) {
+    const st = tabs[acc.id] ?? initialTabs(acc);
+    if (mod === 'mail') return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
+    const key = `${baseKey(acc.id)}:${mod}`;
+    const exists = st.tabs.some((x) => x.key === key);
+    setTabs((t) => ({
+      ...t,
+      [acc.id]: {
+        tabs: exists ? st.tabs : [...st.tabs, { key, title: MODULE_TITLES[mod], url: moduleUrl(mod, acc.host), module: mod }],
+        active: key,
       },
+    }));
+  }
+  function closeTab(acc: M365Account, key: string) {
+    void api?.webClose(key);
+    setTabs((t) => {
+      const st = t[acc.id];
+      if (!st) return t;
+      const rest = st.tabs.filter((x) => x.key !== key);
+      return { ...t, [acc.id]: { tabs: rest, active: st.active === key ? baseKey(acc.id) : st.active } };
     });
   }
 
-  const selectModule = (k: ModuleKey) => {
-    if (k === 'whatsapp' || k === 'teams' || k === 'copilot') {
-      setWebService(k);
-      setWebOpen(true);
-      return;
-    }
-    setModule(k);
+  const editAccount = (a: AccountPublic) => {
+    if (a.id === DEMO_ID) return openDialog({ kind: 'chooser' });
+    if (isImap(a)) openDialog({ kind: 'imap', edit: a });
+    else if (isM365(a)) openDialog({ kind: 'm365', edit: a });
   };
 
-  const editable = selection.accountId !== 'all' && !demo ? accounts.find((a) => a.id === selection.accountId) : undefined;
+  // horný pruh
+  const accent = THEMES[theme].accent;
+  const topColor = activeAcc ? accountColor(activeAcc.color) : accent;
+  const topTitle = activeAcc ? activeAcc.name : 'Všetky doručené';
+  const topSub = activeM365
+    ? `${activeM365.email || 'Microsoft 365'} · Outlook na webe`
+    : activeImap
+      ? `${activeImap.email} · IMAP${activeImap.imap.host ? ` · ${activeImap.imap.host}` : ''}`
+      : `${imapAccounts.length} IMAP ${imapAccounts.length === 1 ? 'konto' : imapAccounts.length < 5 ? 'kontá' : 'kont'}`;
+
+  const curImapModule: ImapModule = activeImap ? imapModule[activeImap.id] ?? 'mail' : 'mail';
+  const m365State = activeM365 ? tabs[activeM365.id] ?? initialTabs(activeM365) : null;
+  const m365ActiveModule = m365State ? m365State.tabs.find((t) => t.key === m365State.active)?.module ?? null : null;
 
   return (
     <FluentProvider theme={getTheme(theme)} className={`app theme-${theme}`}>
-      <TopBar search={search} onSearch={setSearch} />
-      <Ribbon
-        tab={ribbonTab}
-        onTab={setRibbonTab}
-        canReply={!!full.msg}
-        onCompose={() => setCompose({ open: true, init: {}, key: compose.key + 1 })}
-        onReply={reply}
-        onRefresh={() => setRefreshKey((k) => k + 1)}
-        onAddAccount={() => setAccDialog({ open: true, key: accDialog.key + 1 })}
-        onEditAccount={editable ? () => setAccDialog({ open: true, edit: editable, key: accDialog.key + 1 }) : undefined}
-        theme={theme}
-        onTheme={setTheme}
-        webOpen={webOpen}
-        onToggleWeb={() => setWebOpen(!webOpen)}
-        compact={compact}
-        onCompact={setCompact}
-      />
-      {demo && (
-        <div className="banner">
-          Zobrazujú sa ukážkové dáta. <button className="link" onClick={() => setAccDialog({ open: true, key: accDialog.key + 1 })}>Pridať IMAP konto</button>
+      <div className="shell">
+        <AccountRail
+          accounts={railAccounts}
+          active={activeKey}
+          unread={unread}
+          showAll={imapAccounts.length > 1}
+          onSelect={setActiveId}
+          onAdd={() => openDialog({ kind: 'chooser' })}
+          onEdit={editAccount}
+          onReorder={(ids) => {
+            setAccounts((list) => [...list].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)));
+            void api?.reorderAccounts(ids);
+          }}
+          onSettings={() => (activeAcc ? editAccount(activeAcc) : openDialog({ kind: 'chooser' }))}
+        />
+        <div className="workspace">
+          <TopBar title={topTitle} subtitle={topSub} color={topColor} search={search} onSearch={activeM365 ? undefined : setSearch} />
+          {!activeM365 && (
+            <Ribbon
+              tab={ribbonTab}
+              onTab={setRibbonTab}
+              hasMessage={!!full.msg}
+              seen={current?.seen ?? true}
+              flagged={current?.flagged ?? false}
+              canMove={!!current && current.accountId !== DEMO_ID && folderList.length > 0}
+              folders={folderList.filter((f) => f.path !== current?.folder)}
+              onCompose={() => compose('new')}
+              onReply={() => compose('reply')}
+              onReplyAll={() => compose('replyAll')}
+              onForward={() => compose('forward')}
+              onDelete={() => void del()}
+              onArchive={() => void archive()}
+              onMove={(d) => void move(d)}
+              onToggleSeen={() => void toggleSeen()}
+              onToggleFlag={() => void toggleFlag()}
+              onRefresh={() => setRefreshKey((k) => k + 1)}
+              onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
+              theme={theme}
+              onTheme={setTheme}
+              rightOpen={rightOpen}
+              onToggleRight={() => setRightOpen(!rightOpen)}
+              compact={compact}
+              onCompact={setCompact}
+            />
+          )}
+          {demo && (
+            <div className="banner">
+              Zobrazujú sa ukážkové dáta. Pridaj konto tlačidlom <b>+</b> v páse kont vľavo (IMAP alebo Microsoft 365).
+            </div>
+          )}
+          {secretsWarning && (
+            <div className="banner warn">Systémové úložisko hesiel nie je dostupné: heslá sa držia len do zatvorenia aplikácie.</div>
+          )}
+          <main className={`body ${rightOpen ? 'with-right' : ''}`}>
+            {activeM365 ? (
+              <ModuleRail modules={M365_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+            ) : (
+              <ModuleRail
+                modules={IMAP_MODULES}
+                active={curImapModule}
+                color={topColor}
+                onSelect={(k) => activeImap && setImapModule((m) => ({ ...m, [activeImap.id]: k }))}
+              />
+            )}
+            <div className="content">
+              {activeM365 && m365State ? (
+                <M365View
+                  account={activeM365}
+                  state={m365State}
+                  color={topColor}
+                  overlay={overlay}
+                  rightOpen={rightOpen}
+                  onActivate={(key) => setTabs((t) => ({ ...t, [activeM365.id]: { ...m365State, active: key } }))}
+                  onClose={(key) => closeTab(activeM365, key)}
+                  onToggleRight={() => setRightOpen(!rightOpen)}
+                  onEditAccount={() => editAccount(activeM365)}
+                />
+              ) : showMail ? (
+                <div className="mail">
+                  <FolderPane
+                    account={activeImap}
+                    accounts={imapAccounts}
+                    folders={folders}
+                    unread={unread}
+                    selection={selection}
+                    onSelect={(s) => {
+                      setSelection(s);
+                      setCurrent(undefined);
+                      setFull({ loading: false });
+                    }}
+                  />
+                  <MessageList
+                    title={listTitle}
+                    messages={filtered}
+                    loading={listState.loading}
+                    error={listState.error}
+                    selected={current}
+                    colorOf={colorOf}
+                    onOpen={(m) => void open(m)}
+                    onDeleteKey={() => void del()}
+                  />
+                  <ReadingPane
+                    message={full.msg}
+                    loading={full.loading}
+                    error={full.error}
+                    color={colorOf(full.msg?.accountId ?? '')}
+                    onReply={() => compose('reply')}
+                    onReplyAll={() => compose('replyAll')}
+                    onForward={() => compose('forward')}
+                  />
+                </div>
+              ) : (
+                <section className="placeholder">
+                  <h2>{IMAP_MODULES.find((x) => x.key === curImapModule)?.label}</h2>
+                  <p className="muted">
+                    Pripravuje sa: kalendár, úlohy a kontakty cez CalDAV/CardDAV (Zimbra, Google, Nextcloud) pre konto {activeImap?.name}.
+                  </p>
+                </section>
+              )}
+            </div>
+            {rightOpen && (
+              <RightPanel
+                settings={settings}
+                onSettings={saveSettings}
+                active={rightActive}
+                onActive={setRightActive}
+                overlay={overlay}
+                onOverlay={setPanelOverlay}
+                onStatus={setStatus}
+              />
+            )}
+          </main>
+          <footer className="statusbar">
+            {status ||
+              (demo
+                ? 'Ukážkový režim'
+                : `${accounts.length} ${accounts.length === 1 ? 'konto' : accounts.length < 5 ? 'kontá' : 'kont'}`)}
+          </footer>
         </div>
-      )}
-      {secretsWarning && (
-        <div className="banner warn">
-          Systémové úložisko hesiel (keyring) nie je dostupné: heslá sa držia len do zatvorenia aplikácie.
-        </div>
-      )}
-      <main className={`body ${webOpen ? 'with-web' : ''}`}>
-        <ModuleRail active={module} onSelect={selectModule} />
-        {module === 'mail' ? (
-          <>
-            <AccountPane accounts={shown} folders={folders} selection={selection} onSelect={(s) => { setSelection(s); setCurrent(undefined); setFull({ loading: false }); }} />
-            <MessageList title={title} messages={filtered} loading={listState.loading} error={listState.error} selected={current} colorOf={colorOf} onOpen={open} />
-            <ReadingPane message={full.msg} loading={full.loading} error={full.error} color={colorOf(full.msg?.accountId ?? '')} onReply={reply} />
-          </>
-        ) : (
-          <section className="placeholder">
-            <h2>{module === 'calendar' ? 'Kalendár' : module === 'tasks' ? 'Úlohy' : 'Spúšťače'}</h2>
-            <p className="muted">{module === 'launchers' ? 'Pripravuje sa v etape 3.' : 'Pripravuje sa v etape 2 (CalDAV, Zimbra, MS365).'}</p>
-          </section>
-        )}
-        {webOpen && <WebColumn service={webService} onService={setWebService} onClose={() => setWebOpen(false)} />}
-      </main>
-      <footer className="statusbar">{status || (demo ? 'Ukážkový režim' : `${accounts.length} ${accounts.length === 1 ? 'konto' : accounts.length < 5 ? 'kontá' : 'kont'}`)}</footer>
+      </div>
 
-      {accDialog.open && (
+      {dialog.kind === 'chooser' && (
+        <AddAccountChooser
+          onClose={closeDialog}
+          onImap={() => openDialog({ kind: 'imap' })}
+          onM365={() => openDialog({ kind: 'm365' })}
+        />
+      )}
+      {dialog.kind === 'imap' && (
         <AccountDialog
-          key={accDialog.key}
+          key={dialogKey}
           open
-          edit={accDialog.edit}
-          usedColors={accounts.map((a) => a.color)}
-          onClose={() => setAccDialog({ ...accDialog, open: false })}
+          edit={dialog.edit}
+          usedColors={accounts.map((a) => accountColor(a.color))}
+          onClose={closeDialog}
           onSaved={(a) => {
-            setAccDialog({ ...accDialog, open: false });
+            closeDialog();
             setStatus(`Konto ${a.name} uložené.`);
+            setActiveId(a.id);
             void loadAccounts();
+            setRefreshKey((k) => k + 1);
           }}
           onDeleted={() => {
-            setAccDialog({ ...accDialog, open: false });
-            setSelection({ accountId: 'all', folder: 'INBOX' });
+            closeDialog();
+            setActiveId('');
             void loadAccounts();
           }}
         />
       )}
-      {compose.open && (
+      {dialog.kind === 'm365' && (
+        <M365Dialog
+          key={dialogKey}
+          edit={dialog.edit}
+          usedColors={accounts.map((a) => accountColor(a.color))}
+          onClose={closeDialog}
+          onSaved={(a) => {
+            closeDialog();
+            setStatus(`Konto ${a.name} uložené.`);
+            setActiveId(a.id);
+            void loadAccounts();
+          }}
+          onDeleted={() => {
+            closeDialog();
+            setActiveId('');
+            void loadAccounts();
+          }}
+        />
+      )}
+      {dialog.kind === 'compose' && (
         <ComposeDialog
-          key={compose.key}
+          key={dialogKey}
           open
-          init={compose.init}
-          accounts={accounts}
-          onClose={() => setCompose({ ...compose, open: false })}
+          init={dialog.init}
+          accounts={accounts.filter(isImap)}
+          onClose={closeDialog}
           onSent={(info) => {
-            setCompose({ ...compose, open: false });
+            closeDialog();
             setStatus(info);
           }}
         />

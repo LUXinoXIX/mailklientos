@@ -2,9 +2,10 @@
 import { Button, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useMemo, useState } from 'react';
-import type { AccountPublic } from '../../core/account';
+import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary } from '../../core/api';
-import { AttachIcon, FolderIcon, InboxIcon, SentIcon, TrashIcon } from '../icons';
+import { AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
 
@@ -27,54 +28,58 @@ export function Avatar({ name, color, size = 32 }: { name: string; color: string
 const folderIcon = (f: FolderInfo) =>
   f.specialUse === '\\Inbox' ? <InboxIcon /> : f.specialUse === '\\Sent' ? <SentIcon /> : f.specialUse === '\\Trash' ? <TrashIcon /> : <FolderIcon />;
 
-export function AccountPane(props: {
-  accounts: AccountPublic[];
+/** Priečinky vybraného konta; v režime „Všetky“ zoznam doručených pôšt všetkých IMAP kont. */
+export function FolderPane(props: {
+  account: ImapAccountPublic | null;
+  accounts: ImapAccountPublic[];
   folders: Record<string, FolderInfo[] | 'loading' | { error: string }>;
+  unread: Record<string, number>;
   selection: Selection;
   onSelect: (s: Selection) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const a = props.account;
+  if (!a)
+    return (
+      <aside className="accounts">
+        <div className="pane-head">
+          <span className="dot" style={{ background: 'var(--colorBrandBackground)' }} />
+          <span className="pane-head-text"><b>Všetky kontá</b><span className="muted small">{props.accounts.length} IMAP kontá</span></span>
+        </div>
+        <button className={`folder ${props.selection.accountId === 'all' ? 'active' : ''}`} onClick={() => props.onSelect({ accountId: 'all', folder: 'INBOX' })}>
+          <InboxIcon /> <span className="grow">Všetky doručené</span>
+        </button>
+        {props.accounts.map((x) => (
+          <button key={x.id} className={`folder ${props.selection.accountId === x.id ? 'active' : ''}`} onClick={() => props.onSelect({ accountId: x.id, folder: 'INBOX' })}>
+            <span className="dot" style={{ background: accountColor(x.color) }} /> <span className="grow">{x.name}</span>
+            {(props.unread[x.id] ?? 0) > 0 && <span className="count">{props.unread[x.id]}</span>}
+          </button>
+        ))}
+      </aside>
+    );
+  const f = props.folders[a.id];
   return (
     <aside className="accounts">
-      <button
-        className={`folder all ${props.selection.accountId === 'all' ? 'active' : ''}`}
-        onClick={() => props.onSelect({ accountId: 'all', folder: 'INBOX' })}
-      >
-        <InboxIcon /> <span>Všetky doručené</span>
-      </button>
-      {props.accounts.map((a) => {
-        const f = props.folders[a.id];
-        return (
-          <div key={a.id} className="account">
-            <button className="account-head" onClick={() => setCollapsed((c) => ({ ...c, [a.id]: !c[a.id] }))}>
-              <span className="dot" style={{ background: a.color }} />
-              <span className="account-name" title={a.email}>
-                {a.name}
-              </span>
-              <span className="chev">{collapsed[a.id] ? '▸' : '▾'}</span>
-            </button>
-            {!collapsed[a.id] &&
-              (f === 'loading' || f === undefined ? (
-                <Spinner size="extra-tiny" className="pad" />
-              ) : 'error' in f ? (
-                <div className="pane-error" title={f.error}>
-                  ⚠ {f.error}
-                </div>
-              ) : (
-                f.map((fo) => (
-                  <button
-                    key={fo.path}
-                    className={`folder ${props.selection.accountId === a.id && props.selection.folder === fo.path ? 'active' : ''}`}
-                    style={{ paddingLeft: 20 + fo.depth * 14 }}
-                    onClick={() => props.onSelect({ accountId: a.id, folder: fo.path })}
-                  >
-                    {folderIcon(fo)} <span>{fo.name}</span>
-                  </button>
-                ))
-              ))}
-          </div>
-        );
-      })}
+      <div className="pane-head">
+        <span className="dot" style={{ background: accountColor(a.color) }} />
+        <span className="pane-head-text"><b>{a.name}</b><span className="muted small">{a.email}</span></span>
+      </div>
+      {f === 'loading' || f === undefined ? (
+        <Spinner size="extra-tiny" className="pad" />
+      ) : 'error' in f ? (
+        <div className="pane-error" title={f.error}>⚠ {f.error}</div>
+      ) : (
+        f.map((fo) => (
+          <button
+            key={fo.path}
+            className={`folder ${props.selection.accountId === a.id && props.selection.folder === fo.path ? 'active' : ''}`}
+            style={{ paddingLeft: 14 + fo.depth * 14 }}
+            onClick={() => props.onSelect({ accountId: a.id, folder: fo.path })}
+          >
+            {folderIcon(fo)} <span className="grow">{fo.name}</span>
+            {fo.specialUse === '\\Inbox' && (props.unread[a.id] ?? 0) > 0 && <span className="count">{props.unread[a.id]}</span>}
+          </button>
+        ))
+      )}
     </aside>
   );
 }
@@ -95,6 +100,7 @@ export function MessageList(props: {
   selected?: MessageSummary;
   colorOf: (accountId: string) => string;
   onOpen: (m: MessageSummary) => void;
+  onDeleteKey?: () => void;
 }) {
   const [tab, setTab] = useState<'all' | 'unread'>('all');
   const list = tab === 'unread' ? props.messages.filter((m) => !m.seen) : props.messages;
@@ -107,7 +113,13 @@ export function MessageList(props: {
           <Tab value="unread">Neprečítané</Tab>
         </TabList>
       </div>
-      <div className="list-body">
+      <div
+        className="list-body"
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
+        }}
+      >
         {props.loading && <Spinner size="small" label="Načítavam…" className="pad" />}
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
         {!props.loading && !props.error && list.length === 0 && <div className="empty">Žiadne správy</div>}
@@ -125,7 +137,10 @@ export function MessageList(props: {
                   <span className="msg-from">{m.fromName || m.fromAddress}</span>
                   <span className="msg-date">{fmtDate(m.date)}</span>
                 </div>
-                <div className="msg-subject">{m.subject}</div>
+                <div className="msg-row">
+                  <span className="msg-subject">{m.subject}</span>
+                  {m.flagged && <FlagFilledIcon className="flag" />}
+                </div>
               </div>
             </button>
           );
@@ -151,12 +166,22 @@ function HtmlBody({ html, showImages }: { html: string; showImages: boolean }) {
   return <iframe className="mail-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} title="Obsah správy" />;
 }
 
-export function ReadingPane(props: { message?: MessageFull; loading: boolean; error?: string; color: string; onReply: () => void }) {
+export function ReadingPane(props: {
+  message?: MessageFull;
+  loading: boolean;
+  error?: string;
+  color: string;
+  onReply: () => void;
+  onReplyAll: () => void;
+  onForward: () => void;
+}) {
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
+  const api = window.mailApi;
   if (props.loading) return <section className="reading"><Spinner label="Otváram správu…" className="pad" /></section>;
   if (props.error) return <section className="reading"><div className="pane-error pad">⚠ {props.error}</div></section>;
   if (!m) return <section className="reading"><div className="empty">Vyber správu na čítanie</div></section>;
+  const demo = m.accountId === 'demo';
   return (
     <section className="reading">
       <h2 className="read-subject">{m.subject}</h2>
@@ -169,12 +194,28 @@ export function ReadingPane(props: { message?: MessageFull; loading: boolean; er
           <div className="muted">Komu: {m.to}{m.cc ? ` · Kópia: ${m.cc}` : ''}</div>
           <div className="muted">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
         </div>
-        <Button size="small" onClick={props.onReply}>Odpovedať</Button>
+        <div className="read-actions">
+          <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
+          <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
+          <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+        </div>
       </div>
       {m.attachments.length > 0 && (
         <div className="attachments">
           {m.attachments.map((a, i) => (
-            <span key={i} className="attachment"><AttachIcon /> {a.filename} <span className="muted">({Math.ceil(a.size / 1024)} kB)</span></span>
+            <span key={i} className="attachment">
+              <button
+                className="attachment-open"
+                disabled={demo}
+                title="Otvoriť"
+                onClick={() => void api?.openAttachment(m.accountId, m.folder, m.uid, i)}
+              >
+                <AttachIcon /> {a.filename} <span className="muted">({Math.ceil(a.size / 1024)} kB)</span>
+              </button>
+              <Button size="small" appearance="transparent" disabled={demo} onClick={() => void api?.saveAttachment(m.accountId, m.folder, m.uid, i)}>
+                Uložiť
+              </Button>
+            </span>
           ))}
         </div>
       )}
@@ -185,33 +226,5 @@ export function ReadingPane(props: { message?: MessageFull; loading: boolean; er
       )}
       <div className="read-body">{m.html ? <HtmlBody html={m.html} showImages={showImages} /> : <pre className="plain">{m.text}</pre>}</div>
     </section>
-  );
-}
-
-export const WEB_SERVICES = {
-  copilot: { label: 'Copilot', url: 'https://copilot.microsoft.com' },
-  teams: { label: 'Teams', url: 'https://teams.microsoft.com' },
-  whatsapp: { label: 'WhatsApp Web', url: 'https://web.whatsapp.com' },
-} as const;
-export type WebKey = keyof typeof WEB_SERVICES;
-
-export function WebColumn(props: { service: WebKey; onService: (k: WebKey) => void; onClose: () => void }) {
-  const s = WEB_SERVICES[props.service];
-  return (
-    <aside className="web">
-      <div className="web-head">
-        <TabList size="small" selectedValue={props.service} onTabSelect={(_, d) => props.onService(d.value as WebKey)}>
-          {Object.entries(WEB_SERVICES).map(([k, v]) => (
-            <Tab key={k} value={k}>{v.label}</Tab>
-          ))}
-        </TabList>
-        <Button size="small" appearance="subtle" onClick={props.onClose} aria-label="Zavrieť">✕</Button>
-      </div>
-      <div className="web-placeholder">
-        <p><b>{s.label}</b> sa tu bude zobrazovať priamo v okne (izolované prihlásenie cez WebContentsView).</p>
-        <p className="muted">Pripravené v etape 3. Zatiaľ sa dá otvoriť v prehliadači:</p>
-        <Button onClick={() => window.mailApi?.openExternal(s.url)}>Otvoriť {s.label}</Button>
-      </div>
-    </aside>
   );
 }
