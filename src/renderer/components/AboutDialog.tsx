@@ -56,3 +56,40 @@ export function AboutDialog(props: { onClose: () => void }) {
     </Dialog>
   );
 }
+
+const SHORTCUTS: Array<[string, string]> = [
+  ['Ctrl+N', 'Nová správa'],
+  ['Ctrl+R', 'Odpovedať'],
+  ['Ctrl+Shift+R', 'Odpovedať všetkým'],
+  ['Ctrl+F', 'Preposlať'],
+  ['Ctrl+Enter', 'Odoslať (pri písaní)'],
+  ['Ctrl+Q / Ctrl+U', 'Označiť ako prečítané / neprečítané'],
+  ['Insert', 'Vlajka'],
+  ['Delete', 'Odstrániť'],
+  ['Ctrl+P', 'Tlačiť'],
+  ['Ctrl+E', 'Hľadať'],
+  ['F9', 'Obnoviť'],
+  ['Ctrl+1 … 4', 'Pošta, Kalendár, Kontakty, Úlohy'],
+];
+
+export function ShortcutsDialog(props: { onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
+      <DialogSurface style={{ maxWidth: 480 }}>
+        <DialogBody>
+          <DialogContent>
+            <div className="about-name" style={{ fontSize: 18, marginBottom: 10 }}>Klávesové skratky</div>
+            <table className="keys">
+              <tbody>
+                {SHORTCUTS.map(([k, d]) => (
+                  <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </DialogContent>
+          <DialogActions><Button onClick={props.onClose}>Zavrieť</Button></DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+}

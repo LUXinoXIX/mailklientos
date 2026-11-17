@@ -56,9 +56,11 @@ export interface ComposerHandle {
   insertTemplate(id: string): void;
   saveAsTemplate(): void;
   setSecurity(s: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }): void;
+  setFollowUp(days: number): void;
 }
 
 export interface ComposerState {
+  followUp?: number;
   security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
   importance: boolean;
   receipt: boolean;
@@ -256,6 +258,7 @@ export const Composer = forwardRef<
   const [importance, setImportance] = useState(!!init.importance);
   const [receipt, setReceipt] = useState(!!init.receipt);
   const [attachWarn, setAttachWarn] = useState(false);
+  const [followUp, setFollowUp] = useState(0);
   const [security, setSecurity] = useState<{ sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }>(init.security ?? {});
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -334,8 +337,9 @@ export const Composer = forwardRef<
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
       from: fromIdentity(),
       security: security.sign || security.encrypt ? security : undefined,
+      followUpDays: followUp || undefined,
     };
-  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId, security]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId, security, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priebežné ukladanie konceptu (každých 5 s, ak sa niečo zmenilo)
   useEffect(() => {
@@ -360,8 +364,8 @@ export const Composer = forwardRef<
   }, [api, accountId, buildInput, sending]);
 
   useEffect(() => {
-    props.onState({ importance, receipt, savedAt, sending, security });
-  }, [importance, receipt, savedAt, sending, security]); // eslint-disable-line react-hooks/exhaustive-deps
+    props.onState({ importance, receipt, savedAt, sending, security, followUp });
+  }, [importance, receipt, savedAt, sending, security, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zmena odosielateľa: vymeniť podpis za podpis nového konta. */
   function changeAccount(id: string) {
@@ -488,6 +492,7 @@ export const Composer = forwardRef<
     },
     sendLater: (at) => void send(at),
     setSecurity: (x) => setSecurity(x),
+    setFollowUp: (d) => setFollowUp(d),
     popOut: () => void popOut(),
     insertTemplate: (id) => insertTemplate(id),
     saveAsTemplate: () => {

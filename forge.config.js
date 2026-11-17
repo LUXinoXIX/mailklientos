@@ -10,6 +10,8 @@ module.exports = {
     // ikona aplikácie (Windows .ico, Linux/macOS .png); zobrazovaný názov „Universum eMail“.
     // productName ostáva „MailKlient“ – podľa neho sa volá priečinok s nastaveniami a .exe (aktualizácie).
     icon: 'assets/icon',
+    // ikona pre oznamovaciu oblasť (tray) – mimo asar, v priečinku resources
+    extraResource: ['assets/tray.png'],
     win32metadata: {
       ProductName: 'Universum eMail',
       FileDescription: 'Universum eMail',

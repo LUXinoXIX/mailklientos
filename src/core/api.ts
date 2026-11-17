@@ -32,6 +32,8 @@ export interface MessageSummary {
   inReplyTo?: string;
   /** IMAP kľúčové slová (kategórie, $Pin …) */
   keywords?: string[];
+  /** začiatok textu správy (riadok s náhľadom v zozname) */
+  preview?: string;
 }
 
 export interface MessageFull extends MessageSummary {
@@ -43,6 +45,8 @@ export interface MessageFull extends MessageSummary {
   messageId?: string;
   /** pozvánka na udalosť (iMIP, text/calendar v správe) */
   invite?: { method: string; event: CalEvent; ics: string };
+  /** odhlásenie z newslettera (List-Unsubscribe) */
+  unsubscribe?: { url?: string; mailto?: string; oneClick?: boolean };
   /** šifrovanie / podpis (PGP, S/MIME) */
   security?: {
     encrypted?: 'pgp' | 'smime';
@@ -82,6 +86,8 @@ export interface SendInput {
   autoReply?: boolean;
   /** pozvánka / odpoveď na pozvánku (text/calendar) */
   ical?: { method: string; content: string };
+  /** pripomenúť, ak príjemca neodpovie do toľkých dní */
+  followUpDays?: number;
   /** podpísať / zašifrovať (PGP alebo S/MIME) */
   security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
 }
@@ -156,7 +162,7 @@ export interface MailApi {
   autoconfig(email: string): Promise<Result<AutoConfigResult | null>>;
   // pošta (IMAP)
   listFolders(accountId: string): Promise<Result<FolderInfo[]>>;
-  listMessages(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
+  listMessages(accountId: string, folder: string, limit?: number, preview?: boolean): Promise<Result<MessageSummary[]>>;
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
@@ -169,6 +175,13 @@ export interface MailApi {
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
   updateCheck(): Promise<Result<boolean>>;
   testNotification(): Promise<Result<string>>;
+  printMessage(accountId: string, folder: string, uid: number, pdf: boolean): Promise<Result<string>>;
+  previewAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<{ kind: 'image' | 'window' | 'external'; src?: string; filename: string }>>;
+  unsubscribe(accountId: string, u: { url?: string; mailto?: string; oneClick?: boolean }): Promise<Result<string>>;
+  backupExport(): Promise<Result<string>>;
+  backupImport(): Promise<Result<{ accounts: number; restored: boolean }>>;
+  setUnread(total: number, badge?: string): Promise<Result<true>>;
+  openInOffice(url: string): Promise<Result<true>>;
   appInfo(): Promise<Result<{ version: string; electron: string; chrome: string; node: string; platform: string }>>;
   zimbraCheck(accountId: string): Promise<Result<boolean>>;
   zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
@@ -272,6 +285,7 @@ export type AppEvent =
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }
   | { type: 'outbox-changed' }
+  | { type: 'followup'; subject: string; to: string; accountId: string }
   | { type: 'progress'; text: string }
   | { type: 'update'; state: 'downloading' | 'none' | 'ready'; version?: string }
   | { type: 'outbox-sent'; id: string; subject: string; savedToSent: boolean }
