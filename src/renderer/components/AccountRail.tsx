@@ -1,6 +1,6 @@
 // Pás kont úplne vľavo: „Všetky doručené“, kontá (ikona s iniciálami, neprečítané), pridať konto.
 // Poradie sa mení ťahaním, pravé tlačidlo = nastavenia konta.
-import { Tooltip } from '@fluentui/react-components';
+import { Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import { useState } from 'react';
 import type { AccountPublic } from '../../core/account';
 import { AddIcon, AllInboxIcon, SettingsIcon } from '../icons';
@@ -28,6 +28,12 @@ export function AccountRail(props: {
   onEdit: (a: AccountPublic) => void;
   onReorder: (ids: string[]) => void;
   onSettings: () => void;
+  onSignatures: () => void;
+  gpuOff: boolean;
+  onToggleGpu: () => void;
+  onOpenLog: () => void;
+  /** Ponuka je otvorená: vložené weby sa musia skryť, inak by ju prekryli. */
+  onMenuOpen: (open: boolean) => void;
 }) {
   const [drag, setDrag] = useState<string | null>(null);
   const totalUnread = Object.values(props.unread).reduce((a, b) => a + b, 0);
@@ -98,11 +104,27 @@ export function AccountRail(props: {
         </button>
       </Tooltip>
       <div className="grow" />
-      <Tooltip content="Nastavenia konta (alebo pravé tlačidlo na ikone konta)" relationship="label" positioning="after">
-        <button className="acc-tool" onClick={props.onSettings} aria-label="Nastavenia">
-          <SettingsIcon />
-        </button>
-      </Tooltip>
+      <Menu positioning="after-bottom" onOpenChange={(_, d) => props.onMenuOpen(d.open)}>
+        <MenuTrigger disableButtonEnhancement>
+          <Tooltip content="Nastavenia" relationship="label" positioning="after">
+            <button className="acc-tool" aria-label="Nastavenia">
+              <SettingsIcon />
+            </button>
+          </Tooltip>
+        </MenuTrigger>
+        <MenuPopover>
+          <MenuList>
+            <MenuItem onClick={props.onSettings}>Nastavenia konta…</MenuItem>
+            <MenuItem onClick={props.onAdd}>Pridať konto…</MenuItem>
+            <MenuItem onClick={props.onSignatures}>Podpisy…</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={props.onToggleGpu}>
+              {props.gpuOff ? 'Zapnúť hardvérovú akceleráciu (reštart)' : 'Vypnúť hardvérovú akceleráciu, ak obraz bliká (reštart)'}
+            </MenuItem>
+            <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
+          </MenuList>
+        </MenuPopover>
+      </Menu>
     </nav>
   );
 }

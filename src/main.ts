@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { registerIpc } from './main/ipc';
 import { attachWindow } from './main/webviews';
+import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
 
 // Dymový test v CI (MAILKLIENT_SMOKE=m365): dočasné dáta s ukážkovým kontom M365 a otvoreným pravým panelom.
@@ -18,6 +19,9 @@ if (SMOKE) {
   app.setPath('userData', dir);
 }
 
+// Prepínače vykresľovania (proti blikaniu) musia byť nastavené pred štartom.
+applyRenderingSwitches();
+
 // Windows inštalátor Squirrel: pri inštalácii len vytvoriť zástupcov a skončiť.
 const squirrelEvent = handleSquirrelEvent();
 
@@ -30,7 +34,9 @@ const createWindow = () => {
     title: 'MailKlient',
     autoHideMenuBar: true,
     show: false,
+    backgroundColor: '#f5f5f5',
     webPreferences: {
+      backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -38,6 +44,7 @@ const createWindow = () => {
     },
   });
   win.once('ready-to-show', () => win.show());
+  win.on('unresponsive', () => log('okno neodpovedá'));
   attachWindow(win);
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.
@@ -70,6 +77,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   if (squirrelEvent) return;
+  watchProcesses();
   registerIpc();
   createWindow();
   app.on('activate', () => {

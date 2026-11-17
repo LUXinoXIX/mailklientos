@@ -97,11 +97,30 @@ export function App() {
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
+  const [menuOverlay, setMenuOverlay] = useState(false);
+  const [gpuOff, setGpuOff] = useState(false);
+  const [gpuCrash, setGpuCrash] = useState(0);
+
+  // stabilita vykresľovania: stav akcelerácie, pády GPU, chyby rozhrania do záznamu
+  useEffect(() => {
+    if (!api) return;
+    void api.gpuDisabled().then((r) => r.ok && setGpuOff(r.data));
+    const onErr = (e: ErrorEvent) => void api.logError(`${e.message} @ ${e.filename}:${e.lineno}`);
+    const onRej = (e: PromiseRejectionEvent) => void api.logError(`promise: ${String(e.reason)}`);
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onRej);
+    const off = api.onAppEvent((ev) => ev.type === 'gpu-crash' && setGpuCrash(ev.count));
+    return () => {
+      window.removeEventListener('error', onErr);
+      window.removeEventListener('unhandledrejection', onRej);
+      off();
+    };
+  }, [api]);
 
   const demo = loaded && accounts.length === 0;
   const railAccounts: AccountPublic[] = demo ? [demoAccount] : accounts;
   const imapAccounts = useMemo(() => (demo ? [demoAccount] : accounts.filter(isImap)), [accounts, demo]);
-  const overlay = dialog.kind !== 'none' || panelOverlay;
+  const overlay = dialog.kind !== 'none' || panelOverlay || menuOverlay;
 
   // aktívne konto (alebo „Všetky“)
   const active: AccountPublic | null = railAccounts.find((a) => a.id === activeId) ?? null;
@@ -437,6 +456,11 @@ export function App() {
             void api?.reorderAccounts(ids);
           }}
           onSettings={() => (activeAcc ? editAccount(activeAcc) : openDialog({ kind: 'chooser' }))}
+          onSignatures={() => openDialog({ kind: 'signatures' })}
+          gpuOff={gpuOff}
+          onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
+          onOpenLog={() => void api?.openLog()}
+          onMenuOpen={setMenuOverlay}
         />
         <div className="workspace">
           <TopBar
@@ -475,11 +499,22 @@ export function App() {
               onToggleRight={() => setRightOpen(!rightOpen)}
               compact={compact}
               onCompact={setCompact}
+              gpuOff={gpuOff}
+              onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
+              onOpenLog={() => void api?.openLog()}
             />
           )}
           {demo && (
             <div className="banner">
               Zobrazujú sa ukážkové dáta. Pridaj konto tlačidlom <b>+</b> v páse kont vľavo (IMAP alebo Microsoft 365).
+            </div>
+          )}
+          {gpuCrash > 0 && !gpuOff && (
+            <div className="banner warn">
+              Grafická karta mala problém s vykresľovaním (preto mohol obraz zbelieť alebo blikať).{' '}
+              <button className="link" onClick={() => void api?.setGpuDisabled(true)}>
+                Vypnúť hardvérovú akceleráciu a reštartovať
+              </button>
             </div>
           )}
           {secretsWarning && (
