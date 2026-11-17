@@ -43,6 +43,8 @@ export interface MessageFull extends MessageSummary {
   messageId?: string;
   /** pozvánka na udalosť (iMIP, text/calendar v správe) */
   invite?: { method: string; event: CalEvent; ics: string };
+  /** overenie odosielateľa podľa servera (Authentication-Results) a varovania pred phishingom */
+  auth?: { spf?: string; dkim?: string; dmarc?: string; verified: boolean; warnings: string[] };
 }
 
 export interface SendInput {
@@ -153,6 +155,12 @@ export interface MailApi {
   /** otvorí koncept v samostatnom okne */
   composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
+  updateCheck(): Promise<Result<boolean>>;
+  exportEml(accountId: string, folder: string, uid: number, subject: string): Promise<Result<string>>;
+  exportMbox(accountId: string, folder: string): Promise<Result<{ file: string; count: number }>>;
+  importFiles(accountId: string, folder: string): Promise<Result<number>>;
+  importThunderbird(accountId: string): Promise<Result<{ folders: number; messages: number }>>;
+  updateInstall(): Promise<Result<true>>;
   calEvents(accountId: string, calendarIds: string[], from: string, to: string): Promise<Result<CalEvent[]>>;
   calSave(accountId: string, calendarId: string, event: CalEvent, invite: boolean): Promise<Result<CalEvent>>;
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
@@ -217,6 +225,8 @@ export type AppEvent =
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }
   | { type: 'outbox-changed' }
+  | { type: 'progress'; text: string }
+  | { type: 'update'; state: 'downloading' | 'none' | 'ready'; version?: string }
   | { type: 'outbox-sent'; id: string; subject: string; savedToSent: boolean }
   | { type: 'outbox-failed'; id: string; subject: string; error: string };
 

@@ -8,9 +8,9 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
-import { THEMES, type ThemeKey } from '../theme';
+import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
 import type { OrganizeTab } from './OrganizeDialog';
 import type { ComposerHandle, ComposerState } from './Composer';
@@ -25,7 +25,7 @@ export function TopBar(props: {
   onToggleRight: () => void;
 }) {
   return (
-    <header className="topbar" style={{ background: props.color }}>
+    <header className="topbar" style={{ background: props.color, color: onColor(props.color) }}>
       <div className="topbar-title">
         <div className="topbar-name">{props.title}</div>
         <div className="topbar-sub">{props.subtitle}</div>
@@ -184,6 +184,7 @@ export function Ribbon(props: {
   pinned: boolean;
   onTogglePin: () => void;
   onTask: (due?: string) => void;
+  onIo: (k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update') => void;
   onSnooze: (until: Date) => void;
   quickSteps: QuickStep[];
   onQuickStep: (q: QuickStep) => void;
@@ -195,6 +196,8 @@ export function Ribbon(props: {
   onSignatures: () => void;
   theme: ThemeKey;
   onTheme: (t: ThemeKey) => void;
+  customThemes: ThemeDef[];
+  onEditThemes: () => void;
   rightOpen: boolean;
   onToggleRight: () => void;
   compact: boolean;
@@ -342,6 +345,20 @@ export function Ribbon(props: {
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<FileIcon />}>Súbor</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('eml')}>Uložiť správu ako .eml</MenuItem>
+                  <MenuItem onClick={() => p.onIo('mbox')}>Exportovať priečinok (.mbox)</MenuItem>
+                  <MenuItem onClick={() => p.onIo('import')}>Importovať .eml / .mbox…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('thunderbird')}>Importovať z Thunderbirdu…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('update')}>Skontrolovať aktualizácie</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             {p.onEditAccount && (
               <ToolbarButton icon={<SettingsIcon />} onClick={p.onEditAccount}>Nastavenia konta</ToolbarButton>
             )}
@@ -350,10 +367,11 @@ export function Ribbon(props: {
           <>
             <label className="ribbon-label">Téma</label>
             <Select size="small" value={p.theme} onChange={(_, d) => p.onTheme(d.value as ThemeKey)}>
-              {Object.entries(THEMES).map(([k, t]) => (
-                <option key={k} value={k}>{t.label}</option>
+              {[...BUILTIN_THEMES, ...p.customThemes].map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </Select>
+            <ToolbarButton onClick={p.onEditThemes}>Vlastné témy…</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<PanelIcon />} onClick={p.onToggleRight}>
               {p.rightOpen ? 'Skryť pravý panel' : 'Zobraziť pravý panel'}

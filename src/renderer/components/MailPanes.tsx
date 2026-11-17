@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -405,6 +405,11 @@ export function ReadingPane(props: {
         <div className="read-meta">
           <div>
             <b>{m.fromName}</b> <span className="muted">&lt;{m.fromAddress}&gt;</span>
+            {m.auth?.verified && !m.auth.warnings.length && (
+              <span className="verified" title={`Server overil odosielateľa (SPF: ${m.auth.spf ?? '–'}, DKIM: ${m.auth.dkim ?? '–'}, DMARC: ${m.auth.dmarc ?? '–'})`}>
+                <VerifiedIcon /> overený
+              </span>
+            )}
           </div>
           <div className="muted">Komu: {m.to}{m.cc ? ` · Kópia: ${m.cc}` : ''}</div>
           <div className="muted">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
@@ -430,6 +435,13 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {m.auth && m.auth.warnings.length > 0 && (
+        <div className="phish">
+          <div className="phish-head"><WarnIcon /> Pozor, správa môže byť podvodná</div>
+          <ul>{m.auth.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+          <div className="small">Neklikajte na odkazy a neposielajte heslá ani platobné údaje, kým si odosielateľa neoveríte inou cestou.</div>
+        </div>
+      )}
       {m.invite && <InviteCard invite={m.invite} onRespond={props.onRespond} />}
       {props.thread && props.thread.length > 1 && (
         <details className="thread-box">

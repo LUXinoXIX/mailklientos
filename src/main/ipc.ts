@@ -17,6 +17,8 @@ import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
 import * as outbox from './outbox';
+import * as updater from './updater';
+import * as io from './importexport';
 import * as cal from './calendar';
 import * as dav from './dav';
 import type { CalEvent, Contact } from '../core/ical';
@@ -115,6 +117,15 @@ export function registerIpc() {
   handle('card:save', (id: string, bookId: string, c: Contact) => cal.contactSave(store.getImap(id), bookId, c));
   handle('card:delete', async (id: string, href: string) => {
     await dav.deleteContact(store.getImap(id), href);
+    return true as const;
+  });
+  handle('io:exportEml', (id: string, folder: string, uid: number, subject: string) => io.exportEml(store.getImap(id), folder, uid, subject));
+  handle('io:exportMbox', (id: string, folder: string) => io.exportMbox(store.getImap(id), folder));
+  handle('io:importFiles', (id: string, folder: string) => io.importFiles(store.getImap(id), folder));
+  handle('io:importThunderbird', (id: string) => io.importThunderbird(store.getImap(id)));
+  handle('update:check', () => updater.check());
+  handle('update:install', () => {
+    updater.installNow();
     return true as const;
   });
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));

@@ -14,6 +14,7 @@ import {
 import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
 import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
+import { ThemeDialog } from './components/ThemeDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel, type AgendaData } from './components/RightPanel';
@@ -24,7 +25,7 @@ import {
   IMAP_MODULES, M365_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
-import { THEMES, accountColor, getTheme, type ThemeKey } from './theme';
+import { accountColor, getTheme, themeById, themeVars, type ThemeKey } from './theme';
 
 declare global {
   interface Window {
@@ -59,7 +60,8 @@ type Dialogs =
   | { kind: 'm365'; edit?: M365Account }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
-  | { kind: 'templates' };
+  | { kind: 'templates' }
+  | { kind: 'themes' };
 
 const splitAddrs = (s: string) =>
   s
@@ -88,6 +90,7 @@ export function App() {
   const [imapModule, setImapModule] = useState<Record<string, ImapModule>>({});
   const [tabs, setTabs] = useState<Record<string, TabsState>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const themeDef = themeById(theme, settings.customThemes);
 
   const [accounts, setAccounts] = useState<AccountPublic[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -106,6 +109,7 @@ export function App() {
   const pendingOpen = useRef<{ accountId: string; uid: number } | null>(null);
   // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
   const [undo, setUndo] = useState<OutboxItem | null>(null);
+  const [updateReady, setUpdateReady] = useState<string | null>(null);
   const [outboxTick, setOutboxTick] = useState(0);
   const [scheduled, setScheduled] = useState<OutboxItem[]>([]);
   const [status, setStatus] = useState('');
@@ -145,6 +149,11 @@ export function App() {
         setUndo((u) => (u?.id === ev.id ? null : u));
         setStatus(`Správu „${ev.subject}“ sa nepodarilo odoslať: ${ev.error} Skúsim znova o 5 minút.`);
         setOutboxTick((t) => t + 1);
+      } else if (ev.type === 'update') {
+        if (ev.state === 'ready') setUpdateReady(ev.version || 'nová verzia');
+        else if (ev.state === 'downloading') setStatus('Sťahujem novú verziu MailKlienta na pozadí…');
+      } else if (ev.type === 'progress') {
+        setStatus(ev.text);
       } else if (ev.type === 'outbox-changed') {
         setOutboxTick((t) => t + 1);
       } else if (ev.type === 'open-message') {
@@ -641,6 +650,36 @@ export function App() {
     onToggleTask: (t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }),
   };
 
+  /** Export a import pošty, aktualizácie (karta Domov → Súbor). */
+  async function runIo(k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update') {
+    if (!api) return;
+    const accId = current?.accountId ?? activeImap?.id;
+    if (k === 'update') {
+      const r = await api.updateCheck();
+      return setStatus(r.ok && r.data ? 'Hľadám novú verziu…' : 'Aktualizácie fungujú len v nainštalovanej verzii pre Windows.');
+    }
+    if (!accId || accId === DEMO_ID) return setStatus('Najprv pridajte IMAP konto.');
+    if (k === 'eml') {
+      if (!current) return setStatus('Vyberte správu.');
+      const r = await api.exportEml(current.accountId, current.folder, current.uid, current.subject);
+      return setStatus(r.ok ? (r.data ? `Správa uložená: ${r.data}` : '') : r.error);
+    }
+    if (k === 'mbox') {
+      const folder = selection.accountId === ALL ? 'INBOX' : selection.folder;
+      setStatus('Exportujem priečinok…');
+      const r = await api.exportMbox(accId, folder);
+      return setStatus(r.ok ? (r.data.file ? `Exportované ${r.data.count} správ do ${r.data.file}` : '') : r.error);
+    }
+    if (k === 'import') {
+      const r = await api.importFiles(accId, 'Import');
+      if (r.ok && r.data) setRefreshKey((x) => x + 1);
+      return setStatus(r.ok ? (r.data ? `Importované ${r.data} správ do priečinka Import.` : '') : r.error);
+    }
+    const r = await api.importThunderbird(accId);
+    if (r.ok && r.data.messages) setRefreshKey((x) => x + 1);
+    setStatus(r.ok ? (r.data.folders ? `Z Thunderbirdu importovaných ${r.data.messages} správ v ${r.data.folders} priečinkoch (priečinok Thunderbird).` : '') : `${r.error}${r.hint ? ` ${r.hint}` : ''}`);
+  }
+
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
     const m = full.msg;
@@ -780,8 +819,8 @@ export function App() {
   };
 
   // horný pruh
-  const accent = THEMES[theme].accent;
-  const topColor = activeAcc ? accountColor(activeAcc.color) : accent;
+  const accent = themeDef.accent;
+  const topColor = themeDef.top ?? (activeAcc ? accountColor(activeAcc.color) : accent);
   const topTitle = activeAcc ? activeAcc.name : 'Všetky doručené';
   const topSub = activeM365
     ? `${activeM365.email || 'Microsoft 365'} · Outlook na webe`
@@ -807,8 +846,8 @@ export function App() {
   if (POP_COMPOSE) {
     const imapOnly = accounts.filter(isImap);
     return (
-      <FluentProvider theme={getTheme(theme)}>
-        <div className={`app theme-${theme} pop-compose`}>
+      <FluentProvider theme={getTheme(themeDef)}>
+        <div className={`app theme-${theme} pop-compose`} style={themeVars(themeDef)}>
           {popInit && imapOnly.length ? (
             <Composer
               init={popInit}
@@ -845,8 +884,8 @@ export function App() {
   return (
     // Pozor: className FluentProvidera sa kopíruje aj na kontajnery vyskakovacích prvkov (tooltip, menu, dialóg)
     // pripojené k <body>. Trieda .app (celé okno, pozadie) tam spôsobovala zakrytie celého okna = blikanie.
-    <FluentProvider theme={getTheme(theme)}>
-      <div className={`app theme-${theme}`}>
+    <FluentProvider theme={getTheme(themeDef)}>
+      <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''}`} style={themeVars(themeDef)}>
       <div className="shell">
         <AccountRail
           accounts={railAccounts}
@@ -905,6 +944,7 @@ export function App() {
               pinned={!!current?.keywords?.includes(PIN_KEYWORD)}
               onTogglePin={() => void togglePin()}
               onTask={(due) => void taskFromMessage(due)}
+              onIo={(k) => void runIo(k)}
               onSnooze={(d) => void snoozeCurrent(d)}
               quickSteps={settings.quickSteps ?? []}
               onQuickStep={(q) => void runQuickStep(q)}
@@ -916,6 +956,8 @@ export function App() {
               onSignatures={() => openDialog({ kind: 'signatures' })}
               theme={theme}
               onTheme={setTheme}
+              customThemes={settings.customThemes ?? []}
+              onEditThemes={() => openDialog({ kind: 'themes' })}
               rightOpen={rightOpen}
               onToggleRight={() => setRightOpen(!rightOpen)}
               compact={compact}
@@ -939,6 +981,13 @@ export function App() {
           {demo && (
             <div className="banner">
               Zobrazujú sa ukážkové dáta. Pridaj konto tlačidlom <b>+</b> v páse kont vľavo (IMAP alebo Microsoft 365).
+            </div>
+          )}
+          {updateReady && (
+            <div className="banner">
+              Je pripravená nová verzia MailKlienta.{' '}
+              <button className="link" onClick={() => void api?.updateInstall()}>Reštartovať a aktualizovať</button>{' '}
+              <button className="link" onClick={() => setUpdateReady(null)}>Neskôr</button>
             </div>
           )}
           {gpuCrash > 0 && !gpuOff && (
@@ -1137,6 +1186,19 @@ export function App() {
             saveSettings(s);
             closeDialog();
             setStatus('Podpisy uložené.');
+          }}
+        />
+      )}
+      {dialog.kind === 'themes' && (
+        <ThemeDialog
+          custom={settings.customThemes ?? []}
+          current={theme}
+          onClose={closeDialog}
+          onSave={(list, select) => {
+            saveSettings({ ...settings, customThemes: list });
+            if (select) setTheme(select);
+            else if (!list.some((t) => t.id === theme) && theme.startsWith('custom-')) setTheme('sage');
+            closeDialog();
           }}
         />
       )}
