@@ -8,7 +8,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, LockIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
@@ -186,6 +186,7 @@ export function Ribbon(props: {
   onTogglePin: () => void;
   onTask: (due?: string) => void;
   onIo: (k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update') => void;
+  onZimbra?: (tab?: 'ooo' | 'filters' | 'shares' | 'spam' | 'sync' | 'password') => void;
   onSnooze: (until: Date) => void;
   quickSteps: QuickStep[];
   onQuickStep: (q: QuickStep) => void;
@@ -369,6 +370,23 @@ export function Ribbon(props: {
               </MenuPopover>
             </Menu>
             <ToolbarButton icon={<RulesIcon />} onClick={() => p.onOrganize('rules')}>Pravidlá</ToolbarButton>
+            {p.onZimbra && (
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <ToolbarButton icon={<ServerIcon />}>Zimbra</ToolbarButton>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem onClick={() => p.onZimbra!('ooo')}>Neprítomnosť (automatická odpoveď)</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('filters')}>Filtre na serveri</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('shares')}>Zdieľané od kolegov</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('spam')}>Spam: dôveryhodní a blokovaní</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('sync')}>Podpisy, identity a značky</MenuItem>
+                    <MenuItem onClick={() => p.onZimbra!('password')}>Zmeniť heslo</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+            )}
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>

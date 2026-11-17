@@ -928,6 +928,7 @@ export function App() {
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
+          onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
@@ -971,6 +972,7 @@ export function App() {
               onTogglePin={() => void togglePin()}
               onTask={(due) => void taskFromMessage(due)}
               onIo={(k) => void runIo(k)}
+              onZimbra={activeImap && zimbraOk[activeImap.id] ? (tab) => openDialog({ kind: 'zimbra', tab }) : undefined}
               onSnooze={(d) => void snoozeCurrent(d)}
               quickSteps={settings.quickSteps ?? []}
               onQuickStep={(q) => void runQuickStep(q)}

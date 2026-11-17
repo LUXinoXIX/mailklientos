@@ -1,6 +1,7 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  Server24Regular as ServerIcon,
   LockClosed24Regular as LockIcon,
   LockClosed16Regular as LockSmallIcon,
   DocumentArrowRight24Regular as FileIcon,

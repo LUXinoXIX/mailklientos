@@ -12,7 +12,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
-import { syncWatchers } from './watch';
+import { syncWatchers, testNotification } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
@@ -201,6 +201,7 @@ export function registerIpc() {
   handle('zimbra:block', (id: string, email: string) => zimbra.blockSender(zacc(id), email));
   handle('tasks:sync', (tasks: Task[]) => tasksync.syncTasks(tasks));
   handle('tasks:delete', (t: Task) => tasksync.deleteRemote(t));
+  handle('diag:testNotification', () => testNotification());
   handle('update:check', () => updater.check());
   handle('update:install', () => {
     updater.installNow();
