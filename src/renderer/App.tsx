@@ -60,6 +60,9 @@ const splitAddrs = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
+/** Prototyp v okne Tauri (WebView2). */
+const IS_TAURI = '__TAURI_INTERNALS__' in window;
+
 /** Dymový test v CI: pravý panel otvorený, aby bolo vidieť aj vložené weby. */
 const SMOKE_MODE = new URLSearchParams(window.location.search).get('smoke') ?? '';
 const SMOKE = SMOKE_MODE === 'm365';
@@ -685,7 +688,9 @@ export function App() {
           </main>
           <footer className="statusbar">
             {status ||
-              (demo
+              (IS_TAURI
+                ? 'Tauri (WebView2 / jadro Edge) – test vykresľovania s ukážkovými dátami'
+                : demo
                 ? 'Ukážkový režim'
                 : `${accounts.length} ${accounts.length === 1 ? 'konto' : accounts.length < 5 ? 'kontá' : 'kont'}`)}
           </footer>
