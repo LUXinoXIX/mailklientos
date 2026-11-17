@@ -511,7 +511,10 @@ export function App() {
   const m365ActiveModule = m365State ? m365State.tabs.find((t) => t.key === m365State.active)?.module ?? null : null;
 
   return (
-    <FluentProvider theme={getTheme(theme)} className={`app theme-${theme}`}>
+    // Pozor: className FluentProvidera sa kopíruje aj na kontajnery vyskakovacích prvkov (tooltip, menu, dialóg)
+    // pripojené k <body>. Trieda .app (celé okno, pozadie) tam spôsobovala zakrytie celého okna = blikanie.
+    <FluentProvider theme={getTheme(theme)}>
+      <div className={`app theme-${theme}`}>
       <div className="shell">
         <AccountRail
           accounts={railAccounts}
@@ -772,6 +775,7 @@ export function App() {
           }}
         />
       )}
+      </div>
     </FluentProvider>
   );
 }
