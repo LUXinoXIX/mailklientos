@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { registerIpc } from './main/ipc';
 import { closeAllConnections } from './main/mail';
+import { startSnoozeTimer } from './main/snooze';
 import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
 import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
@@ -99,6 +100,7 @@ app.whenReady().then(() => {
   // Windows: ID aplikácie pre upozornenia (inak sa nezobrazia pri Squirrel inštalácii)
   if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.mailklient.MailKlient');
   syncWatchers();
+  startSnoozeTimer();
   powerMonitor.on('resume', () => reconnectWatchers());
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

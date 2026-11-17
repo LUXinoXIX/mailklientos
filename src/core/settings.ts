@@ -45,6 +45,81 @@ export interface AppSettings {
   signatureDefaults: Record<string, SignatureDefaults>;
   /** upozornenia Windows na novú poštu (predvolene zapnuté) */
   notifications?: boolean;
+  /** kategórie = IMAP kľúčové slová ($label1–5 sú zhodné s Thunderbirdom) */
+  categories?: Category[];
+  rules?: Rule[];
+  quickSteps?: QuickStep[];
+  savedSearches?: SavedSearch[];
+  /** zoznam správ zoskupený do konverzácií */
+  conversations?: boolean;
+}
+
+export interface Category {
+  /** IMAP kľúčové slovo */
+  id: string;
+  name: string;
+  color: string;
+}
+
+export type RuleField = 'from' | 'to' | 'subject' | 'any';
+export interface RuleCond {
+  field: RuleField;
+  contains: string;
+}
+export type ActionType = 'move' | 'read' | 'unread' | 'flag' | 'category' | 'pin' | 'archive' | 'delete';
+export interface RuleAction {
+  type: ActionType;
+  /** cieľový priečinok (move) */
+  folder?: string;
+  /** kľúčové slovo kategórie (category) */
+  category?: string;
+}
+export interface Rule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** prázdne = všetky IMAP kontá */
+  accountId?: string;
+  match: 'all' | 'any';
+  conds: RuleCond[];
+  actions: RuleAction[];
+  /** po splnení ďalšie pravidlá nespúšťať */
+  stop?: boolean;
+}
+export interface QuickStep {
+  id: string;
+  name: string;
+  actions: RuleAction[];
+}
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string;
+  accountId?: string;
+}
+
+export const PIN_KEYWORD = '$Pinned';
+
+export const DEFAULT_CATEGORIES: Category[] = [
+  { id: '$label1', name: 'Dôležité', color: '#c50f1f' },
+  { id: '$label2', name: 'Práca', color: '#d83b01' },
+  { id: '$label3', name: 'Osobné', color: '#107c10' },
+  { id: '$label4', name: 'Úlohy', color: '#0f6cbd' },
+  { id: '$label5', name: 'Neskôr', color: '#6d28d9' },
+];
+
+export const categoriesOf = (s: AppSettings) => s.categories ?? DEFAULT_CATEGORIES;
+
+/** Platí podmienka pravidla pre správu? (texty bez ohľadu na veľkosť písmen a diakritiku) */
+export function ruleMatches(rule: Rule, m: { from: string; to: string; subject: string }): boolean {
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const conds = rule.conds.filter((c) => c.contains.trim());
+  if (!conds.length) return false;
+  const test = (c: RuleCond) => {
+    const hay = c.field === 'from' ? m.from : c.field === 'to' ? m.to : c.field === 'subject' ? m.subject : `${m.from} ${m.to} ${m.subject}`;
+    return norm(hay).includes(norm(c.contains.trim()));
+  };
+  return rule.match === 'any' ? conds.some(test) : conds.every(test);
 }
 
 /** Oddeľovač podpisu (štandard „-- “ s medzerou). */

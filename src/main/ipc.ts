@@ -4,7 +4,7 @@ import path from 'node:path';
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
 import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
-import type { AppSettings, LauncherItem } from '../core/settings';
+import type { AppSettings, LauncherItem, RuleAction } from '../core/settings';
 import { autodetect, probeServer, type Protocol } from '../core/tls';
 import * as store from './accounts';
 import { autoconfig } from './autoconfig';
@@ -14,6 +14,8 @@ import * as web from './webviews';
 import * as diag from './diagnostics';
 import { syncWatchers } from './watch';
 import * as cache from './cache';
+import { applyActions, runRulesOnFolder } from './actions';
+import { snooze } from './snooze';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -75,6 +77,16 @@ export function registerIpc() {
   handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
   handle('mail:search', (q: string, accountId?: string, folder?: string) => cache.search(q, { account: accountId, folder }));
   handle('mail:searchServer', (id: string, folder: string, q: string) => mail.searchServer(store.getImap(id), folder, q));
+  handle('mail:keywords', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
+    mail.setKeywords(store.getImap(id), folder, uids, add, remove));
+  handle('mail:thread', (id: string, messageId: string) => cache.threadOf(id, messageId));
+  handle('mail:actions', async (id: string, folder: string, uids: number[], actions: RuleAction[]) => {
+    await applyActions(store.getImap(id), folder, uids, actions);
+    return true as const;
+  });
+  handle('mail:snooze', (id: string, folder: string, uid: number, messageId: string, subject: string, until: string) =>
+    snooze(id, folder, uid, messageId, subject, until));
+  handle('rules:run', (id: string, folder: string) => runRulesOnFolder(store.getImap(id), folder, settings.loadSettings().rules ?? []));
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));
   handle('mail:send', (id: string, msg: SendInput) => mail.sendMail(store.getImap(id), msg));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
