@@ -55,6 +55,23 @@ export interface AppSettings {
   templates?: Template[];
   vacation?: Vacation;
   tasks?: Task[];
+  customThemes?: ThemeDef[];
+}
+
+export interface ThemeDef {
+  id: string;
+  name: string;
+  dark: boolean;
+  /** akcent: tlačidlá, výber, odkazy */
+  accent: string;
+  /** horný pruh; null = farba vybraného konta */
+  top: string | null;
+  rail: string;
+  pane: string;
+  read: string;
+  text: string;
+  /** zaoblenie rohov v px */
+  radius: number;
 }
 
 export interface Task {

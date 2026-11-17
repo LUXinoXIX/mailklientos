@@ -181,7 +181,7 @@ const isConnectionError = (e: unknown) => {
   return /NoConnection|ECONNRESET|EPIPE|ETIMEDOUT|Socket|Connection not available|closed/i.test(`${err?.code ?? ''} ${err?.message ?? ''}`);
 };
 
-async function withImap<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pwOverride?: string): Promise<T> {
+export async function withImap<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pwOverride?: string): Promise<T> {
   if (pwOverride) return withOneShot(acc, fn, pwOverride);
   for (let attempt = 0; ; attempt++) {
     let p: Pooled | undefined;
@@ -351,6 +351,57 @@ function inviteOf(p: any): MessageFull['invite'] {
   }
 }
 
+const domainOf = (addr?: string) => (addr ?? '').split('@')[1]?.toLowerCase().replace(/>$/, '') ?? '';
+const baseDomain = (d: string) => d.split('.').slice(-2).join('.');
+
+/** Overenie odosielateľa: výsledky SPF/DKIM/DMARC zapísané serverom + jednoduché znaky phishingu. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function authOf(p: any): MessageFull['auth'] {
+  const h = p.headers as Map<string, unknown>;
+  const raw = ([] as unknown[]).concat(h.get('authentication-results') ?? [], h.get('arc-authentication-results') ?? []).map(String).join(' ; ');
+  const pick = (k: string) => new RegExp(`\\b${k}=(\\w+)`, 'i').exec(raw)?.[1]?.toLowerCase();
+  let spf = pick('spf');
+  if (!spf) spf = /^\s*(pass|fail|softfail|neutral|none)/i.exec(String(h.get('received-spf') ?? ''))?.[1]?.toLowerCase();
+  const dkim = pick('dkim');
+  const dmarc = pick('dmarc');
+  const from = p.from?.value?.[0];
+  const fromDomain = domainOf(from?.address);
+  const warnings: string[] = [];
+  if (dmarc === 'fail') warnings.push('Server overil, že správa neprišla od skutočného vlastníka domény odosielateľa (DMARC).');
+  else if (spf === 'fail' && dkim !== 'pass') warnings.push('Server odosielateľa nie je oprávnený posielať poštu za túto doménu (SPF).');
+  if (dkim === 'fail' && dmarc !== 'pass') warnings.push('Podpis správy (DKIM) nesedí – správa mohla byť cestou zmenená.');
+  const name = String(from?.name ?? '');
+  const inName = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(name)?.[0];
+  if (inName && inName.toLowerCase() !== String(from?.address ?? '').toLowerCase())
+    warnings.push(`Meno odosielateľa obsahuje inú adresu (${inName}) než skutočný odosielateľ (${from?.address}).`);
+  const replyTo = p.replyTo?.value?.[0]?.address as string | undefined;
+  if (replyTo && fromDomain && baseDomain(domainOf(replyTo)) !== baseDomain(fromDomain))
+    warnings.push(`Odpoveď pôjde na inú doménu (${replyTo}) než od koho správa prišla.`);
+  // odkazy, ktorých text ukazuje inú doménu než skutočný cieľ
+  if (typeof p.html === 'string') {
+    const re = /<a\b[^>]*href=["']?(https?:\/\/[^"' >]+)[^>]*>([\s\S]*?)<\/a>/gi;
+    let m: RegExpExecArray | null;
+    let n = 0;
+    while ((m = re.exec(p.html)) && n < 300) {
+      n++;
+      const shown = m[2]!.replace(/<[^>]+>/g, '').trim();
+      const sd = /^(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i.exec(shown)?.[1]?.toLowerCase();
+      let real = '';
+      try {
+        real = new URL(m[1]!).hostname.toLowerCase().replace(/^www\./, '');
+      } catch {
+        continue;
+      }
+      if (sd && /\.[a-z]{2,}$/.test(sd) && baseDomain(sd) !== baseDomain(real)) {
+        warnings.push(`Odkaz „${shown.slice(0, 60)}“ v skutočnosti vedie na ${real}.`);
+        break;
+      }
+    }
+  }
+  const verified = dmarc === 'pass' || (dkim === 'pass' && spf === 'pass');
+  return { spf, dkim, dmarc, verified, warnings };
+}
+
 async function parseFull(acc: AccountConfig, folder: string, uid: number, source: Buffer, flagged: boolean): Promise<MessageFull> {
   const p = await simpleParser(source);
   const f = p.from?.value?.[0];
@@ -372,6 +423,7 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     text: p.text ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invite: inviteOf(p),
+    auth: authOf(p),
     attachments: (p.attachments ?? []).filter((a: any) => !/^text\/calendar/i.test(a.contentType ?? '')).map((a: any) => ({
       filename: a.filename || 'príloha',
       size: a.size ?? 0,

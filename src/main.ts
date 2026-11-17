@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { registerIpc, setComposeWindowFactory } from './main/ipc';
 import { startOutbox } from './main/outbox';
+import { startUpdater } from './main/updater';
 import { closeAllConnections } from './main/mail';
 import { startSnoozeTimer } from './main/snooze';
 import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
@@ -106,6 +107,7 @@ app.whenReady().then(() => {
   syncWatchers();
   startSnoozeTimer();
   startOutbox();
+  if (!squirrelEvent) startUpdater();
   powerMonitor.on('resume', () => reconnectWatchers());
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

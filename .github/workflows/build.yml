@@ -115,6 +115,8 @@ jobs:
             out/make/**/*.exe
             out/make/**/*.zip
             out/make/**/*.deb
+            out/make/**/*.nupkg
+            out/make/**/RELEASES
           if-no-files-found: warn
 
       # Logy a vygenerovaný package-lock.json do vetvy ci-logs-<os> (na diagnostiku chýb).
@@ -135,76 +137,10 @@ jobs:
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
 
   # Prototyp na Tauri 2 (WebView2 = jadro Edge): rovnaké rozhranie s ukážkovými dátami, test blikania.
-  tauri:
-    name: Tauri prototyp (windows)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: tauri/src-tauri
-      - name: Závislosti a rozhranie
-        run: |
-          set +e +o pipefail
-          mkdir -p ci
-          npm ci --no-audit --no-fund > ci/install.log 2>&1 || npm install --no-audit --no-fund >> ci/install.log 2>&1
-          set -e
-          npx vite build --config vite.renderer.config.ts --outDir dist-web --base ./ 2>&1 | tee ci/web.log
-      - name: Ikony
-        working-directory: tauri
-        run: npx --yes @tauri-apps/cli@2 icon app-icon.png -o src-tauri/icons 2>&1 | tail -5
-      - name: Zostavenie Tauri
-        working-directory: tauri
-        run: |
-          npx --yes @tauri-apps/cli@2 build 2>&1 | tee ../ci/tauri.log
-          exit ${PIPESTATUS[0]}
-      - name: Inštalátor
-        if: success()
-        run: |
-          mkdir -p tauri-out
-          f=$(find tauri/src-tauri/target/release/bundle/nsis -name '*.exe' | head -1)
-          echo "inštalátor: $f"
-          cp "$f" tauri-out/MailKlient-Tauri-Test-Setup.exe
-          m=$(find tauri/src-tauri/target/release/bundle/msi -name '*.msi' | head -1)
-          if [ -n "$m" ]; then cp "$m" tauri-out/MailKlient-Tauri-Test.msi; fi
-          # prenosná verzia bez inštalácie (potrebuje WebView2, ktorý má každý Windows 11)
-          mkdir -p portable/MailKlient-Tauri
-          cp tauri/src-tauri/target/release/mailklient-tauri.exe portable/MailKlient-Tauri/MailKlient.exe
-          (cd portable && 7z a -tzip ../tauri-out/MailKlient-Tauri-Test-portable.zip MailKlient-Tauri >/dev/null)
-          ls -la tauri-out
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: mailklient-tauri
-          path: |
-            tauri-out/*.exe
-            tauri-out/*.msi
-            tauri-out/*.zip
-      - name: Uloženie logov
-        if: always()
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          dir="$RUNNER_TEMP/logs"; mkdir -p "$dir"
-          cp ci/*.log "$dir"/ 2>/dev/null || true
-          echo "commit=${GITHUB_SHA} run=${GITHUB_RUN_ID} job=${{ job.status }}" > "$dir/status.txt"
-          cd "$dir"
-          git init -q
-          git checkout -q -b ci-logs-tauri
-          git add -A
-          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
 
   release:
     name: Zverejnenie (latest-build)
-    needs: [build, tauri]
+    needs: [build]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -217,7 +153,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p files
-          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' \) -exec cp {} files/ \;
+          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' -o -name '*.nupkg' -o -name 'RELEASES' \) -exec cp {} files/ \;
           ls -la files
           if [ -z "$(ls -A files)" ]; then echo "Žiadne inštalátory, release preskakujem."; exit 0; fi
           gh release delete latest-build --cleanup-tag -y || true
