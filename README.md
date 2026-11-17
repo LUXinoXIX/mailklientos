@@ -15,12 +15,19 @@ Najnovší inštalátor: [Releases → Najnovšie zostavenie](../../releases/tag
 
 Inštalátory zostavuje GitHub Actions pri každej zmene vo vetve `main`.
 
-## Stav
+## Stav (verzia 0.3)
 
-- Hotové: rozloženie D (pás modulov, kontá, zoznam, čítací panel, 4. stĺpec), ribbon plný aj kompaktný,
-  témy modrá / sivozelená / sivá, IMAP kontá (autodetekcia, SSL/TLS, STARTTLS, dôvera certifikátu,
-  režim pre staré servery), čítanie, odoslanie a odpoveď.
-- Ďalej: lokálna cache a fulltext, IDLE, mazanie a presun, prílohy, kalendár, úlohy, spúšťače, vložené weby.
+- **Rozloženie:** pás kont úplne vľavo (poradie ťahaním, pravé tlačidlo = nastavenia), pás modulov podľa konta,
+  horný pruh vo farbe konta, pravý panel (tlačidlo vpravo hore).
+- **IMAP kontá:** plnohodnotný klient: priečinky, zoznam, čítanie, nová správa, odpovedať / všetkým, preposlať,
+  prílohy (otvoriť, uložiť, priložiť), odstrániť, archivovať, presunúť, prečítané / neprečítané, vlajka,
+  počty neprečítaných, „Všetky doručené“, podpisy pre každé konto, automatické nastavenie servera
+  (Autoconfig a databáza Thunderbirdu), SSL/TLS, STARTTLS, výnimky certifikátov, režim pre staré Zimbry.
+- **Kontá Microsoft 365 / Outlook.com:** vložený Outlook na webe ako celé okno, vlastné prihlásenie pre každé konto;
+  Kalendár, To Do, Teams, OneDrive, Word, Excel, PowerPoint v kartách (aj keď ich otvoríš cez prepínač aplikácií
+  v Outlooku); tlačidlo Edge.
+- **Pravý panel:** vložené weby (Copilot, WhatsApp, Teams, vlastná adresa) a spúšťače programov (.exe) s ikonami.
+- Ďalej: kalendár, úlohy a kontakty pre IMAP (CalDAV/CardDAV), lokálna cache a fulltext, okamžité doručovanie (IDLE).
 
 ## Vývoj
 
