@@ -54,6 +54,19 @@ export interface AppSettings {
   conversations?: boolean;
   templates?: Template[];
   vacation?: Vacation;
+  tasks?: Task[];
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  /** termín (YYYY-MM-DD) */
+  due?: string;
+  done: boolean;
+  note?: string;
+  created: string;
+  /** úloha vytvorená zo správy */
+  message?: { accountId: string; folder: string; uid: number; messageId?: string; subject: string; from: string };
 }
 
 export interface Template {

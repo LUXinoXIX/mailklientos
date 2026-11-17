@@ -313,6 +313,51 @@ export function MessageList(props: {
   );
 }
 
+function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void }) {
+  const { method, event: e } = props.invite;
+  const [busy, setBusy] = useState(false);
+  const when = e.allDay
+    ? new Date(e.start).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : `${new Date(e.start).toLocaleString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} – ${new Date(e.end).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`;
+  const head =
+    method === 'CANCEL' ? 'Udalosť bola zrušená' : method === 'REPLY' ? 'Odpoveď na pozvánku' : method === 'REQUEST' ? 'Pozvánka na udalosť' : 'Udalosť';
+  const reply = method === 'REPLY' ? e.attendees?.[0] : undefined;
+  return (
+    <div className={`invite ${method === 'CANCEL' ? 'cancel' : ''}`}>
+      <div className="invite-head">{head}</div>
+      <div className="invite-title">{e.summary}</div>
+      <div className="muted">{when}{e.rrule ? ' · opakuje sa' : ''}</div>
+      {e.location && <div className="muted">{e.location}</div>}
+      {e.organizer && <div className="muted small">Organizátor: {e.organizer.name || e.organizer.email}</div>}
+      {reply && (
+        <div className="small">
+          {reply.name || reply.email}:{' '}
+          <b>{reply.partstat === 'ACCEPTED' ? 'prijal(a)' : reply.partstat === 'DECLINED' ? 'odmietol(a)' : reply.partstat === 'TENTATIVE' ? 'predbežne prijal(a)' : reply.partstat}</b>
+        </div>
+      )}
+      {method === 'REQUEST' && props.onRespond && (
+        <div className="row gap" style={{ marginTop: 8 }}>
+          {(['ACCEPTED', 'TENTATIVE', 'DECLINED'] as const).map((p) => (
+            <Button
+              key={p}
+              size="small"
+              appearance={p === 'ACCEPTED' ? 'primary' : 'secondary'}
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await props.onRespond!(p);
+                setBusy(false);
+              }}
+            >
+              {p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** HTML e-mailu: sanitizované (DOMPurify) a v izolovanom iframe bez skriptov. Vzdialené obrázky blokované. */
 function HtmlBody({ html, showImages }: { html: string; showImages: boolean }) {
   const doc = useMemo(() => {
@@ -341,6 +386,7 @@ export function ReadingPane(props: {
   onOpenThread?: (m: MessageSummary) => void;
   categories?: Category[];
   onRemoveCategory?: (id: string) => void;
+  onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void;
 }) {
   const [showImages, setShowImages] = useState(false);
   const m = props.message;
@@ -384,6 +430,7 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {m.invite && <InviteCard invite={m.invite} onRespond={props.onRespond} />}
       {props.thread && props.thread.length > 1 && (
         <details className="thread-box">
           <summary>Konverzácia: {props.thread.length} správ</summary>

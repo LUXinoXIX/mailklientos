@@ -13,6 +13,7 @@ import {
 } from '../core/tls';
 import { getPassword } from './accounts';
 import * as cache from './cache';
+import { parseEvents, parseMethod } from '../core/ical';
 
 export class UserError extends Error {
   constructor(message: string, public hint?: string, public needsTrust?: boolean) {
@@ -333,6 +334,23 @@ export function listCached(accountId: string, folder: string, limit = 50) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const addrText = (x: any): string => (Array.isArray(x) ? x.map((y) => y.text).join(', ') : x?.text ?? '');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function inviteOf(p: any): MessageFull['invite'] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const part = (p.attachments ?? []).find((a: any) => /^text\/calendar/i.test(a.contentType ?? '') || /\.ics$/i.test(a.filename ?? ''));
+  if (!part) return undefined;
+  try {
+    const ics = (part.content as Buffer).toString('utf8');
+    const ev = parseEvents(ics)[0];
+    if (!ev) return undefined;
+    const method = parseMethod(ics) ?? (/method=([A-Z]+)/i.exec(part.contentType ?? '')?.[1]?.toUpperCase() ?? 'PUBLISH');
+    const { exdates: _x, ...event } = ev;
+    return { method, event, ics };
+  } catch {
+    return undefined;
+  }
+}
+
 async function parseFull(acc: AccountConfig, folder: string, uid: number, source: Buffer, flagged: boolean): Promise<MessageFull> {
   const p = await simpleParser(source);
   const f = p.from?.value?.[0];
@@ -353,7 +371,8 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     html: typeof p.html === 'string' ? p.html : null,
     text: p.text ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    attachments: (p.attachments ?? []).map((a: any) => ({
+    invite: inviteOf(p),
+    attachments: (p.attachments ?? []).filter((a: any) => !/^text\/calendar/i.test(a.contentType ?? '')).map((a: any) => ({
       filename: a.filename || 'príloha',
       size: a.size ?? 0,
       contentType: a.contentType,
@@ -408,6 +427,7 @@ function buildMail(acc: AccountConfig, input: SendInput) {
     references: input.replyMessageId || undefined,
     priority: input.priority ?? 'normal',
     headers: Object.keys(headers).length ? headers : undefined,
+    icalEvent: input.ical ? { method: input.ical.method, content: input.ical.content } : undefined,
   };
 }
 
