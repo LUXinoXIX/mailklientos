@@ -9,13 +9,16 @@ import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics'
 import { handleSquirrelEvent } from './main/squirrel';
 
 // Dymový test v CI (MAILKLIENT_SMOKE=m365): dočasné dáta s ukážkovým kontom M365 a otvoreným pravým panelom.
-const SMOKE = process.env.MAILKLIENT_SMOKE === 'm365';
+const SMOKE_MODE = process.env.MAILKLIENT_SMOKE ?? '';
+const SMOKE = SMOKE_MODE === 'm365' || SMOKE_MODE === 'compose';
 if (SMOKE) {
-  const dir = path.join(os.tmpdir(), 'mailklient-smoke');
+  const dir = path.join(os.tmpdir(), `mailklient-smoke-${SMOKE_MODE}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, 'accounts.json'),
-    JSON.stringify([{ id: 'smoke', kind: 'm365', name: 'Microsoft 365', email: 'test@contoso.com', color: '#1d4ed8', host: 'office' }]),
+    JSON.stringify(
+      SMOKE_MODE === 'm365' ? [{ id: 'smoke', kind: 'm365', name: 'Microsoft 365', email: 'test@contoso.com', color: '#1d4ed8', host: 'office' }] : [],
+    ),
   );
   app.setPath('userData', dir);
 }
@@ -60,9 +63,9 @@ const createWindow = () => {
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL + (SMOKE ? '?smoke=1' : ''));
+    win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL + (SMOKE ? `?smoke=${SMOKE_MODE}` : ''));
   } else {
-    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), SMOKE ? { query: { smoke: '1' } } : undefined);
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), SMOKE ? { query: { smoke: SMOKE_MODE } } : undefined);
   }
 };
 

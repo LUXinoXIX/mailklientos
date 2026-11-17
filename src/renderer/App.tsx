@@ -6,7 +6,8 @@ import type { FolderInfo, MailApi, MessageFull, MessageSummary } from '../core/a
 import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
-import { ComposeDialog, type ComposeInit } from './components/ComposeDialog';
+import { Composer, type ComposeInit, type ComposeKind, type ComposerHandle, type ComposerState } from './components/Composer';
+import type { Contact } from './components/RecipientField';
 import {
   M365View, MODULE_TITLES, baseKey, initialTabs, moduleUrl, tabTitle, type TabsState,
 } from './components/M365View';
@@ -51,14 +52,7 @@ type Dialogs =
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
   | { kind: 'm365'; edit?: M365Account }
-  | { kind: 'compose'; init: ComposeInit }
   | { kind: 'signatures' };
-
-const quote = (m: MessageFull) =>
-  `\n\n${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}, ${m.fromName || m.fromAddress} napísal(a):\n${m.text
-    .split('\n')
-    .map((l) => `> ${l}`)
-    .join('\n')}`;
 
 const splitAddrs = (s: string) =>
   s
@@ -67,7 +61,8 @@ const splitAddrs = (s: string) =>
     .filter(Boolean);
 
 /** Dymový test v CI: pravý panel otvorený, aby bolo vidieť aj vložené weby. */
-const SMOKE = new URLSearchParams(window.location.search).get('smoke') === '1';
+const SMOKE_MODE = new URLSearchParams(window.location.search).get('smoke') ?? '';
+const SMOKE = SMOKE_MODE === 'm365';
 
 export function App() {
   const api = window.mailApi;
@@ -99,6 +94,9 @@ export function App() {
   const [panelOverlay, setPanelOverlay] = useState(false);
   const [menuOverlay, setMenuOverlay] = useState(false);
   const msgCache = useRef(new Map<string, MessageFull>());
+  const [composeView, setCompose] = useState<{ init: ComposeInit; key: number } | null>(null);
+  const composerRef = useRef<ComposerHandle>(null);
+  const [composerState, setComposerState] = useState<ComposerState>({ importance: false, receipt: false, savedAt: null, sending: false });
   const openKey = useRef('');
   const [gpuOff, setGpuOff] = useState(false);
   const [gpuCrash, setGpuCrash] = useState(0);
@@ -294,6 +292,10 @@ export function App() {
   };
 
   async function open(m: MessageSummary) {
+    if (composeView) {
+      setCompose(null); // koncept sa priebežne ukladá do Konceptov
+      setRibbonTab('home');
+    }
     setCurrent(m);
     if (m.accountId === DEMO_ID) {
       setFull({ loading: false, msg: demoMessages.find((x) => x.uid === m.uid) });
@@ -374,40 +376,61 @@ export function App() {
     patchMsg(m, { flagged });
   }
 
-  function compose(kind: 'new' | 'reply' | 'replyAll' | 'forward') {
+  /** Písanie v čítacom paneli (ako Outlook). */
+  function compose(kind: ComposeKind) {
     const m = full.msg;
-    const accountId = m && m.accountId !== DEMO_ID ? m.accountId : activeImap && activeImap.id !== DEMO_ID ? activeImap.id : undefined;
-    if (kind === 'new' || !m) return openDialog({ kind: 'compose', init: { accountId, kind: 'new' } });
+    const accountId = m && m.accountId !== DEMO_ID ? m.accountId : activeImap && activeImap.id !== DEMO_ID ? activeImap.id : imapAccounts.find((a) => a.id !== DEMO_ID)?.id;
+    if (activeImap) setImapModule((x) => ({ ...x, [activeImap.id]: 'mail' }));
+    setRibbonTab('message');
+    if (kind === 'new' || !m) {
+      setCompose({ init: { kind: 'new', accountId }, key: Date.now() });
+      return;
+    }
     const me = (imapAccounts.find((a) => a.id === m.accountId)?.email ?? '').toLowerCase();
-    if (kind === 'forward')
-      return openDialog({
-        kind: 'compose',
-        init: {
-          accountId,
-          title: 'Preposlať',
-          kind: 'reply',
-          subject: /^(fw|fwd):/i.test(m.subject) ? m.subject : `Fwd: ${m.subject}`,
-          text: `\n\n---------- Preposlaná správa ----------\nOd: ${m.fromName} <${m.fromAddress}>\nDátum: ${m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}\nPredmet: ${m.subject}\nKomu: ${m.to}\n\n${m.text}`,
-        },
-      });
+    const subject =
+      kind === 'forward'
+        ? /^(fw|fwd|pd):/i.test(m.subject) ? m.subject : `PD: ${m.subject}`
+        : /^(re|odp):/i.test(m.subject) ? m.subject : `RE: ${m.subject}`;
     const cc =
       kind === 'replyAll'
-        ? [...splitAddrs(m.to), ...splitAddrs(m.cc)].filter((a) => !a.toLowerCase().includes(me) && !a.toLowerCase().includes(m.fromAddress.toLowerCase())).join(', ')
+        ? [...splitAddrs(m.to), ...splitAddrs(m.cc)]
+            .filter((a) => !a.toLowerCase().includes(me) && !a.toLowerCase().includes(m.fromAddress.toLowerCase()))
+            .join(', ')
         : '';
-    openDialog({
-      kind: 'compose',
+    setCompose({
       init: {
+        kind,
         accountId,
-        title: kind === 'replyAll' ? 'Odpovedať všetkým' : 'Odpovedať',
-        kind: 'reply',
-        to: m.fromAddress,
+        original: m,
+        to: kind === 'forward' ? '' : m.fromName ? `"${m.fromName.replace(/"/g, '')}" <${m.fromAddress}>` : m.fromAddress,
         cc,
-        subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`,
-        text: quote(m),
-        replyMessageId: m.messageId,
+        subject,
       },
+      key: Date.now(),
     });
   }
+
+  // dymový test v CI: otvorená odpoveď na ukážkovú správu
+  useEffect(() => {
+    if (SMOKE_MODE !== 'compose' || !demo) return;
+    const m = demoMessages[0]!;
+    setCurrent(m);
+    setFull({ loading: false, msg: m });
+    setRibbonTab('message');
+    setCompose({ init: { kind: 'reply', accountId: DEMO_ID, original: m, to: `"${m.fromName}" <${m.fromAddress}>`, subject: `RE: ${m.subject}` }, key: 1 });
+  }, [demo]);
+
+  // kontakty na dopĺňanie: odosielatelia načítaných správ + adresy, na ktoré si písal
+  const contacts = useMemo<Contact[]>(() => {
+    let known: Contact[] = [];
+    try {
+      known = JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[];
+    } catch {
+      /* nič */
+    }
+    const all = [...known, ...messages.map((m) => ({ name: m.fromName, email: m.fromAddress }))].filter((c) => c.email);
+    return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
+  }, [messages, composeView]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -529,6 +552,11 @@ export function App() {
               gpuOff={gpuOff}
               onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
               onOpenLog={() => void api?.openLog()}
+              composer={
+                composeView
+                  ? { state: composerState, signatures: settings.signatures, run: (fn) => composerRef.current && fn(composerRef.current) }
+                  : undefined
+              }
             />
           )}
           {demo && (
@@ -595,6 +623,22 @@ export function App() {
                     onOpen={(m) => void open(m)}
                     onDeleteKey={() => void del()}
                   />
+                  {composeView ? (
+                    <Composer
+                      key={composeView.key}
+                      ref={composerRef}
+                      init={composeView.init}
+                      accounts={imapAccounts.filter((a) => a.id !== DEMO_ID).length ? imapAccounts.filter((a) => a.id !== DEMO_ID) : imapAccounts}
+                      settings={settings}
+                      contacts={contacts}
+                      onState={setComposerState}
+                      onClose={(st) => {
+                        setCompose(null);
+                        setRibbonTab('home');
+                        if (st) setStatus(st);
+                      }}
+                    />
+                  ) : (
                   <ReadingPane
                     message={full.msg}
                     loading={full.loading}
@@ -604,6 +648,7 @@ export function App() {
                     onReplyAll={() => compose('replyAll')}
                     onForward={() => compose('forward')}
                   />
+                  )}
                 </div>
               ) : (
                 <section className="placeholder">
@@ -691,20 +736,6 @@ export function App() {
             closeDialog();
             setActiveId('');
             void loadAccounts();
-          }}
-        />
-      )}
-      {dialog.kind === 'compose' && (
-        <ComposeDialog
-          key={dialogKey}
-          open
-          init={dialog.init}
-          accounts={accounts.filter(isImap)}
-          settings={settings}
-          onClose={closeDialog}
-          onSent={(info) => {
-            closeDialog();
-            setStatus(info);
           }}
         />
       )}

@@ -95,6 +95,13 @@ jobs:
           sleep 30
           import -window root ci/screenshot-m365.png || true
           if kill -0 $pid 2>/dev/null; then echo "beží (m365)" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA (m365)" | tee -a ci/smoke.log; exit 1; fi
+          sleep 2
+          # tretí beh: písanie odpovede v čítacom paneli (ukážkové dáta)
+          MAILKLIENT_SMOKE=compose ./out/MailKlient-linux-x64/MailKlient --no-sandbox --enable-logging=stderr > ci/smoke-compose.log 2>&1 &
+          pid=$!
+          sleep 15
+          import -window root ci/screenshot-compose.png || true
+          if kill -0 $pid 2>/dev/null; then echo "beží (compose)" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA (compose)" | tee -a ci/smoke.log; exit 1; fi
 
       - name: Zoznam výstupov
         if: always()

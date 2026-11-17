@@ -339,10 +339,31 @@ export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
   return true as const;
 }
 
+/** Prílohy pôvodnej správy pri preposlaní. */
+async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid: number }) {
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(f.folder);
+    try {
+      const msg = await c.fetchOne(String(f.uid), { source: true }, { uid: true });
+      if (!msg?.source) return [];
+      const p = await simpleParser(msg.source);
+      return (p.attachments ?? [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((a: any) => a.contentDisposition !== 'inline' || !a.cid)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((a: any) => ({ filename: (a.filename as string) || 'priloha', content: a.content as Buffer, contentType: a.contentType }));
+    } finally {
+      lock.release();
+    }
+  });
+}
+
 export async function sendMail(acc: AccountConfig, input: SendInput) {
   const pass = passwordFor(acc);
   await ensureTrusted(acc.smtp, 'smtp');
-  const mail = buildMail(acc, input);
+  const base = buildMail(acc, input);
+  const fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
+  const mail = { ...base, attachments: [...(base.attachments ?? []), ...fw] };
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),
     auth: { user: acc.username, pass },
