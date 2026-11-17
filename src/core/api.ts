@@ -168,6 +168,7 @@ export interface MailApi {
   composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   davCollections(accountId: string): Promise<Result<DavCollection[]>>;
   updateCheck(): Promise<Result<boolean>>;
+  testNotification(): Promise<Result<string>>;
   zimbraCheck(accountId: string): Promise<Result<boolean>>;
   zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraGalAuto(accountId: string, q: string): Promise<Result<GalEntry[]>>;

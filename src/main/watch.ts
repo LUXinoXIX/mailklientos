@@ -36,8 +36,8 @@ function notify(acc: AccountConfig, items: Array<{ uid: number; from: string; su
   const s = loadSettings();
   if (s.notifications === false || !Notification.isSupported()) return;
   const win = mainWindow();
-  if (win && win.isFocused()) return; // pri práci v aplikácii stačí obnovený zoznam
-  win?.flashFrame(true);
+  // upozornenie aj pri otvorenej aplikácii (ako Outlook); blikanie na paneli úloh len keď je okno v pozadí
+  if (win && !win.isFocused()) win.flashFrame(true);
   const shown = items.slice(-3);
   for (const m of shown) {
     const n = new Notification({
@@ -88,6 +88,8 @@ async function fetchNew(w: Watch, acc: AccountConfig) {
     const hits = await runRules(acc, 'INBOX', rules, forRules).catch(() => 0);
     if (hits) log(`pravidlá: použité na ${hits} nových správ (${acc.name})`);
   }
+  if (!forRules.length) return;
+  log(`sledovanie pošty: ${acc.name} – nové správy ${forRules.length} (neprečítané ${items.length})`);
   send({ type: 'mail-changed', accountId: acc.id, folder: 'INBOX', newCount: items.length });
   if (items.length) notify(acc, items);
 }
@@ -126,7 +128,14 @@ async function start(w: Watch) {
     });
     c.on('expunge', () => send({ type: 'mail-changed', accountId: acc.id, folder: 'INBOX', newCount: 0 }));
     c.on('flags', () => send({ type: 'mail-changed', accountId: acc.id, folder: 'INBOX', newCount: 0 }));
+    // poistka: niektoré servery (staršia Zimbra, firewally) IDLE neohlásia alebo spojenie potichu zaspí –
+    // každú minútu sa pozrieť na nové UID priamo
+    const poll = setInterval(() => {
+      if (w.client !== c || !c.usable) return;
+      later(() => fetchNew(w, acc));
+    }, 60_000);
     c.on('close', () => {
+      clearInterval(poll);
       if (w.client === c) w.client = undefined;
       if (!w.stopped) {
         log(`sledovanie pošty: ${acc.name} odpojené, nové spojenie o ${Math.round(w.delay / 1000)} s`);
@@ -181,4 +190,19 @@ export function reconnectWatchers() {
     w.delay = 2000;
     schedule(w);
   }
+}
+
+/** Skúšobné upozornenie (Nastavenia → Otestovať upozornenie). */
+export function testNotification() {
+  if (!Notification.isSupported()) return 'Systém nepodporuje upozornenia.';
+  const n = new Notification({ title: 'MailKlient', body: 'Takto bude vyzerať upozornenie na novú poštu.' });
+  n.show();
+  const states = [...watches.values()].map((w) => {
+    try {
+      return `${store.getImap(w.id).name}: ${w.client ? 'sleduje sa' : 'nepripojené'}`;
+    } catch {
+      return '';
+    }
+  });
+  return `Upozornenie odoslané. ${states.filter(Boolean).join(', ') || 'Žiadne IMAP konto sa nesleduje.'}`;
 }

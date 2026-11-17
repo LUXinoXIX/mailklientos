@@ -19,6 +19,7 @@ const api: MailApi = {
   listCached: (id, folder, limit) => inv('mail:listCached', id, folder, limit),
   davCollections: (id) => inv('dav:collections', id),
   updateCheck: () => inv('update:check'),
+  testNotification: () => inv('diag:testNotification'),
   zimbraCheck: (id) => inv('zimbra:check', id),
   zimbraGal: (id, q) => inv('zimbra:gal', id, q),
   zimbraGalAuto: (id, q) => inv('zimbra:galAuto', id, q),

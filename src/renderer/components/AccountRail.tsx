@@ -33,6 +33,7 @@ export function AccountRail(props: {
   onToggleGpu: () => void;
   notifications: boolean;
   onCrypto: () => void;
+  onTestNotification: () => void;
   onZimbra?: () => void;
   onToggleNotifications: () => void;
   gpuForced: boolean;
@@ -125,6 +126,7 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onSignatures}>Podpisy…</MenuItem>
             <MenuItem onClick={props.onCrypto}>Šifrovanie (PGP, S/MIME)…</MenuItem>
             {props.onZimbra && <MenuItem onClick={props.onZimbra}>Zimbra: neprítomnosť, filtre, zdieľania, heslo…</MenuItem>}
+            <MenuItem onClick={props.onTestNotification}>Otestovať upozornenie</MenuItem>
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>
