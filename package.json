@@ -1,7 +1,7 @@
 {
   "name": "mailklient",
   "productName": "MailKlient",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Rich e-mailový klient (IMAP/SMTP, voliteľne MS365)",
   "main": ".vite/build/main.js",
   "private": true,

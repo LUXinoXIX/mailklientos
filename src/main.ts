@@ -41,6 +41,7 @@ const createWindow = () => {
     backgroundColor: '#f5f5f5',
     webPreferences: {
       backgroundThrottling: false,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,

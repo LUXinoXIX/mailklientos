@@ -1,52 +1,71 @@
-// Miesto v rozložení, kam hlavný proces položí vložený web (WebContentsView).
-// Web leží NAD stránkou: keď je otvorený dialóg, web sa skryje (hidden), inak by ho prekryl.
-import { useEffect, useRef } from 'react';
+// Vložený web ako značka <webview>: vykresľuje sa vnútri stránky (žiadna samostatná vrstva nad oknom).
+// Ovládanie (späť, obnoviť, adresa) cez ref; názov stránky a chyby načítania cez udalosti prvku.
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
-export function WebSlot(props: { viewKey: string; url: string; partition: string; hidden?: boolean; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { viewKey, url, partition, hidden } = props;
+export interface WebSlotHandle {
+  back(): void;
+  reload(): void;
+  url(): string;
+}
+
+interface WebviewElement extends HTMLElement {
+  canGoBack(): boolean;
+  goBack(): void;
+  reload(): void;
+  getURL(): string;
+}
+
+export const WebSlot = forwardRef<
+  WebSlotHandle,
+  { url: string; partition: string; visible?: boolean; className?: string; onTitle?: (title: string) => void }
+>(function WebSlot(props, ref) {
+  const el = useRef<WebviewElement | null>(null);
+  const ready = useRef(false);
+  const onTitle = useRef(props.onTitle);
+  onTitle.current = props.onTitle;
+
+  useImperativeHandle(ref, () => ({
+    back: () => {
+      if (ready.current && el.current?.canGoBack()) el.current.goBack();
+    },
+    reload: () => {
+      if (ready.current) el.current?.reload();
+    },
+    url: () => (ready.current ? el.current?.getURL() ?? props.url : props.url),
+  }));
 
   useEffect(() => {
-    const api = window.mailApi;
-    const el = ref.current;
-    if (!api || !el) return;
-    if (hidden) {
-      void api.webHide(viewKey);
-      return;
-    }
-    let last = '';
-    const rect = () => {
-      const r = el.getBoundingClientRect();
-      return { x: r.left, y: r.top, width: r.width, height: r.height };
+    const w = el.current;
+    if (!w) return;
+    const onReady = () => {
+      ready.current = true;
     };
-    const b0 = rect();
-    last = JSON.stringify(b0);
-    void api.webShow(viewKey, url, partition, b0);
-    // Poloha sa môže zmeniť aj bez zmeny veľkosti (banner, ribbon), preto aj krátky interval.
-    const update = () => {
-      const b = rect();
-      const s = JSON.stringify(b);
-      if (s !== last) {
-        last = s;
-        void api.webBounds(viewKey, b);
-      }
-    };
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    window.addEventListener('resize', update);
-    const t = window.setInterval(update, 250);
+    const onTitleEv = (e: Event) => onTitle.current?.((e as Event & { title: string }).title);
+    w.addEventListener('dom-ready', onReady);
+    w.addEventListener('page-title-updated', onTitleEv);
     return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', update);
-      window.clearInterval(t);
-      void api.webHide(viewKey);
+      w.removeEventListener('dom-ready', onReady);
+      w.removeEventListener('page-title-updated', onTitleEv);
     };
-    // url a partition sa pri existujúcom webe ignorujú (stránka si drží vlastnú navigáciu)
-  }, [viewKey, url, partition, hidden]);
+  }, []);
 
+  // src sa nastaví len raz: ďalej si stránka drží vlastnú navigáciu (zmena src by ju načítala znova)
+  const src = useRef(props.url);
+
+  if (!window.mailApi) {
+    return (
+      <div className={`webslot ${props.className ?? ''}`} style={props.visible === false ? { display: 'none' } : undefined}>
+        <div className="webslot-hint">Vložený web sa zobrazí v aplikácii.</div>
+      </div>
+    );
+  }
   return (
-    <div ref={ref} className={`webslot ${props.className ?? ''}`}>
-      <div className="webslot-hint">{window.mailApi ? 'Načítavam…' : 'Vložený web sa zobrazí v aplikácii.'}</div>
-    </div>
+    <webview
+      ref={el}
+      src={src.current}
+      partition={props.partition}
+      allowpopups="true"
+      className={`webslot ${props.className ?? ''} ${props.visible === false ? 'webslot-hidden' : ''}`}
+    />
   );
-}
+});

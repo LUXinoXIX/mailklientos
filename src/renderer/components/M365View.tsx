@@ -4,7 +4,8 @@ import { Button, Tooltip } from '@fluentui/react-components';
 import { accountPartition, type M365Account } from '../../core/account';
 import { BackIcon, CloseSmallIcon, OpenOutsideIcon, ReloadIcon, SettingsIcon } from '../icons';
 import type { M365Module } from './Shell';
-import { WebSlot } from './WebSlot';
+import { useRef } from 'react';
+import { WebSlot, type WebSlotHandle } from './WebSlot';
 
 export interface WebTab {
   key: string;
@@ -57,20 +58,22 @@ export function M365View(props: {
   account: M365Account;
   state: TabsState;
   color: string;
-  overlay: boolean;
-  rightOpen: boolean;
+  /** konto je práve vybraté (inak ostáva načítané, len skryté) */
+  visible: boolean;
   onActivate: (key: string) => void;
   onClose: (key: string) => void;
-  onToggleRight: () => void;
+  onTitle: (key: string, title: string) => void;
   onEditAccount: () => void;
 }) {
   const api = window.mailApi;
   const { account, state } = props;
   const partition = accountPartition(account.id);
   const active = state.tabs.find((t) => t.key === state.active) ?? state.tabs[0]!;
+  const slots = useRef(new Map<string, WebSlotHandle>());
+  const cur = () => slots.current.get(active.key);
 
   return (
-    <section className="m365">
+    <section className={`m365 ${props.visible ? '' : 'm365-hidden'}`} aria-hidden={!props.visible}>
       <div className="m365-bar">
         <div className="m365-tabs" role="tablist" aria-label="Karty konta">
           {state.tabs.map((t, i) => {
@@ -91,13 +94,13 @@ export function M365View(props: {
         </div>
         <div className="m365-tools">
           <Tooltip content="Späť" relationship="label">
-            <Button size="small" appearance="subtle" icon={<BackIcon />} onClick={() => api?.webBack(active.key)} aria-label="Späť" />
+            <Button size="small" appearance="subtle" icon={<BackIcon />} onClick={() => cur()?.back()} aria-label="Späť" />
           </Tooltip>
           <Tooltip content="Obnoviť stránku" relationship="label">
-            <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => api?.webReload(active.key)} aria-label="Obnoviť" />
+            <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
           </Tooltip>
           <Tooltip content="Otvoriť túto stránku v Edge" relationship="label">
-            <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(active.key, active.url)}>
+            <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? active.url)}>
               Edge
             </Button>
           </Tooltip>
@@ -106,7 +109,22 @@ export function M365View(props: {
           </Tooltip>
         </div>
       </div>
-      <WebSlot key={active.key} viewKey={active.key} url={active.url} partition={partition} hidden={props.overlay} className="m365-web" />
+      <div className="m365-webs">
+        {state.tabs.map((t) => (
+          <WebSlot
+            key={t.key}
+            ref={(h) => {
+              if (h) slots.current.set(t.key, h);
+              else slots.current.delete(t.key);
+            }}
+            url={t.url}
+            partition={partition}
+            visible={t.key === active.key}
+            onTitle={(title) => props.onTitle(t.key, title)}
+            className="m365-web"
+          />
+        ))}
+      </div>
     </section>
   );
 }

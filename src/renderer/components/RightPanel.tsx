@@ -3,10 +3,10 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar,
   MessageBarBody, Tooltip,
 } from '@fluentui/react-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type WebItem } from '../../core/settings';
 import { AddIcon, AppsIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
-import { WebSlot } from './WebSlot';
+import { WebSlot, type WebSlotHandle } from './WebSlot';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -48,7 +48,8 @@ export function RightPanel(props: {
   const [editing, setEditing] = useState(false);
   const [addWeb, setAddWeb] = useState<{ name: string; url: string; error?: string } | null>(null);
   const web: WebItem | undefined = settings.webs.find((w) => w.id === props.active) ?? settings.webs[0];
-  const key = web ? `web-${web.id}` : '';
+  const slots = useRef(new Map<string, WebSlotHandle>());
+  const cur = () => (web ? slots.current.get(web.id) : undefined);
 
   const openAdd = (open: boolean) => {
     setAddWeb(open ? { name: '', url: '' } : null);
@@ -91,7 +92,6 @@ export function RightPanel(props: {
                 className="right-tab-x"
                 aria-label={`Odstrániť ${w.name}`}
                 onClick={() => {
-                  void api?.webClose(`web-${w.id}`);
                   props.onSettings({ ...settings, webs: settings.webs.filter((x) => x.id !== w.id) });
                 }}
               >
@@ -113,10 +113,24 @@ export function RightPanel(props: {
           <div className="right-url">
             <GlobeIcon />
             <span className="grow ellipsis" title={web.url}>{web.url.replace(/^https?:\/\//, '')}</span>
-            <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => api?.webReload(key)} aria-label="Obnoviť" />
-            <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(key, web.url)} aria-label="Otvoriť v prehliadači" />
+            <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
+            <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? web.url)} aria-label="Otvoriť v prehliadači" />
           </div>
-          <WebSlot key={key} viewKey={key} url={web.url} partition={webPartition(web.id)} hidden={props.overlay} className="right-web" />
+          <div className="right-webs">
+            {settings.webs.map((w) => (
+              <WebSlot
+                key={w.id}
+                ref={(h) => {
+                  if (h) slots.current.set(w.id, h);
+                  else slots.current.delete(w.id);
+                }}
+                url={w.url}
+                partition={webPartition(w.id)}
+                visible={w.id === web.id}
+                className="right-web"
+              />
+            ))}
+          </div>
         </>
       ) : (
         <div className="empty grow">Pridaj web tlačidlom +</div>

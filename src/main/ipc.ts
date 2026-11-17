@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
-import type { DraftRef, PickedFile, Result, SendInput, WebBounds } from '../core/api';
+import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
 import type { AppSettings, LauncherItem } from '../core/settings';
 import { autodetect, probeServer, type Protocol } from '../core/tls';
 import * as store from './accounts';
@@ -128,27 +128,6 @@ export function registerIpc() {
   on('diag:log', (msg: string) => diag.log('renderer:', String(msg).slice(0, 2000)));
 
   // vložené weby
-  on('web:show', (key: string, url: string, partition: string, b: WebBounds) => web.show(key, url, partition, b));
-  on('web:bounds', (key: string, b: WebBounds) => web.setBounds(key, b));
-  on('web:hide', (key: string) => web.hide(key));
-  on('web:hideAll', () => web.hideAll());
-  on('web:navigate', (key: string, url: string) => web.navigate(key, url));
-  on('web:reload', (key: string) => web.reload(key));
-  on('web:back', (key: string) => web.back(key));
-  on('web:close', (key: string) => web.destroy(key));
   on('web:clear', (partition: string) => web.clearPartition(partition));
-  on('web:openOutside', async (key: string, fallback: string) => {
-    const url = web.currentUrl(key) || fallback;
-    if (!/^https?:/i.test(url)) return;
-    // Windows: Edge cez jeho URL schému (funguje aj keď je predvolený iný prehliadač).
-    if (process.platform === 'win32') {
-      try {
-        await shell.openExternal(`microsoft-edge:${url}`);
-        return;
-      } catch {
-        /* Edge nie je: predvolený prehliadač */
-      }
-    }
-    await shell.openExternal(url);
-  });
+  on('web:openOutside', (url: string) => web.openOutside(url));
 }

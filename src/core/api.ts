@@ -139,17 +139,6 @@ export interface MailApi {
   pickProgram(): Promise<Result<{ target: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
-  // vložené weby
-  webShow(key: string, url: string, partition: string, bounds: WebBounds): Promise<void>;
-  webBounds(key: string, bounds: WebBounds): Promise<void>;
-  webHide(key: string): Promise<void>;
-  webHideAll(): Promise<void>;
-  webNavigate(key: string, url: string): Promise<void>;
-  webReload(key: string): Promise<void>;
-  webBack(key: string): Promise<void>;
-  /** Zavrie kartu (zničí web). */
-  webClose(key: string): Promise<void>;
-  onWebEvent(cb: (ev: WebEvent) => void): () => void;
   // stabilita vykresľovania
   gpuDisabled(): Promise<Result<boolean>>;
   /** Uloží nastavenie a reštartuje aplikáciu. */
@@ -160,8 +149,10 @@ export interface MailApi {
   openLog(): Promise<void>;
   logError(msg: string): Promise<void>;
   onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
-  /** Otvorí aktuálnu stránku webu v Edge (Windows) alebo v predvolenom prehliadači. */
-  webOpenOutside(key: string, fallbackUrl: string): Promise<void>;
+  // vložené weby
+  /** Otvorí stránku v Edge (Windows) alebo v predvolenom prehliadači. */
+  webOpenOutside(url: string): Promise<void>;
+  onWebEvent(cb: (ev: WebEvent) => void): () => void;
   /** Vymaže prihlásenie webovej relácie (odhlásiť konto M365 / web). */
   webClear(partition: string): Promise<void>;
 }

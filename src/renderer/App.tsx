@@ -477,7 +477,6 @@ export function App() {
     }));
   }
   function closeTab(acc: M365Account, key: string) {
-    void api?.webClose(key);
     setTabs((t) => {
       const st = t[acc.id];
       if (!st) return t;
@@ -605,19 +604,27 @@ export function App() {
               />
             )}
             <div className="content">
-              {activeM365 && m365State ? (
+              {accounts.filter(isM365).filter((a) => tabs[a.id]).map((a) => (
                 <M365View
-                  account={activeM365}
-                  state={m365State}
-                  color={topColor}
-                  overlay={overlay}
-                  rightOpen={rightOpen}
-                  onActivate={(key) => setTabs((t) => ({ ...t, [activeM365.id]: { ...m365State, active: key } }))}
-                  onClose={(key) => closeTab(activeM365, key)}
-                  onToggleRight={() => setRightOpen(!rightOpen)}
-                  onEditAccount={() => editAccount(activeM365)}
+                  key={a.id}
+                  account={a}
+                  state={tabs[a.id]!}
+                  color={accountColor(a.color)}
+                  visible={activeM365?.id === a.id}
+                  onActivate={(key) => setTabs((t) => ({ ...t, [a.id]: { ...t[a.id]!, active: key } }))}
+                  onClose={(key) => closeTab(a, key)}
+                  onTitle={(key, title) =>
+                    setTabs((all) => {
+                      const st = all[a.id];
+                      if (!st) return all;
+                      const tabsNext = st.tabs.map((x) => (x.key === key ? { ...x, title: tabTitle(title, x.module ? MODULE_TITLES[x.module] : x.title) } : x));
+                      return { ...all, [a.id]: { ...st, tabs: tabsNext } };
+                    })
+                  }
+                  onEditAccount={() => editAccount(a)}
                 />
-              ) : showMail ? (
+              ))}
+              {activeM365 ? null : showMail ? (
                 <div className="mail">
                   <FolderPane
                     account={activeImap}
