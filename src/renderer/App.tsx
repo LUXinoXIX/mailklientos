@@ -1021,7 +1021,7 @@ export function App() {
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? '365' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
@@ -1033,7 +1033,7 @@ export function App() {
         />
         <div className="workspace">
           <TopBar
-            kind={activeM365 ? 'OUTLOOK WEB' : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1139,7 +1139,7 @@ export function App() {
           )}
           <main className={`body ${rightOpen ? 'with-right' : ''}`}>
             {activeM365 ? (
-              <ModuleRail modules={M365_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              <ModuleRail modules={activeM365.host === 'live' ? M365_MODULES.filter((m) => !m.work) : M365_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
                 modules={IMAP_MODULES}

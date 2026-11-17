@@ -35,7 +35,7 @@ export function moduleUrl(m: M365Module, host: 'office' | 'live' = 'office'): st
     case 'excel': return 'https://www.office.com/launch/excel';
     case 'powerpoint': return 'https://www.office.com/launch/powerpoint';
     case 'copilot': return o ? 'https://m365.cloud.microsoft/chat' : 'https://copilot.microsoft.com/';
-    case 'planner': return o ? 'https://planner.cloud.microsoft/' : 'https://to-do.live.com/tasks/';
+    case 'planner': return 'https://tasks.office.com/'; // klasický Planner, len firemné kontá
     case 'sharepoint': return 'https://www.office.com/launch/sharepoint';
     case 'onenote': return o ? 'https://www.office.com/launch/onenote' : 'https://www.onenote.com/notebooks';
     case 'forms': return 'https://forms.office.com/';

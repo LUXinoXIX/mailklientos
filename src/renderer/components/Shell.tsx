@@ -487,6 +487,8 @@ export interface ModuleDef<K extends string> {
   label: string;
   icon: ReactNode;
   sep?: boolean;
+  /** len pre firemné (pracovné/školské) kontá M365 */
+  work?: boolean;
 }
 
 export const IMAP_MODULES: ModuleDef<ImapModule>[] = [
@@ -502,10 +504,10 @@ export const M365_MODULES: ModuleDef<M365Module>[] = [
   { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
   { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
   { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true },
-  { key: 'planner', label: 'Planner', icon: <PlannerIcon /> },
+  { key: 'planner', label: 'Planner', icon: <PlannerIcon />, work: true },
   { key: 'teams', label: 'Teams', icon: <TeamsIcon /> },
   { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon />, sep: true },
-  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon /> },
+  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon />, work: true },
   { key: 'word', label: 'Word', icon: <WordIcon /> },
   { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
   { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
