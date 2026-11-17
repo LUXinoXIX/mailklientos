@@ -9,6 +9,8 @@ import { app, BrowserWindow, shell } from 'electron';
 interface Prefs {
   /** true = vykresľovať bez GPU (softvérovo). */
   disableGpu?: boolean;
+  /** true = použiť grafickú kartu aj keď je jej ovládač v Chromiu na zozname blokovaných. */
+  forceGpu?: boolean;
 }
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
@@ -44,9 +46,13 @@ export function log(...parts: unknown[]) {
 export function applyRenderingSwitches() {
   // Windows: chybné vyhodnotenie zakrytia okna spôsobuje biele/prázdne okno a blikanie.
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
-  if (loadPrefs().disableGpu) {
+  const p = loadPrefs();
+  if (p.disableGpu) {
     app.disableHardwareAcceleration();
     log('štart: hardvérová akcelerácia VYPNUTÁ (nastavenie)');
+  } else if (p.forceGpu) {
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
+    log('štart: grafická karta VYNÚTENÁ (ignore-gpu-blocklist)');
   }
 }
 
@@ -75,10 +81,38 @@ export function watchProcesses() {
   } catch {
     /* nič */
   }
+  // ovládač grafiky a dôvod zablokovania (ako chrome://gpu)
+  void app
+    .getGPUInfo('complete')
+    .then((info) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const i = info as any;
+      const dev = (i.gpuDevice ?? []).map((d: any) => ({
+        vendor: d.vendorString ?? d.vendorId,
+        device: d.deviceString ?? d.deviceId,
+        driver: d.driverVersion,
+        active: d.active,
+      }));
+      log('GPU zariadenia', dev);
+      log('GPU dôvody', { blocklist: i.auxAttributes?.gpuBlocklistReasons ?? i.featureStatus, workarounds: i.driverBugWorkarounds?.length, disabled: i.auxAttributes?.softwareRendering });
+    })
+    .catch((e: unknown) => log('GPU info chyba', String(e)));
 }
 
 export function gpuDisabled() {
   return !!loadPrefs().disableGpu;
+}
+
+export function gpuForced() {
+  return !!loadPrefs().forceGpu;
+}
+
+/** Vynúti grafickú kartu (ignoruje zoznam blokovaných ovládačov) a reštartuje. */
+export function setGpuForced(on: boolean) {
+  savePrefs({ ...loadPrefs(), forceGpu: on, disableGpu: on ? false : loadPrefs().disableGpu });
+  log(`nastavenie: vynútená grafická karta ${on ? 'zapnutá' : 'vypnutá'}, reštart`);
+  app.relaunch();
+  app.exit(0);
 }
 
 /** Zapne/vypne hardvérovú akceleráciu a reštartuje aplikáciu. */

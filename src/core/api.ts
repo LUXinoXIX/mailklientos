@@ -154,6 +154,9 @@ export interface MailApi {
   gpuDisabled(): Promise<Result<boolean>>;
   /** Uloží nastavenie a reštartuje aplikáciu. */
   setGpuDisabled(off: boolean): Promise<void>;
+  gpuForced(): Promise<Result<boolean>>;
+  /** Vynúti grafickú kartu napriek zoznamu blokovaných ovládačov; reštart. */
+  setGpuForced(on: boolean): Promise<void>;
   openLog(): Promise<void>;
   logError(msg: string): Promise<void>;
   onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
