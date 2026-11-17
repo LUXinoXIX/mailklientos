@@ -15,7 +15,7 @@ Najnovší inštalátor: [Releases → Najnovšie zostavenie](../../releases/tag
 
 Inštalátory zostavuje GitHub Actions pri každej zmene vo vetve `main`.
 
-## Stav (verzia 0.3)
+## Stav (verzia 0.4)
 
 - **Rozloženie:** pás kont úplne vľavo (poradie ťahaním, pravé tlačidlo = nastavenia), pás modulov podľa konta,
   horný pruh vo farbe konta, pravý panel (tlačidlo vpravo hore).
@@ -23,6 +23,10 @@ Inštalátory zostavuje GitHub Actions pri každej zmene vo vetve `main`.
   prílohy (otvoriť, uložiť, priložiť), odstrániť, archivovať, presunúť, prečítané / neprečítané, vlajka,
   počty neprečítaných, „Všetky doručené“, podpisy pre každé konto, automatické nastavenie servera
   (Autoconfig a databáza Thunderbirdu), SSL/TLS, STARTTLS, výnimky certifikátov, režim pre staré Zimbry.
+- **Písanie správ ako v Outlooku:** odpoveď a nová správa priamo v čítacom paneli, formátovaný text
+  (písmo, farby, zoznamy, zarovnanie, odkazy, obrázky aj cez Ctrl+V, tabuľky), karty Správa a Vložiť v ribbone,
+  príjemcovia s dopĺňaním, citácia ako v Outlooku, koncepty sa ukladajú priebežne do Konceptov.
+- **Rýchlosť:** jedno trvalé spojenie na konto, otvorené správy sa pamätajú, pri načítaní žiadne biele plochy.
 - **Kontá Microsoft 365 / Outlook.com:** vložený Outlook na webe ako celé okno, vlastné prihlásenie pre každé konto;
   Kalendár, To Do, Teams, OneDrive, Word, Excel, PowerPoint v kartách (aj keď ich otvoríš cez prepínač aplikácií
   v Outlooku); tlačidlo Edge.

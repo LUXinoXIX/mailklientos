@@ -238,7 +238,7 @@ body { overflow: hidden; }
 .fmt-font { width: 140px; }
 .fmt-size { width: 64px; }
 .fmt-sep { width: 1px; height: 20px; background: var(--colorNeutralStroke2); margin: 0 4px; }
-.tb { min-width: 28px; height: 28px; padding: 0 6px; border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; font-size: 13px; color: inherit; }
+.tb { min-width: 28px; height: 28px; padding: 0 6px; display: inline-grid; place-items: center; border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; font-size: 13px; color: inherit; }
 .tb:hover { background: var(--colorNeutralBackground1Hover); }
 .tb.on { background: var(--colorBrandBackground2); color: var(--colorBrandForeground1); }
 .tb.wide { font-size: 12px; }
