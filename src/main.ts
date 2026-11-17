@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,6 +82,14 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   if (squirrelEvent) return;
   watchProcesses();
+  // kontrola pravopisu: slovenčina + angličtina (Windows a macOS používajú jazyky systému)
+  if (process.platform === 'linux') {
+    try {
+      session.defaultSession.setSpellCheckerLanguages(['sk', 'en-US']);
+    } catch {
+      /* slovník nie je k dispozícii */
+    }
+  }
   registerIpc();
   createWindow();
   app.on('activate', () => {

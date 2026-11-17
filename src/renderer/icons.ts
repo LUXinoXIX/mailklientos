@@ -39,4 +39,11 @@ export {
   Flag16Filled as FlagFilledIcon,
   MailInbox24Regular as AllInboxIcon,
   Signature24Regular as SignatureIcon,
+  TextBulletListLtr20Regular as BulletsIcon,
+  TextNumberListLtr20Regular as NumberingIcon,
+  TextIndentDecreaseLtr20Regular as OutdentIcon,
+  TextIndentIncreaseLtr20Regular as IndentIcon,
+  TextAlignLeft20Regular as AlignLeftIcon,
+  TextAlignCenter20Regular as AlignCenterIcon,
+  TextAlignRight20Regular as AlignRightIcon,
 } from '@fluentui/react-icons';

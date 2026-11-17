@@ -13,7 +13,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { ImapAccountPublic } from '../../core/account';
 import type { DraftRef, MessageFull, PickedFile, SendInput } from '../../core/api';
 import type { AppSettings } from '../../core/settings';
-import { AttachIcon, CloseSmallIcon } from '../icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
 
@@ -170,13 +170,13 @@ function FormatBar({ editor, onImage }: { editor: Editor; onImage: () => void })
         </MenuPopover>
       </Menu>
       <span className="fmt-sep" />
-      <Tb label="Odrážky" active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()}>•≡</Tb>
-      <Tb label="Číslovanie" active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()}>1.</Tb>
-      <Tb label="Zmenšiť odsadenie" onClick={() => chain().liftListItem('listItem').run()}>⇤</Tb>
-      <Tb label="Zväčšiť odsadenie" onClick={() => chain().sinkListItem('listItem').run()}>⇥</Tb>
-      <Tb label="Zarovnať doľava" active={editor.isActive({ textAlign: 'left' })} onClick={() => chain().setTextAlign('left').run()}>⯇</Tb>
-      <Tb label="Na stred" active={editor.isActive({ textAlign: 'center' })} onClick={() => chain().setTextAlign('center').run()}>≡</Tb>
-      <Tb label="Zarovnať doprava" active={editor.isActive({ textAlign: 'right' })} onClick={() => chain().setTextAlign('right').run()}>⯈</Tb>
+      <Tb label="Odrážky" active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()}><BulletsIcon /></Tb>
+      <Tb label="Číslovanie" active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()}><NumberingIcon /></Tb>
+      <Tb label="Zmenšiť odsadenie" onClick={() => chain().liftListItem('listItem').run()}><OutdentIcon /></Tb>
+      <Tb label="Zväčšiť odsadenie" onClick={() => chain().sinkListItem('listItem').run()}><IndentIcon /></Tb>
+      <Tb label="Zarovnať doľava" active={editor.isActive({ textAlign: 'left' })} onClick={() => chain().setTextAlign('left').run()}><AlignLeftIcon /></Tb>
+      <Tb label="Na stred" active={editor.isActive({ textAlign: 'center' })} onClick={() => chain().setTextAlign('center').run()}><AlignCenterIcon /></Tb>
+      <Tb label="Zarovnať doprava" active={editor.isActive({ textAlign: 'right' })} onClick={() => chain().setTextAlign('right').run()}><AlignRightIcon /></Tb>
       <span className="fmt-sep" />
       <Popover open={linkOpen} onOpenChange={(_, d) => { setLinkOpen(d.open); if (d.open) setLink(editor.getAttributes('link').href ?? ''); }} trapFocus>
         <PopoverTrigger disableButtonEnhancement>
