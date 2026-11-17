@@ -329,6 +329,9 @@ export function AccountDialog(props: {
                 }}
               />
             </Field>
+            <Field label="Adresa kalendára a kontaktov (CalDAV/CardDAV)" hint="Nechajte prázdne – zistí sa automaticky. Zimbra: https://server/dav/meno@firma.sk/">
+              <Input value={acc.davUrl ?? ''} onChange={(_, d) => set({ davUrl: d.value.trim() || undefined })} placeholder="automaticky" />
+            </Field>
             <ServerSection proto="imap" value={acc.imap} onChange={(imap) => setAcc((a) => ({ ...a, imap }))} probe={test?.imap} onRetest={(imap) => runTest({ ...acc, imap })} />
             <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
             {test?.login && (

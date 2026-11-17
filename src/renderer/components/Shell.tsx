@@ -87,6 +87,35 @@ function SendLaterMenu(props: { onPick: (d: Date) => void }) {
   );
 }
 
+/** Úloha zo správy s termínom (ako vlajky s termínom v Outlooku). */
+function TaskMenu(props: { disabled: boolean; onTask: (due?: string) => void }) {
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const plus = (n: number) => iso(new Date(Date.now() + n * 86400000));
+  const weekday = (target: number, next: boolean) => {
+    const d = new Date();
+    let add = (target - d.getDay() + 7) % 7;
+    if (next) add = add === 0 ? 7 : add + (add < 7 && target === 1 ? 0 : 0);
+    if (next && add <= 0) add += 7;
+    return iso(new Date(d.getFullYear(), d.getMonth(), d.getDate() + add));
+  };
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <ToolbarButton icon={<TasksIcon />} disabled={props.disabled}>Úloha</ToolbarButton>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          <MenuItem onClick={() => props.onTask(plus(0))}>Dnes</MenuItem>
+          <MenuItem onClick={() => props.onTask(plus(1))}>Zajtra</MenuItem>
+          <MenuItem onClick={() => props.onTask(weekday(5, false))}>Tento týždeň (piatok)</MenuItem>
+          <MenuItem onClick={() => props.onTask(weekday(1, true))}>Budúci týždeň (pondelok)</MenuItem>
+          <MenuItem onClick={() => props.onTask(undefined)}>Bez termínu</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+}
+
 /** Odložiť: rýchle voľby ako v Outlooku + vlastný dátum a čas. */
 function SnoozeMenu(props: { disabled: boolean; onSnooze: (d: Date) => void }) {
   const [custom, setCustom] = useState('');
@@ -154,6 +183,7 @@ export function Ribbon(props: {
   onCategory: (id: string, on: boolean) => void;
   pinned: boolean;
   onTogglePin: () => void;
+  onTask: (due?: string) => void;
   onSnooze: (until: Date) => void;
   quickSteps: QuickStep[];
   onQuickStep: (q: QuickStep) => void;
@@ -292,6 +322,7 @@ export function Ribbon(props: {
               {p.pinned ? 'Odopnúť' : 'Pripnúť'}
             </ToolbarButton>
             <SnoozeMenu disabled={!p.hasMessage} onSnooze={p.onSnooze} />
+            <TaskMenu disabled={!p.hasMessage} onTask={p.onTask} />
             <ToolbarDivider />
             <Menu>
               <MenuTrigger disableButtonEnhancement>

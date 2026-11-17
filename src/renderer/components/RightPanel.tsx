@@ -4,7 +4,8 @@ import {
   MessageBarBody, Tooltip,
 } from '@fluentui/react-components';
 import { useEffect, useRef, useState } from 'react';
-import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type WebItem } from '../../core/settings';
+import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type Task, type WebItem } from '../../core/settings';
+import type { CalEvent } from '../../core/ical';
 import { AddIcon, AppsIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
 import { WebSlot, type WebSlotHandle } from './WebSlot';
 
@@ -34,6 +35,52 @@ function LauncherButton(props: { item: LauncherItem; editing: boolean; onRun: ()
   );
 }
 
+export interface AgendaData {
+  loading: boolean;
+  error?: string;
+  events: Array<CalEvent & { accountName: string; accountColor: string }>;
+  tasks: Task[];
+  onOpenTask: (t: Task) => void;
+  onOpenCalendar: () => void;
+  onToggleTask: (t: Task) => void;
+}
+
+/** Dnešný deň: stretnutia zo všetkých kalendárov a úlohy na dnes / po termíne. */
+function Agenda({ data }: { data: AgendaData }) {
+  const now = Date.now();
+  const time = (iso: string) => new Date(iso).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
+  const today = new Date().toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
+  return (
+    <div className="agenda">
+      <div className="agenda-day">{today}</div>
+      <div className="folder-section">Stretnutia</div>
+      {data.loading && <div className="muted small pad">Načítavam…</div>}
+      {data.error && <div className="muted small pad">⚠ {data.error}</div>}
+      {!data.loading && !data.events.length && <div className="muted small pad">Dnes žiadne stretnutia.</div>}
+      {data.events.map((e) => {
+        const past = Date.parse(e.end) < now;
+        const live = Date.parse(e.start) <= now && Date.parse(e.end) > now;
+        return (
+          <button key={`${e.uid}-${e.start}`} className={`agenda-item ${past ? 'past' : ''} ${live ? 'live' : ''}`} style={{ borderLeftColor: e.color ?? e.accountColor }} onClick={data.onOpenCalendar}>
+            <span className="agenda-time">{e.allDay ? 'celý deň' : `${time(e.start)}–${time(e.end)}`}</span>
+            <b>{e.summary}</b>
+            {e.location && <span className="muted small">{e.location}</span>}
+          </button>
+        );
+      })}
+      <div className="folder-section">Úlohy na dnes</div>
+      {!data.tasks.length && <div className="muted small pad">Nič na dnes.</div>}
+      {data.tasks.map((t) => (
+        <div key={t.id} className="agenda-task">
+          <input type="checkbox" checked={t.done} onChange={() => data.onToggleTask(t)} aria-label="Hotové" />
+          <button className="link" onClick={() => data.onOpenTask(t)}>{t.title}</button>
+          {t.due && t.due < new Date().toISOString().slice(0, 10) && <span className="overdue small">po termíne</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function RightPanel(props: {
   settings: AppSettings;
   onSettings: (s: AppSettings) => void;
@@ -42,12 +89,15 @@ export function RightPanel(props: {
   overlay: boolean;
   onOverlay: (open: boolean) => void;
   onStatus: (s: string) => void;
+  /** dnešné udalosti a úlohy (karta Agenda) */
+  agenda?: AgendaData;
 }) {
   const api = window.mailApi;
   const { settings } = props;
   const [editing, setEditing] = useState(false);
   const [addWeb, setAddWeb] = useState<{ name: string; url: string; error?: string } | null>(null);
-  const web: WebItem | undefined = settings.webs.find((w) => w.id === props.active) ?? settings.webs[0];
+  const agendaOn = props.active === 'agenda' && !!props.agenda;
+  const web: WebItem | undefined = agendaOn ? undefined : settings.webs.find((w) => w.id === props.active) ?? settings.webs[0];
   const slots = useRef(new Map<string, WebSlotHandle>());
   const cur = () => (web ? slots.current.get(web.id) : undefined);
 
@@ -84,6 +134,11 @@ export function RightPanel(props: {
   return (
     <aside className="right" aria-label="Pravý panel">
       <div className="right-tabs">
+        {props.agenda && (
+          <div className={`right-tab ${agendaOn ? 'on' : ''}`}>
+            <button onClick={() => props.onActive('agenda')}>Agenda</button>
+          </div>
+        )}
         {settings.webs.map((w) => (
           <div key={w.id} className={`right-tab ${web?.id === w.id ? 'on' : ''}`}>
             <button onClick={() => props.onActive(w.id)} title={w.url}>{w.name}</button>
@@ -108,15 +163,19 @@ export function RightPanel(props: {
           <Button size="small" appearance={editing ? 'primary' : 'subtle'} icon={<EditSmallIcon />} onClick={() => setEditing(!editing)} aria-label="Upraviť" />
         </Tooltip>
       </div>
-      {web ? (
+      {agendaOn && props.agenda ? (
+        <Agenda data={props.agenda} />
+      ) : null}
+      {/* weby ostávajú načítané aj pri zobrazenej Agende */}
+      {web || agendaOn ? (
         <>
-          <div className="right-url">
+          {web && <div className="right-url">
             <GlobeIcon />
             <span className="grow ellipsis" title={web.url}>{web.url.replace(/^https?:\/\//, '')}</span>
             <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
             <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? web.url)} aria-label="Otvoriť v prehliadači" />
-          </div>
-          <div className="right-webs">
+          </div>}
+          <div className="right-webs" style={agendaOn ? { display: 'none' } : undefined}>
             {settings.webs.map((w) => (
               <WebSlot
                 key={w.id}
@@ -126,7 +185,7 @@ export function RightPanel(props: {
                 }}
                 url={w.url}
                 partition={webPartition(w.id)}
-                visible={w.id === web.id}
+                visible={!agendaOn && w.id === web?.id}
                 className="right-web"
               />
             ))}

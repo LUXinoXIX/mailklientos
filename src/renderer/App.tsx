@@ -3,7 +3,7 @@ import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
-import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch } from '../core/settings';
+import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
 import { Composer, type ComposeInit, type ComposeKind, type ComposerHandle, type ComposerState } from './components/Composer';
@@ -16,7 +16,10 @@ import { SignaturesDialog } from './components/SignaturesDialog';
 import { TemplatesDialog } from './components/TemplatesDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
-import { RightPanel } from './components/RightPanel';
+import { RightPanel, type AgendaData } from './components/RightPanel';
+import { CalendarView } from './components/CalendarView';
+import { ContactsView } from './components/ContactsView';
+import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
   IMAP_MODULES, M365_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
@@ -577,6 +580,67 @@ export function App() {
     setStatus(`Šablóna „${t.name}“ uložená.`);
   }
 
+  /** Úloha zo správy (ako vlajka s termínom v Outlooku); správa sa zároveň označí vlajkou. */
+  async function taskFromMessage(due?: string) {
+    const m = current;
+    if (!m) return;
+    const t: Task = {
+      id: Math.random().toString(36).slice(2, 10),
+      title: m.subject,
+      due,
+      done: false,
+      created: new Date().toISOString(),
+      message: { accountId: m.accountId, folder: m.folder, uid: m.uid, messageId: full.msg?.messageId ?? m.messageId, subject: m.subject, from: m.fromName || m.fromAddress },
+    };
+    saveSettings({ ...settings, tasks: [...(settings.tasks ?? []), t] });
+    if (!m.flagged && m.accountId !== DEMO_ID) await toggleFlag();
+    setStatus(`Úloha vytvorená${due ? ` s termínom ${dueLabel(due)}` : ''}.`);
+  }
+  function openTaskMessage(ref: NonNullable<Task['message']>) {
+    setActiveId(ref.accountId);
+    setImapModule((x) => ({ ...x, [ref.accountId]: 'mail' }));
+    pendingOpen.current = { accountId: ref.accountId, uid: ref.uid };
+    setSelection({ accountId: ref.accountId, folder: ref.folder });
+  }
+
+  // Agenda (pravý panel): dnešné stretnutia zo všetkých IMAP kont + úlohy na dnes a po termíne
+  const [agendaTick, setAgendaTick] = useState(0);
+  const [agendaEvents, setAgendaEvents] = useState<{ loading: boolean; error?: string; list: AgendaData['events'] }>({ loading: false, list: [] });
+  const agendaVisible = rightOpen && rightActive === 'agenda';
+  useEffect(() => {
+    if (!api || demo || !agendaVisible) return;
+    let alive = true;
+    const run = async () => {
+      const d = new Date();
+      const from = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const to = new Date(from.getTime() + 86400000);
+      setAgendaEvents((x) => ({ ...x, loading: true }));
+      const accs = accounts.filter(isImap);
+      const rs = await Promise.all(accs.map((a) => api.calEvents(a.id, [], from.toISOString(), to.toISOString())));
+      if (!alive) return;
+      const list = rs
+        .flatMap((r, i) => (r.ok ? r.data.map((e) => ({ ...e, accountName: accs[i]!.name, accountColor: accountColor(accs[i]!.color) })) : []))
+        .sort((a, b) => Number(b.allDay) - Number(a.allDay) || Date.parse(a.start) - Date.parse(b.start));
+      const errs = rs.filter((r) => !r.ok).length;
+      setAgendaEvents({ loading: false, list, error: errs && !list.length ? 'Kalendár sa nepodarilo načítať.' : undefined });
+    };
+    void run();
+    const t = window.setInterval(() => void run(), 10 * 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [api, accounts, demo, agendaVisible, agendaTick]);
+  const agenda: AgendaData = {
+    loading: agendaEvents.loading,
+    error: agendaEvents.error,
+    events: agendaEvents.list,
+    tasks: (settings.tasks ?? []).filter((t) => !t.done && t.due && t.due <= todayIso()),
+    onOpenTask: (t) => (t.message ? openTaskMessage(t.message) : activeImap && setImapModule((x) => ({ ...x, [activeImap.id]: 'tasks' }))),
+    onOpenCalendar: () => activeImap && setImapModule((x) => ({ ...x, [activeImap.id]: 'calendar' })),
+    onToggleTask: (t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }),
+  };
+
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
     const m = full.msg;
@@ -622,16 +686,24 @@ export function App() {
   }, [demo]);
 
   // kontakty na dopĺňanie: odosielatelia načítaných správ + adresy, na ktoré si písal
+  // adresáre CardDAV (napr. Zimbra) na dopĺňanie adries
+  const [davContacts, setDavContacts] = useState<Record<string, Contact[]>>({});
+  useEffect(() => {
+    if (!api || demo) return;
+    for (const a of accounts.filter(isImap))
+      void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
+  }, [api, accounts, demo]);
+
   const contacts = useMemo<Contact[]>(() => {
-    let known: Contact[] = [];
+    let known: Contact[] = [...Object.values(davContacts).flat()];
     try {
-      known = JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[];
+      known = [...(JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]), ...known];
     } catch {
       /* nič */
     }
     const all = [...known, ...messages.map((m) => ({ name: m.fromName, email: m.fromAddress }))].filter((c) => c.email);
     return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
-  }, [messages, composeView]);
+  }, [messages, composeView, davContacts]);
 
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
@@ -809,7 +881,7 @@ export function App() {
             rightOpen={rightOpen}
             onToggleRight={() => setRightOpen(!rightOpen)}
           />
-          {!activeM365 && (
+          {!activeM365 && curImapModule === 'mail' && (
             <Ribbon
               tab={ribbonTab}
               onTab={setRibbonTab}
@@ -832,6 +904,7 @@ export function App() {
               onCategory={(id, on) => void setCategory(id, on)}
               pinned={!!current?.keywords?.includes(PIN_KEYWORD)}
               onTogglePin={() => void togglePin()}
+              onTask={(due) => void taskFromMessage(due)}
               onSnooze={(d) => void snoozeCurrent(d)}
               quickSteps={settings.quickSteps ?? []}
               onQuickStep={(q) => void runQuickStep(q)}
@@ -990,16 +1063,38 @@ export function App() {
                     onOpenThread={(t) => void open(t)}
                     categories={categoriesOf(settings)}
                     onRemoveCategory={(id) => void setCategory(id, false)}
+                    onRespond={async (ps) => {
+                      const m = full.msg;
+                      if (!m || !api || m.accountId === DEMO_ID) return;
+                      const r = await api.calRespond(m.accountId, m.folder, m.uid, ps);
+                      setStatus(r.ok ? r.data : r.error);
+                      if (r.ok) setAgendaTick((t) => t + 1);
+                    }}
                   />
                   )}
                 </div>
               ) : (
-                <section className="placeholder">
-                  <h2>{IMAP_MODULES.find((x) => x.key === curImapModule)?.label}</h2>
-                  <p className="muted">
-                    Pripravuje sa: kalendár, úlohy a kontakty cez CalDAV/CardDAV (Zimbra, Google, Nextcloud) pre konto {activeImap?.name}.
-                  </p>
-                </section>
+                curImapModule === 'tasks' ? (
+                  <TasksView settings={settings} onSettings={saveSettings} onOpenMessage={openTaskMessage} />
+                ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'calendar' ? (
+                  <CalendarView key={activeImap.id} account={activeImap} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
+                ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'contacts' ? (
+                  <ContactsView
+                    key={activeImap.id}
+                    account={activeImap}
+                    onStatus={setStatus}
+                    onCompose={(to) => {
+                      setImapModule((m) => ({ ...m, [activeImap.id]: 'mail' }));
+                      setCompose({ init: { kind: 'new', accountId: activeImap.id, to }, key: Date.now() });
+                      setRibbonTab('message');
+                    }}
+                  />
+                ) : (
+                  <section className="placeholder">
+                    <h2>{IMAP_MODULES.find((x) => x.key === curImapModule)?.label}</h2>
+                    <p className="muted">Pridajte IMAP konto – kalendár a kontakty sa načítajú zo servera (CalDAV/CardDAV, napr. Zimbra).</p>
+                  </section>
+                )
               )}
             </div>
             {rightOpen && (
@@ -1011,6 +1106,7 @@ export function App() {
                 overlay={overlay}
                 onOverlay={setPanelOverlay}
                 onStatus={setStatus}
+                agenda={api && !demo ? agenda : undefined}
               />
             )}
           </main>

@@ -1,5 +1,6 @@
 // Zmluva medzi rendererom a hlavným procesom (cez preload). Len typy.
 import type { RuleAction } from './settings';
+import type { CalEvent, Contact } from './ical';
 import type { AccountConfig, AccountPublic, AnyAccount, ServerConfig } from './account';
 import type { AppSettings, LauncherItem } from './settings';
 import type { Protocol, ProbeResult } from './tls-types';
@@ -40,6 +41,8 @@ export interface MessageFull extends MessageSummary {
   text: string;
   attachments: { filename: string; size: number; contentType: string }[];
   messageId?: string;
+  /** pozvánka na udalosť (iMIP, text/calendar v správe) */
+  invite?: { method: string; event: CalEvent; ics: string };
 }
 
 export interface SendInput {
@@ -65,6 +68,8 @@ export interface SendInput {
   from?: { name: string; email: string };
   /** automatická odpoveď (hlavička Auto-Submitted, bez potvrdení) */
   autoReply?: boolean;
+  /** pozvánka / odpoveď na pozvánku (text/calendar) */
+  ical?: { method: string; content: string };
 }
 
 /** Správa čakajúca na odoslanie (odložené odoslanie alebo 10 s na späťvzatie). */
@@ -147,6 +152,14 @@ export interface MailApi {
   outboxList(): Promise<Result<OutboxItem[]>>;
   /** otvorí koncept v samostatnom okne */
   composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
+  davCollections(accountId: string): Promise<Result<DavCollection[]>>;
+  calEvents(accountId: string, calendarIds: string[], from: string, to: string): Promise<Result<CalEvent[]>>;
+  calSave(accountId: string, calendarId: string, event: CalEvent, invite: boolean): Promise<Result<CalEvent>>;
+  calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
+  calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
+  cardList(accountId: string): Promise<Result<Contact[]>>;
+  cardSave(accountId: string, bookId: string, contact: Contact): Promise<Result<Contact>>;
+  cardDelete(accountId: string, href: string): Promise<Result<true>>;
   setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
   /** správy toho istého vlákna z cache (všetky priečinky konta) */
   thread(accountId: string, messageId: string): Promise<Result<MessageSummary[]>>;
@@ -206,3 +219,14 @@ export type AppEvent =
   | { type: 'outbox-changed' }
   | { type: 'outbox-sent'; id: string; subject: string; savedToSent: boolean }
   | { type: 'outbox-failed'; id: string; subject: string; error: string };
+
+export interface DavCollection {
+  id: string;
+  href: string;
+  name: string;
+  color?: string;
+  kind: 'calendar' | 'addressbook';
+  events?: boolean;
+  todos?: boolean;
+  readOnly?: boolean;
+}

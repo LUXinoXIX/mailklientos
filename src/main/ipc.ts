@@ -17,6 +17,9 @@ import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
 import * as outbox from './outbox';
+import * as cal from './calendar';
+import * as dav from './dav';
+import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -56,6 +59,7 @@ export function registerIpc() {
   handle('accounts:list', () => ({ accounts: store.publicAccounts(), canStoreSecrets: store.canStoreSecrets() }));
   handle('accounts:save', (acc: AnyAccount, password?: string) => {
     mail.closeAllConnections(acc.id);
+    cal.forget(acc.id);
     const r = store.saveAccount(acc, password);
     syncWatchers();
     return r;
@@ -100,6 +104,17 @@ export function registerIpc() {
   handle('outbox:list', () => outbox.list());
   handle('window:compose', (id: string, folder: string, uid: number) => {
     openComposeWindow?.({ compose: '1', acc: id, folder, uid: String(uid) });
+    return true as const;
+  });
+  handle('dav:collections', (id: string) => cal.collections(store.getImap(id), true));
+  handle('cal:events', (id: string, ids: string[], from: string, to: string) => cal.events(store.getImap(id), ids, from, to));
+  handle('cal:save', (id: string, calendarId: string, e: CalEvent, invite: boolean) => cal.save(store.getImap(id), calendarId, e, invite));
+  handle('cal:delete', (id: string, e: CalEvent, notify: boolean) => cal.remove(store.getImap(id), e, notify));
+  handle('cal:respond', (id: string, folder: string, uid: number, ps: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => cal.respond(store.getImap(id), folder, uid, ps));
+  handle('card:list', (id: string) => cal.contactList(store.getImap(id)));
+  handle('card:save', (id: string, bookId: string, c: Contact) => cal.contactSave(store.getImap(id), bookId, c));
+  handle('card:delete', async (id: string, href: string) => {
+    await dav.deleteContact(store.getImap(id), href);
     return true as const;
   });
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));

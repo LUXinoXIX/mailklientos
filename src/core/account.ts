@@ -41,6 +41,8 @@ export interface AccountConfig {
   smtp: ServerConfig;
   /** ďalšie adresy (aliasy) toho istého konta pre pole Od */
   identities?: Identity[];
+  /** adresa CalDAV/CardDAV (kalendár, kontakty); prázdne = zistiť automaticky */
+  davUrl?: string;
 }
 
 export interface Identity {
