@@ -318,3 +318,13 @@ body { overflow: hidden; }
 .swatch-row .swatch.on { outline: 2px solid var(--colorNeutralForeground1); outline-offset: 1px; }
 .snooze-custom { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--colorNeutralStroke3); margin-top: 4px; }
 .snooze-custom input { font: inherit; font-size: 13px; padding: 3px 4px; }
+.date-input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--colorNeutralStroke1); border-radius: 4px; }
+.attach-warn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff4ce; border-top: 1px solid #f1d47b; font-size: 13px; }
+.undo-bar { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-radius: 8px; background: #242424; color: #fff; font-size: 14px; overflow: hidden; }
+.undo-bar.pop { position: static; transform: none; margin: 40px auto; width: fit-content; }
+.undo-btn { border: 0; background: none; color: #8fd1ff; font: inherit; font-weight: 600; cursor: pointer; }
+.undo-timer { position: absolute; left: 0; bottom: 0; height: 3px; background: #8fd1ff; animation: undo-shrink 10s linear forwards; width: 100%; }
+@keyframes undo-shrink { from { width: 100%; } to { width: 0; } }
+.pop-compose { height: 100%; display: flex; flex-direction: column; }
+.pop-compose .composer { flex: 1; }
+.workspace { position: relative; }

@@ -2,7 +2,7 @@
 import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
-import type { FolderInfo, MailApi, MessageFull, MessageSummary } from '../core/api';
+import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
 import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
@@ -13,6 +13,7 @@ import {
 } from './components/M365View';
 import { AddAccountChooser, M365Dialog } from './components/M365Dialog';
 import { SignaturesDialog } from './components/SignaturesDialog';
+import { TemplatesDialog } from './components/TemplatesDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel } from './components/RightPanel';
@@ -54,7 +55,8 @@ type Dialogs =
   | { kind: 'imap'; edit?: ImapAccountPublic }
   | { kind: 'm365'; edit?: M365Account }
   | { kind: 'signatures' }
-  | { kind: 'organize'; tab?: OrganizeTab };
+  | { kind: 'organize'; tab?: OrganizeTab }
+  | { kind: 'templates' };
 
 const splitAddrs = (s: string) =>
   s
@@ -68,6 +70,9 @@ const IS_TAURI = '__TAURI_INTERNALS__' in window;
 /** Dymový test v CI: pravý panel otvorený, aby bolo vidieť aj vložené weby. */
 const SMOKE_MODE = new URLSearchParams(window.location.search).get('smoke') ?? '';
 const SMOKE = SMOKE_MODE === 'm365';
+// samostatné okno písania (koncept otvorený z hlavného okna)
+const POP = new URLSearchParams(window.location.search);
+const POP_COMPOSE = POP.get('compose') === '1' ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')) } : null;
 
 export function App() {
   const api = window.mailApi;
@@ -96,6 +101,10 @@ export function App() {
   // nová pošta (IDLE): obnoviť zoznam a počty bez načítania priečinkov
   const [mailTick, setMailTick] = useState(0);
   const pendingOpen = useRef<{ accountId: string; uid: number } | null>(null);
+  // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
+  const [undo, setUndo] = useState<OutboxItem | null>(null);
+  const [outboxTick, setOutboxTick] = useState(0);
+  const [scheduled, setScheduled] = useState<OutboxItem[]>([]);
   const [status, setStatus] = useState('');
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
@@ -115,15 +124,6 @@ export function App() {
     if (!api) return;
     void api.gpuDisabled().then((r) => r.ok && setGpuOff(r.data));
     void api.gpuForced().then((r) => r.ok && setGpuForced(r.data));
-    // kliknutia do záznamu (čas a cieľ), aby sa dalo spárovať s blikaním
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null;
-      const label = t?.closest('button,[role=tab],a')?.textContent?.trim().slice(0, 40) ?? t?.tagName ?? '';
-      void api.logError(`klik: ${label}`);
-    };
-    window.addEventListener('click', onClick, true);
-    const onVis = () => void api.logError(`viditeľnosť stránky: ${document.visibilityState}`);
-    document.addEventListener('visibilitychange', onVis);
     const onErr = (e: ErrorEvent) => void api.logError(`${e.message} @ ${e.filename}:${e.lineno}`);
     const onRej = (e: PromiseRejectionEvent) => void api.logError(`promise: ${String(e.reason)}`);
     window.addEventListener('error', onErr);
@@ -134,6 +134,16 @@ export function App() {
       else if (ev.type === 'mail-changed') {
         window.clearTimeout(tickTimer);
         tickTimer = window.setTimeout(() => setMailTick((t) => t + 1), 800);
+      } else if (ev.type === 'outbox-sent') {
+        setUndo((u) => (u?.id === ev.id ? null : u));
+        setStatus(ev.savedToSent ? `Odoslané: ${ev.subject} (uložené do Odoslaných).` : `Odoslané: ${ev.subject}.`);
+        setOutboxTick((t) => t + 1);
+      } else if (ev.type === 'outbox-failed') {
+        setUndo((u) => (u?.id === ev.id ? null : u));
+        setStatus(`Správu „${ev.subject}“ sa nepodarilo odoslať: ${ev.error} Skúsim znova o 5 minút.`);
+        setOutboxTick((t) => t + 1);
+      } else if (ev.type === 'outbox-changed') {
+        setOutboxTick((t) => t + 1);
       } else if (ev.type === 'open-message') {
         pendingOpen.current = { accountId: ev.accountId, uid: ev.uid };
         setActiveId(ev.accountId);
@@ -154,8 +164,6 @@ export function App() {
     return () => {
       window.removeEventListener('error', onErr);
       window.removeEventListener('unhandledrejection', onRej);
-      window.removeEventListener('click', onClick, true);
-      document.removeEventListener('visibilitychange', onVis);
       po?.disconnect();
       off();
     };
@@ -492,6 +500,83 @@ export function App() {
     };
   }, [full.msg?.messageId, full.msg?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!api) return;
+    void api.outboxList().then((r) => r.ok && setScheduled(r.data));
+  }, [api, outboxTick]);
+
+  /** Vrátené alebo naplánované odoslanie znova na úpravu. */
+  function reopenFromOutbox(it: OutboxItem) {
+    const i = it.input;
+    const init: ComposeInit = {
+        kind: 'new',
+        accountId: it.accountId,
+        to: i.to,
+        cc: i.cc,
+        bcc: i.bcc,
+        subject: i.subject,
+        html: i.html ?? `<p>${i.text}</p>`,
+        draft: i.draft,
+        files: (i.attachments ?? []).map((a) => ({ path: a.path, filename: a.filename ?? a.path.split(/[\\/]/).pop() ?? 'príloha', size: 0 })),
+        importance: i.priority === 'high',
+        receipt: i.readReceipt,
+        fromEmail: i.from?.email,
+    };
+    if (POP_COMPOSE) {
+      setPopInit(init);
+      setPopDone(false);
+      return;
+    }
+    setCompose({ init, key: Date.now() });
+    setRibbonTab('message');
+  }
+  async function undoSend() {
+    if (!undo || !api) return;
+    const r = await api.outboxCancel(undo.id);
+    setUndo(null);
+    if (r.ok && r.data) {
+      reopenFromOutbox(r.data);
+      setStatus('Odoslanie zrušené, správa je znova otvorená.');
+    } else setStatus('Správa už bola odoslaná.');
+  }
+  async function cancelScheduled(it: OutboxItem, edit: boolean) {
+    if (!api) return;
+    const r = await api.outboxCancel(it.id);
+    if (r.ok && r.data && edit) reopenFromOutbox(r.data);
+    setStatus(edit ? 'Naplánovaná správa otvorená na úpravu.' : 'Naplánované odoslanie zrušené (koncept ostal v Konceptoch).');
+  }
+  useEffect(() => {
+    if (!undo) return;
+    const t = window.setTimeout(() => setUndo(null), 11_000);
+    return () => window.clearTimeout(t);
+  }, [undo]);
+
+  /** Koncept z priečinka Koncepty na úpravu (s prílohami). */
+  async function editDraft(m: MessageSummary) {
+    if (!api) return;
+    setStatus('Otváram koncept…');
+    const r = await api.openDraft(m.accountId, m.folder, m.uid);
+    if (!r.ok) return setStatus(r.error);
+    const d = r.data.msg;
+    setCompose({
+      init: { kind: 'new', accountId: m.accountId, to: d.to, cc: d.cc, subject: d.subject === '(bez predmetu)' ? '' : d.subject, html: d.html ?? `<p>${d.text}</p>`, draft: { folder: m.folder, uid: m.uid }, files: r.data.files },
+      key: Date.now(),
+    });
+    setRibbonTab('message');
+    setStatus('');
+  }
+  const isDrafts = (m: MessageSummary) => {
+    const fs = folders[m.accountId];
+    const f = Array.isArray(fs) ? fs.find((x) => x.path === m.folder) : undefined;
+    return f?.specialUse === '\\Drafts' || /^(drafts|koncept)/i.test(m.folder);
+  };
+
+  function saveTemplate(t: { name: string; subject: string; html: string }) {
+    const tpl = { id: Math.random().toString(36).slice(2, 10), ...t };
+    saveSettings({ ...settings, templates: [...(settings.templates ?? []), tpl] });
+    setStatus(`Šablóna „${t.name}“ uložená.`);
+  }
+
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
     const m = full.msg;
@@ -633,6 +718,55 @@ export function App() {
       : `${imapAccounts.length} IMAP ${imapAccounts.length === 1 ? 'konto' : imapAccounts.length < 5 ? 'kontá' : 'kont'}`;
 
   const curImapModule: ImapModule = activeImap ? imapModule[activeImap.id] ?? 'mail' : 'mail';
+  // samostatné okno písania: načítať koncept a zobraziť len editor
+  const [popInit, setPopInit] = useState<ComposeInit | null>(null);
+  const [popDone, setPopDone] = useState(false);
+  useEffect(() => {
+    if (POP_COMPOSE && popDone && !undo && !composeView) window.setTimeout(() => window.close(), 300);
+  }, [popDone, undo, composeView]);
+  useEffect(() => {
+    if (!POP_COMPOSE || !api) return;
+    void api.openDraft(POP_COMPOSE.acc, POP_COMPOSE.folder, POP_COMPOSE.uid).then((r) => {
+      if (!r.ok) return setStatus(r.error);
+      const d = r.data.msg;
+      setPopInit({ kind: 'new', accountId: POP_COMPOSE.acc, to: d.to, cc: d.cc, subject: d.subject === '(bez predmetu)' ? '' : d.subject, html: d.html ?? `<p>${d.text}</p>`, draft: { folder: POP_COMPOSE.folder, uid: POP_COMPOSE.uid }, files: r.data.files });
+    });
+  }, [api]);
+  if (POP_COMPOSE) {
+    const imapOnly = accounts.filter(isImap);
+    return (
+      <FluentProvider theme={getTheme(theme)}>
+        <div className={`app theme-${theme} pop-compose`}>
+          {popInit && imapOnly.length ? (
+            <Composer
+              init={popInit}
+              accounts={imapOnly}
+              settings={settings}
+              contacts={contacts}
+              standalone
+              onState={() => undefined}
+              onQueued={(it) => it.kind === 'undo' && setUndo(it)}
+              onSaveTemplate={saveTemplate}
+              onClose={(st) => {
+                if (st) setStatus(st);
+                setPopInit(null);
+                setPopDone(true);
+              }}
+            />
+          ) : popDone && undo ? (
+            <div className="undo-bar pop" role="status">
+              <span>Odosiela sa „{undo.subject || '(bez predmetu)'}“…</span>
+              <button className="undo-btn" onClick={() => void undoSend()}>Späť</button>
+              <span className="undo-timer" />
+            </div>
+          ) : (
+            <div className="empty">{status || 'Otváram koncept…'}</div>
+          )}
+        </div>
+      </FluentProvider>
+    );
+  }
+
   const m365State = activeM365 ? tabs[activeM365.id] ?? initialTabs(activeM365) : null;
   const m365ActiveModule = m365State ? m365State.tabs.find((t) => t.key === m365State.active)?.module ?? null : null;
 
@@ -718,7 +852,13 @@ export function App() {
               onOpenLog={() => void api?.openLog()}
               composer={
                 composeView
-                  ? { state: composerState, signatures: settings.signatures, run: (fn) => composerRef.current && fn(composerRef.current) }
+                  ? {
+                      state: composerState,
+                      signatures: settings.signatures,
+                      templates: settings.templates ?? [],
+                      onManageTemplates: () => openDialog({ kind: 'templates' }),
+                      run: (fn) => composerRef.current && fn(composerRef.current),
+                    }
                   : undefined
               }
             />
@@ -786,6 +926,8 @@ export function App() {
                       setFull({ loading: false });
                     }}
                     onDropMessages={(dest, d) => void dropMessages(dest, d)}
+                    scheduled={scheduled.filter((x) => selection.accountId === ALL || x.accountId === selection.accountId)}
+                    onScheduled={(it, edit) => void cancelScheduled(it, edit)}
                     savedSearches={settings.savedSearches}
                     activeSearch={search.trim()}
                     onSavedSearch={(x) => {
@@ -815,7 +957,7 @@ export function App() {
                     error={listState.error}
                     selected={current}
                     colorOf={colorOf}
-                    onOpen={(m) => void open(m)}
+                    onOpen={(m) => void (isDrafts(m) ? editDraft(m) : open(m))}
                     onDeleteKey={() => void del()}
                   />
                   {composeView ? (
@@ -827,6 +969,8 @@ export function App() {
                       settings={settings}
                       contacts={contacts}
                       onState={setComposerState}
+                      onQueued={(it) => it.kind === 'undo' && setUndo(it)}
+                      onSaveTemplate={saveTemplate}
                       onClose={(st) => {
                         setCompose(null);
                         setRibbonTab('home');
@@ -870,6 +1014,13 @@ export function App() {
               />
             )}
           </main>
+          {undo && (
+            <div className="undo-bar" role="status">
+              <span>Odosiela sa „{undo.subject || '(bez predmetu)'}“…</span>
+              <button className="undo-btn" onClick={() => void undoSend()}>Späť</button>
+              <span className="undo-timer" />
+            </div>
+          )}
           <footer className="statusbar">
             {status ||
               (IS_TAURI
@@ -890,6 +1041,17 @@ export function App() {
             saveSettings(s);
             closeDialog();
             setStatus('Podpisy uložené.');
+          }}
+        />
+      )}
+      {dialog.kind === 'templates' && (
+        <TemplatesDialog
+          settings={settings}
+          onClose={closeDialog}
+          onSave={(s2) => {
+            saveSettings(s2);
+            closeDialog();
+            setStatus('Šablóny uložené.');
           }}
         />
       )}

@@ -1,6 +1,7 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  DocumentText24Regular as TemplateIcon,
   Pin24Regular as PinIcon,
   Pin16Filled as PinSmallIcon,
   Tag24Regular as TagIcon,

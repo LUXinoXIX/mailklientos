@@ -11,7 +11,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
-import type { DraftRef, MessageFull, PickedFile, SendInput } from '../../core/api';
+import type { DraftRef, MessageFull, OutboxItem, PickedFile, SendInput } from '../../core/api';
 import { signatureToHtml, type AppSettings } from '../../core/settings';
 import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
@@ -27,6 +27,15 @@ export interface ComposeInit {
   to?: string;
   cc?: string;
   subject?: string;
+  /** hotový obsah (koncept, vrátené odoslanie) – bez podpisu a citácie */
+  html?: string;
+  bcc?: string;
+  draft?: DraftRef;
+  files?: PickedFile[];
+  importance?: boolean;
+  receipt?: boolean;
+  /** adresa odosielateľa (alias) */
+  fromEmail?: string;
 }
 
 export interface ComposerHandle {
@@ -40,6 +49,10 @@ export interface ComposerHandle {
   setSignature(id: string | null): void;
   toggleImportance(): void;
   toggleReceipt(): void;
+  sendLater(at: Date): void;
+  popOut(): void;
+  insertTemplate(id: string): void;
+  saveAsTemplate(): void;
 }
 
 export interface ComposerState {
@@ -86,6 +99,7 @@ function quoteHtml(m: MessageFull) {
 }
 
 function initialHtml(init: ComposeInit, sig: string) {
+  if (init.html !== undefined) return init.html.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
   const top = `<p></p><p></p>${sig}`;
   return init.original ? `${top}<p></p>${quoteHtml(init.original)}` : top;
 }
@@ -215,6 +229,11 @@ export const Composer = forwardRef<
     contacts: Contact[];
     onState: (s: ComposerState) => void;
     onClose: (status?: string) => void;
+    /** odoslanie čaká 10 s na späťvzatie / je naplánované */
+    onQueued?: (item: OutboxItem) => void;
+    onSaveTemplate?: (t: { name: string; subject: string; html: string }) => void;
+    /** samostatné okno: po odoslaní/zahodení zavrieť okno */
+    standalone?: boolean;
   }
 >(function Composer(props, ref) {
   const api = window.mailApi;
@@ -222,21 +241,23 @@ export const Composer = forwardRef<
   const [accountId, setAccountId] = useState(init.accountId ?? props.accounts[0]?.id ?? '');
   const [to, setTo] = useState<Contact[]>(() => splitAddresses(init.to ?? ''));
   const [cc, setCc] = useState<Contact[]>(() => splitAddresses(init.cc ?? ''));
-  const [bcc, setBcc] = useState<Contact[]>([]);
+  const [bcc, setBcc] = useState<Contact[]>(() => splitAddresses(init.bcc ?? ''));
+  const [fromEmail, setFromEmail] = useState(init.fromEmail ?? '');
   const [showCc, setShowCc] = useState(!!init.cc);
-  const [showBcc, setShowBcc] = useState(false);
+  const [showBcc, setShowBcc] = useState(!!init.bcc);
   const [subject, setSubject] = useState(init.subject ?? '');
-  const [files, setFiles] = useState<PickedFile[]>([]);
-  const [importance, setImportance] = useState(false);
-  const [receipt, setReceipt] = useState(false);
+  const [files, setFiles] = useState<PickedFile[]>(init.files ?? []);
+  const [importance, setImportance] = useState(!!init.importance);
+  const [receipt, setReceipt] = useState(!!init.receipt);
+  const [attachWarn, setAttachWarn] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const draft = useRef<DraftRef | null>(null);
+  const draft = useRef<DraftRef | null>(init.draft ?? null);
   const dirty = useRef(false);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
-  const sig = useRef(signatureHtml(props.settings, accountId, init.kind));
+  const sig = useRef(init.html !== undefined ? '' : signatureHtml(props.settings, accountId, init.kind));
   const imageInput = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
@@ -277,7 +298,6 @@ export const Composer = forwardRef<
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor;
 
-  const account = props.accounts.find((a) => a.id === accountId);
 
   function addDropped(fs: File[]) {
     const imgs = fs.filter((f) => f.type.startsWith('image/') && f.size < 3_000_000);
@@ -305,13 +325,14 @@ export const Composer = forwardRef<
       readReceipt: receipt,
       draft: draft.current ?? undefined,
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
+      from: fromIdentity(),
     };
-  }, [to, cc, bcc, subject, files, importance, receipt, init]);
+  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priebežné ukladanie konceptu (každých 5 s, ak sa niečo zmenilo)
   useEffect(() => {
     dirty.current = true;
-  }, [to, cc, bcc, subject, files]);
+  }, [to, cc, bcc, subject, files, fromEmail]);
   useEffect(() => {
     if (!api || !accountId || accountId === 'demo') return;
     const t = window.setInterval(() => {
@@ -344,18 +365,14 @@ export const Composer = forwardRef<
     setAccountId(id);
   }
 
-  async function send() {
-    if (!api) return;
-    const input = buildInput();
-    if (!input) return;
-    if (!to.length && !cc.length && !bcc.length) return setError('Zadaj aspoň jedného príjemcu.');
-    if (!accountId || accountId === 'demo') return setError('V ukážkovom režime sa nedá odoslať. Pridaj konto.');
-    setError(null);
-    setSending(true);
-    await saving.current;
-    const r = await api.send(accountId, { ...input, draft: draft.current ?? undefined });
-    setSending(false);
-    if (!r.ok) return setError(`${r.error}${r.hint ? ` ${r.hint}` : ''}`);
+  const account = props.accounts.find((a) => a.id === accountId);
+  function fromIdentity() {
+    const acc = props.accounts.find((a) => a.id === accountId);
+    const id = acc?.identities?.find((x) => x.email === fromEmail);
+    return id ? { name: id.name, email: id.email } : undefined;
+  }
+
+  function rememberContacts() {
     try {
       // príjemcov si zapamätať na dopĺňanie
       const known = JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[];
@@ -364,7 +381,62 @@ export const Composer = forwardRef<
     } catch {
       /* nevadí */
     }
-    props.onClose(r.data.savedToSent ? 'Správa odoslaná a uložená do Odoslaných.' : 'Správa odoslaná.');
+  }
+
+  /** Text sľubuje prílohu, ale žiadna nie je (ako Outlook/Thunderbird). */
+  function missingAttachment(input: SendInput) {
+    if (files.length || (init.kind === 'forward' && (init.original?.attachments.length ?? 0) > 0)) return false;
+    // len vlastný text, nie citovaná pôvodná správa
+    const own = (input.text.split(/\n-{2,}|\nOd: |\nFrom: /)[0] ?? '') + ' ' + input.subject;
+    return /(v\s+prílohe|v\s+prilohe|prikladám|prikladam|priložen|prilozen|príloh[ua]|prilohu|attach)/i.test(own);
+  }
+
+  async function send(at?: Date, force = false) {
+    if (!api) return;
+    const input = buildInput();
+    if (!input) return;
+    if (!to.length && !cc.length && !bcc.length) return setError('Zadaj aspoň jedného príjemcu.');
+    if (!accountId || accountId === 'demo') return setError('V ukážkovom režime sa nedá odoslať. Pridaj konto.');
+    if (!force && missingAttachment(input)) {
+      setAttachWarn(true);
+      return;
+    }
+    setAttachWarn(false);
+    setError(null);
+    setSending(true);
+    await saving.current;
+    const final = { ...input, draft: draft.current ?? undefined };
+    // odoslanie ide cez frontu: 10 s na späťvzatie, alebo v naplánovaný čas
+    const r = await api.outboxQueue(accountId, final, (at ?? new Date(Date.now() + 10_000)).toISOString(), at ? 'later' : 'undo');
+    setSending(false);
+    if (!r.ok) return setError(`${r.error}${r.hint ? ` ${r.hint}` : ''}`);
+    rememberContacts();
+    props.onQueued?.(r.data);
+    props.onClose(
+      at
+        ? `Správa sa odošle ${at.toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+        : undefined,
+    );
+  }
+
+  async function popOut() {
+    if (!api || !accountId || accountId === 'demo') return;
+    const input = buildInput();
+    if (!input) return;
+    await saving.current;
+    const r = await api.saveDraft(accountId, { ...input, draft: undefined }, draft.current ?? undefined);
+    if (!r.ok || !r.data) return setError(r.ok ? 'Koncept sa nepodarilo uložiť (chýba priečinok Koncepty).' : r.error);
+    draft.current = r.data;
+    await api.composeWindow(accountId, r.data.folder, r.data.uid);
+    props.onClose('Správa otvorená v samostatnom okne.');
+  }
+
+  function insertTemplate(id: string) {
+    const t = props.settings.templates?.find((x) => x.id === id);
+    const ed = editorRef.current;
+    if (!t || !ed) return;
+    ed.chain().focus().insertContent(t.html).run();
+    if (t.subject && !subject.trim()) setSubject(t.subject);
   }
 
   async function discard() {
@@ -394,6 +466,13 @@ export const Composer = forwardRef<
       if (sig.current && ed.getHTML().includes(sig.current)) ed.commands.setContent(ed.getHTML().replace(sig.current, next), { emitUpdate: true });
       else if (next) ed.chain().focus().insertContent(next).run();
       sig.current = next;
+    },
+    sendLater: (at) => void send(at),
+    popOut: () => void popOut(),
+    insertTemplate: (id) => insertTemplate(id),
+    saveAsTemplate: () => {
+      const ed = editorRef.current;
+      if (ed) props.onSaveTemplate?.({ name: subject.trim() || 'Nová šablóna', subject, html: ed.getHTML() });
     },
     toggleImportance: () => setImportance((v) => !v),
     toggleReceipt: () => setReceipt((v) => !v),
@@ -425,6 +504,11 @@ export const Composer = forwardRef<
             {sending ? 'Odosielam…' : 'Odoslať'}
           </Button>
           <Button onClick={() => void discard()}>Zahodiť</Button>
+          {!props.standalone && (
+            <Button appearance="subtle" onClick={() => void popOut()} title="Otvoriť v samostatnom okne">
+              Samostatné okno
+            </Button>
+          )}
           <span className="composer-title">{title}</span>
           {importance && <span className="pill warn">Vysoká dôležitosť</span>}
           {receipt && <span className="pill">Potvrdenie o prečítaní</span>}
@@ -434,12 +518,27 @@ export const Composer = forwardRef<
         <div className="composer-head">
           <div className="rcpt-row">
             <span className="rcpt-label">Od</span>
-            <Select size="small" value={accountId} onChange={(_, d) => changeAccount(d.value)} className="from-select" aria-label="Od">
-              {props.accounts.map((a) => (
-                <option key={a.id} value={a.id}>
+            <Select
+              size="small"
+              value={`${accountId}|${fromEmail}`}
+              onChange={(_, d) => {
+                const [id, email] = d.value.split('|');
+                if (id && id !== accountId) changeAccount(id);
+                setFromEmail(email ?? '');
+              }}
+              className="from-select"
+              aria-label="Od"
+            >
+              {props.accounts.flatMap((a) => [
+                <option key={a.id} value={`${a.id}|`}>
                   {a.name} &lt;{a.email}&gt;
-                </option>
-              ))}
+                </option>,
+                ...(a.identities ?? []).map((x) => (
+                  <option key={`${a.id}|${x.email}`} value={`${a.id}|${x.email}`}>
+                    {x.name || a.name} &lt;{x.email}&gt;
+                  </option>
+                )),
+              ])}
             </Select>
           </div>
           <RecipientField
@@ -488,6 +587,13 @@ export const Composer = forwardRef<
           <Button size="small" icon={<AttachIcon />} onClick={() => void attach()}>Priložiť súbor</Button>
           <span className="muted small">Súbory aj obrázky môžeš pretiahnuť sem alebo vložiť cez Ctrl+V.</span>
         </div>
+        {attachWarn && (
+          <div className="attach-warn">
+            V texte spomínate prílohu, ale žiadna nie je priložená.
+            <Button size="small" onClick={() => void attach()}>Priložiť súbor</Button>
+            <Button size="small" appearance="subtle" onClick={() => void send(undefined, true)}>Odoslať bez prílohy</Button>
+          </div>
+        )}
         {error && <div className="pane-error pad">⚠ {error}</div>}
       </div>
       <input

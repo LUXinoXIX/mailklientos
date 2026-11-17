@@ -278,6 +278,25 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
   });
 }
 
+/** Koncept na úpravu: obsah + prílohy uložené do dočasných súborov (koncept sa pri ďalšom ukladaní nahrádza). */
+export async function openDraft(acc: AccountConfig, folder: string, uid: number) {
+  const msg = await getMessage(acc, folder, uid);
+  const files: Array<{ path: string; filename: string; size: number }> = [];
+  if (msg.attachments.length) {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mailklient-draft-'));
+    for (let i = 0; i < msg.attachments.length; i++) {
+      const a = await getAttachment(acc, folder, uid, i);
+      const file = path.join(dir, a.filename.replace(/[\\/:*?"<>|]/g, '_'));
+      fs.writeFileSync(file, a.content);
+      files.push({ path: file, filename: a.filename, size: a.content.length });
+    }
+  }
+  return { msg, files };
+}
+
 /** Hľadanie na serveri (IMAP SEARCH): predmet, odosielateľ, príjemca, text. Pre správy, ktoré ešte nie sú v cache. */
 export async function searchServer(acc: AccountConfig, folder: string, q: string, limit = 100): Promise<MessageSummary[]> {
   return withImap(acc, async (c) => {
@@ -368,9 +387,15 @@ export async function getMessage(acc: AccountConfig, folder: string, uid: number
 
 /** Správa pre nodemailer (odoslanie aj koncept). Obrázky vložené v texte (data:) sa prevedú na prílohy cid. */
 function buildMail(acc: AccountConfig, input: SendInput) {
-  const fromName = acc.name;
+  const from = input.from?.email ? { name: input.from.name || acc.name, address: input.from.email } : { name: acc.name, address: acc.email };
+  const headers: Record<string, string> = {};
+  if (input.readReceipt && !input.autoReply) headers['Disposition-Notification-To'] = from.address;
+  if (input.autoReply) {
+    headers['Auto-Submitted'] = 'auto-replied';
+    headers['X-Auto-Response-Suppress'] = 'All';
+  }
   return {
-    from: { name: fromName, address: acc.email },
+    from,
     to: input.to || undefined,
     cc: input.cc || undefined,
     bcc: input.bcc || undefined,
@@ -382,7 +407,7 @@ function buildMail(acc: AccountConfig, input: SendInput) {
     inReplyTo: input.replyMessageId || undefined,
     references: input.replyMessageId || undefined,
     priority: input.priority ?? 'normal',
-    headers: input.readReceipt ? { 'Disposition-Notification-To': acc.email } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
   };
 }
 

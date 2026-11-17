@@ -7,6 +7,7 @@ import { log } from './diagnostics';
 import { closeClient, connectWatcher } from './mail';
 import { loadSettings } from './settings';
 import { runRules } from './actions';
+import { maybeAutoReply } from './vacation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -68,7 +69,7 @@ async function fetchNew(w: Watch, acc: AccountConfig) {
   const forRules: Array<{ uid: number; from: string; to: string; subject: string }> = [];
   const lock = await c.getMailboxLock('INBOX');
   try {
-    for await (const m of c.fetch(`${w.lastUid + 1}:*`, { uid: true, envelope: true, flags: true }, { uid: true })) {
+    for await (const m of c.fetch(`${w.lastUid + 1}:*`, { uid: true, envelope: true, flags: true, headers: ['list-id', 'list-unsubscribe', 'precedence', 'auto-submitted'] }, { uid: true })) {
       if (m.uid <= w.lastUid) continue;
       w.lastUid = Math.max(w.lastUid, m.uid);
       const f = m.envelope?.from?.[0];
@@ -76,6 +77,7 @@ async function fetchNew(w: Watch, acc: AccountConfig) {
       const to = [...(m.envelope?.to ?? []), ...(m.envelope?.cc ?? [])].map((x: any) => `${x.name ?? ''} ${x.address ?? ''}`).join(' ');
       forRules.push({ uid: m.uid, from: `${f?.name ?? ''} ${f?.address ?? ''}`, to, subject: m.envelope?.subject ?? '' });
       if (m.flags?.has('\\Seen')) continue;
+      void maybeAutoReply(acc, { fromAddress: f?.address ?? '', subject: m.envelope?.subject ?? '', messageId: m.envelope?.messageId, headers: m.headers ? m.headers.toString() : '' });
       items.push({ uid: m.uid, from: f?.name || f?.address || '', subject: m.envelope?.subject ?? '' });
     }
   } finally {
