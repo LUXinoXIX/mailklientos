@@ -3,7 +3,7 @@ import { Button, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useMemo, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
-import type { FolderInfo, MessageFull, MessageSummary } from '../../core/api';
+import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
 import { PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
@@ -42,13 +42,30 @@ export function FolderPane(props: {
   activeSearch?: string;
   onSavedSearch?: (s: SavedSearch) => void;
   onRemoveSearch?: (s: SavedSearch) => void;
+  scheduled?: OutboxItem[];
+  onScheduled?: (it: OutboxItem, edit: boolean) => void;
 }) {
   const a = props.account;
   const [over, setOver] = useState<string | null>(null);
   const searches = (props.savedSearches ?? []).filter((x) => !x.accountId || !a || x.accountId === a.id);
-  const searchList = searches.length > 0 && (
+  const sched = props.scheduled ?? [];
+  const searchList = (searches.length > 0 || sched.length > 0) && (
     <>
-      <div className="folder-section">Uložené hľadania</div>
+      {sched.length > 0 && (
+        <>
+          <div className="folder-section">Naplánované na odoslanie</div>
+          {sched.map((x) => (
+            <div key={x.id} className="saved-search">
+              <button className="folder" onClick={() => props.onScheduled?.(x, true)} title={`Upraviť – odošle sa ${new Date(x.sendAt).toLocaleString('sk-SK')}`}>
+                <span className="grow">{x.subject || '(bez predmetu)'}</span>
+                <span className="muted small">{new Date(x.sendAt).toLocaleString('sk-SK', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </button>
+              <button className="saved-search-x" aria-label="Zrušiť odoslanie" title="Zrušiť odoslanie" onClick={() => props.onScheduled?.(x, false)}>×</button>
+            </div>
+          ))}
+        </>
+      )}
+      {searches.length > 0 && <div className="folder-section">Uložené hľadania</div>}
       {searches.map((x) => (
         <div key={x.id} className="saved-search">
           <button className={`folder ${props.activeSearch === x.query ? 'active' : ''}`} onClick={() => props.onSavedSearch?.(x)} title={x.query}>

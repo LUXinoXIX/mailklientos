@@ -2,7 +2,7 @@
 // režim pre staré servery (Zimbra) a test pripojenia.
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
-  MessageBar, MessageBarBody, MessageBarTitle, Select, Spinner, Switch,
+  MessageBar, MessageBarBody, MessageBarTitle, Select, Spinner, Switch, Textarea,
 } from '@fluentui/react-components';
 import { useState } from 'react';
 import {
@@ -177,6 +177,7 @@ export function AccountDialog(props: {
           smtp: emptyServer('smtp'),
         };
   const [acc, setAcc] = useState<AccountConfig>(init);
+  const [aliases, setAliases] = useState(() => (acc.identities ?? []).map((x) => (x.name ? `${x.name} <${x.email}>` : x.email)).join('\n'));
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [test, setTest] = useState<AccountTestResult | null>(null);
@@ -309,6 +310,25 @@ export function AccountDialog(props: {
                 <button key={c} className={`swatch ${acc.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => set({ color: c })} aria-label={c} />
               ))}
             </div>
+            <Field label="Ďalšie adresy (aliasy) pre pole Od" hint="Jedna na riadok, napr. Podpora <podpora@firma.sk>. Server musí odosielanie z nich povoliť.">
+              <Textarea
+                resize="vertical"
+                value={aliases}
+                onChange={(_, d) => {
+                  setAliases(d.value);
+                  const ids = d.value
+                    .split('\n')
+                    .map((l) => l.trim())
+                    .filter(Boolean)
+                    .map((l) => {
+                      const m = /^(.*?)\s*<([^>]+)>$/.exec(l);
+                      return m ? { name: m[1]!.replace(/^"|"$/g, '').trim(), email: m[2]!.trim() } : { name: '', email: l };
+                    })
+                    .filter((x) => x.email.includes('@'));
+                  set({ identities: ids });
+                }}
+              />
+            </Field>
             <ServerSection proto="imap" value={acc.imap} onChange={(imap) => setAcc((a) => ({ ...a, imap }))} probe={test?.imap} onRetest={(imap) => runTest({ ...acc, imap })} />
             <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
             {test?.login && (

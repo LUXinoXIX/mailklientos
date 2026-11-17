@@ -16,6 +16,7 @@ import { syncWatchers } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
+import * as outbox from './outbox';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
 function handle<A extends unknown[], T>(channel: string, fn: (...args: A) => Promise<T> | T) {
@@ -43,6 +44,12 @@ function on<A extends unknown[]>(channel: string, fn: (...args: A) => unknown) {
 
 const winOf = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
 const safeName = (n: string) => n.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180) || 'priloha';
+
+let openComposeWindow: ((q: Record<string, string>) => void) | undefined;
+/** main.ts odovzdá funkciu na otvorenie okna písania (samostatné okno konceptu). */
+export function setComposeWindowFactory(f: (q: Record<string, string>) => void) {
+  openComposeWindow = f;
+}
 
 export function registerIpc() {
   // kontá
@@ -87,6 +94,14 @@ export function registerIpc() {
   handle('mail:snooze', (id: string, folder: string, uid: number, messageId: string, subject: string, until: string) =>
     snooze(id, folder, uid, messageId, subject, until));
   handle('rules:run', (id: string, folder: string) => runRulesOnFolder(store.getImap(id), folder, settings.loadSettings().rules ?? []));
+  handle('mail:openDraft', (id: string, folder: string, uid: number) => mail.openDraft(store.getImap(id), folder, uid));
+  handle('outbox:queue', (id: string, input: SendInput, sendAt: string, kind: 'undo' | 'later') => outbox.queue(id, input, new Date(sendAt), kind));
+  handle('outbox:cancel', (outId: string) => outbox.cancel(outId));
+  handle('outbox:list', () => outbox.list());
+  handle('window:compose', (id: string, folder: string, uid: number) => {
+    openComposeWindow?.({ compose: '1', acc: id, folder, uid: String(uid) });
+    return true as const;
+  });
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));
   handle('mail:send', (id: string, msg: SendInput) => mail.sendMail(store.getImap(id), msg));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {

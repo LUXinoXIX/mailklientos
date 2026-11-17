@@ -8,10 +8,11 @@ import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo } from '../../core/api';
 import {
   DEFAULT_CATEGORIES, categoriesOf, type ActionType, type AppSettings, type Category, type QuickStep, type Rule, type RuleAction,
-  type RuleField, type SavedSearch,
+  type RuleField, type SavedSearch, type Vacation,
 } from '../../core/settings';
+import { SignatureEditor } from './SignatureEditor';
 
-export type OrganizeTab = 'rules' | 'quick' | 'categories' | 'searches';
+export type OrganizeTab = 'rules' | 'quick' | 'categories' | 'searches' | 'vacation';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -84,9 +85,12 @@ export function OrganizeDialog(props: {
   const [cats, setCats] = useState<Category[]>(categoriesOf(props.settings));
   const [searches, setSearches] = useState<SavedSearch[]>(props.settings.savedSearches ?? []);
   const [runInfo, setRunInfo] = useState('');
+  const [vac, setVac] = useState<Vacation>(
+    props.settings.vacation ?? { enabled: false, subject: 'Automatická odpoveď', html: '<p>Dobrý deň,</p><p>som mimo kancelárie a na správy odpoviem po návrate.</p>', text: '' },
+  );
   const foldersFor = (accountId?: string) => props.folders[accountId ?? props.defaultAccountId ?? props.accounts[0]?.id ?? ''] ?? [];
 
-  const save = () => props.onSave({ ...props.settings, rules, quickSteps: quick, categories: cats, savedSearches: searches });
+  const save = () => props.onSave({ ...props.settings, rules, quickSteps: quick, categories: cats, savedSearches: searches, vacation: vac });
 
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
@@ -99,6 +103,7 @@ export function OrganizeDialog(props: {
               <Tab value="quick">Rýchle kroky</Tab>
               <Tab value="categories">Kategórie</Tab>
               <Tab value="searches">Uložené hľadania</Tab>
+              <Tab value="vacation">Neprítomnosť</Tab>
             </TabList>
 
             {tab === 'rules' && (
@@ -161,7 +166,7 @@ export function OrganizeDialog(props: {
                   {props.onRunRules && (
                     <Button
                       onClick={async () => {
-                        props.onSave({ ...props.settings, rules, quickSteps: quick, categories: cats, savedSearches: searches });
+                        props.onSave({ ...props.settings, rules, quickSteps: quick, categories: cats, savedSearches: searches, vacation: vac });
                         setRunInfo('Spúšťam…');
                         setRunInfo(await props.onRunRules!());
                       }}
@@ -222,6 +227,43 @@ export function OrganizeDialog(props: {
                   <Button appearance="primary" onClick={() => setCats([...cats, { id: `mk_${newId()}`, name: 'Nová kategória', color: COLORS[cats.length % COLORS.length]! }])}>+ Nová kategória</Button>
                   <Button appearance="subtle" onClick={() => setCats(DEFAULT_CATEGORIES)}>Obnoviť predvolené</Button>
                 </div>
+              </div>
+            )}
+
+            {tab === 'vacation' && (
+              <div className="org-list">
+                <div className="muted small">
+                  Automatická odpoveď sa posiela, keď je MailKlient spustený: každému odosielateľovi najviac raz za 4 dni, nie na hromadnú poštu ani automatické správy.
+                  Ak má váš server vlastnú funkciu neprítomnosti (napr. webová Zimbra), stačí použiť jednu z nich.
+                </div>
+                <Checkbox label="Posielať automatickú odpoveď" checked={vac.enabled} onChange={(_, d) => setVac({ ...vac, enabled: !!d.checked })} />
+                <div className="org-row">
+                  <label className="sig-label" htmlFor="vac-from">Od</label>
+                  <input id="vac-from" type="date" className="date-input" value={vac.from ?? ''} onChange={(e) => setVac({ ...vac, from: e.target.value || undefined })} />
+                  <label className="sig-label" htmlFor="vac-to">Do</label>
+                  <input id="vac-to" type="date" className="date-input" value={vac.until ?? ''} onChange={(e) => setVac({ ...vac, until: e.target.value || undefined })} />
+                  <span className="muted small">prázdne = bez obmedzenia</span>
+                </div>
+                <div className="org-row">
+                  <span className="sig-label">Kontá</span>
+                  {props.accounts.map((a) => (
+                    <Checkbox
+                      key={a.id}
+                      label={a.name}
+                      checked={!vac.accountIds?.length || vac.accountIds.includes(a.id)}
+                      onChange={(_, d) => {
+                        const all = vac.accountIds?.length ? vac.accountIds : props.accounts.map((x) => x.id);
+                        const next = d.checked ? [...new Set([...all, a.id])] : all.filter((x) => x !== a.id);
+                        setVac({ ...vac, accountIds: next.length === props.accounts.length ? undefined : next });
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="org-row">
+                  <label className="sig-label" htmlFor="vac-subj">Predmet</label>
+                  <Input id="vac-subj" className="grow" value={vac.subject} onChange={(_, d) => setVac({ ...vac, subject: d.value })} />
+                </div>
+                <SignatureEditor id="vacation" html={vac.html} onChange={(html, text) => setVac((v) => ({ ...v, html, text }))} />
               </div>
             )}
 

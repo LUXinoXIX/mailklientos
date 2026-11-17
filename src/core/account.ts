@@ -39,6 +39,13 @@ export interface AccountConfig {
   username: string;
   imap: ServerConfig;
   smtp: ServerConfig;
+  /** ďalšie adresy (aliasy) toho istého konta pre pole Od */
+  identities?: Identity[];
+}
+
+export interface Identity {
+  name: string;
+  email: string;
 }
 
 /**

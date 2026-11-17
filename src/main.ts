@@ -2,7 +2,8 @@ import { app, BrowserWindow, Menu, powerMonitor, session, shell } from 'electron
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { registerIpc } from './main/ipc';
+import { registerIpc, setComposeWindowFactory } from './main/ipc';
+import { startOutbox } from './main/outbox';
 import { closeAllConnections } from './main/mail';
 import { startSnoozeTimer } from './main/snooze';
 import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
@@ -31,7 +32,8 @@ applyRenderingSwitches();
 // Windows inštalátor Squirrel: pri inštalácii len vytvoriť zástupcov a skončiť.
 const squirrelEvent = handleSquirrelEvent();
 
-const createWindow = () => {
+const createWindow = (query?: Record<string, string>) => {
+  const compose = !!query?.compose;
   const win = new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: '#f5f5f5',
@@ -43,11 +45,11 @@ const createWindow = () => {
       nodeIntegration: false,
       sandbox: true,
     },
-    width: 1440,
-    height: 900,
-    minWidth: 960,
+    width: compose ? 980 : 1440,
+    height: compose ? 820 : 900,
+    minWidth: compose ? 640 : 960,
     minHeight: 600,
-    title: 'MailKlient',
+    title: compose ? 'Nová správa – MailKlient' : 'MailKlient',
     show: false,
   });
   win.once('ready-to-show', () => win.show());
@@ -68,9 +70,11 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL + (SMOKE ? `?smoke=${SMOKE_MODE}` : ''));
   } else {
-    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), SMOKE ? { query: { smoke: SMOKE_MODE } } : undefined);
+    const q = { ...(SMOKE ? { smoke: SMOKE_MODE } : {}), ...query };
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), Object.keys(q).length ? { query: q } : undefined);
   }
 };
+setComposeWindowFactory((q) => createWindow(q));
 
 if (!squirrelEvent && !app.requestSingleInstanceLock()) app.quit();
 
@@ -101,6 +105,7 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.mailklient.MailKlient');
   syncWatchers();
   startSnoozeTimer();
+  startOutbox();
   powerMonitor.on('resume', () => reconnectWatchers());
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

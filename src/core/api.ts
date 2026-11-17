@@ -61,6 +61,22 @@ export interface SendInput {
   draft?: DraftRef;
   /** Preposlanie: prílohy pôvodnej správy sa pripoja. */
   forward?: { folder: string; uid: number };
+  /** Odosielateľ (identita/alias); prázdne = hlavná adresa konta */
+  from?: { name: string; email: string };
+  /** automatická odpoveď (hlavička Auto-Submitted, bez potvrdení) */
+  autoReply?: boolean;
+}
+
+/** Správa čakajúca na odoslanie (odložené odoslanie alebo 10 s na späťvzatie). */
+export interface OutboxItem {
+  id: string;
+  accountId: string;
+  sendAt: string;
+  subject: string;
+  to: string;
+  input: SendInput;
+  /** 'undo' = krátke čakanie na späťvzatie, 'later' = naplánované */
+  kind: 'undo' | 'later';
 }
 
 export interface DraftRef {
@@ -125,6 +141,12 @@ export interface MailApi {
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
+  openDraft(accountId: string, folder: string, uid: number): Promise<Result<{ msg: MessageFull; files: PickedFile[] }>>;
+  outboxQueue(accountId: string, input: SendInput, sendAt: string, kind: 'undo' | 'later'): Promise<Result<OutboxItem>>;
+  outboxCancel(id: string): Promise<Result<OutboxItem | null>>;
+  outboxList(): Promise<Result<OutboxItem[]>>;
+  /** otvorí koncept v samostatnom okne */
+  composeWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
   /** správy toho istého vlákna z cache (všetky priečinky konta) */
   thread(accountId: string, messageId: string): Promise<Result<MessageSummary[]>>;
@@ -180,4 +202,7 @@ export interface MailApi {
 export type AppEvent =
   | { type: 'gpu-crash'; count: number }
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
-  | { type: 'open-message'; accountId: string; folder: string; uid: number };
+  | { type: 'open-message'; accountId: string; folder: string; uid: number }
+  | { type: 'outbox-changed' }
+  | { type: 'outbox-sent'; id: string; subject: string; savedToSent: boolean }
+  | { type: 'outbox-failed'; id: string; subject: string; error: string };

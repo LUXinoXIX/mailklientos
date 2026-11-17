@@ -8,10 +8,10 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  TasksIcon, TeamsIcon, WordIcon, TagIcon, TemplateIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { THEMES, type ThemeKey } from '../theme';
-import type { Category, QuickStep, Signature } from '../../core/settings';
+import type { Category, QuickStep, Signature, Template } from '../../core/settings';
 import type { OrganizeTab } from './OrganizeDialog';
 import type { ComposerHandle, ComposerState } from './Composer';
 
@@ -49,6 +49,41 @@ export function TopBar(props: {
         </Tooltip>
       </div>
     </header>
+  );
+}
+
+/** Odoslať neskôr: zajtra ráno, pondelok ráno, vlastný čas. */
+function SendLaterMenu(props: { onPick: (d: Date) => void }) {
+  const [custom, setCustom] = useState('');
+  const at = (days: number, hour: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+  const nextMonday = () => {
+    const d = at(1, 8);
+    while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+    return d;
+  };
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <ToolbarButton icon={<SnoozeIcon />}>Odoslať neskôr</ToolbarButton>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          <MenuItem onClick={() => props.onPick(at(1, 8))}>Zajtra o 8:00</MenuItem>
+          <MenuItem onClick={() => props.onPick(at(1, 13))}>Zajtra o 13:00</MenuItem>
+          <MenuItem onClick={() => props.onPick(nextMonday())}>Budúci pondelok o 8:00</MenuItem>
+          <div className="snooze-custom" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <input type="datetime-local" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Dátum a čas odoslania" />
+            <Button size="small" disabled={!custom} onClick={() => custom && props.onPick(new Date(custom))}>Naplánovať</Button>
+          </div>
+          <div className="muted small pad">MailKlient musí byť v tom čase spustený.</div>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
   );
 }
 
@@ -92,6 +127,8 @@ export type RibbonTab = 'home' | 'message' | 'insert' | 'view';
 export interface RibbonComposer {
   state: ComposerState;
   signatures: Signature[];
+  templates: Template[];
+  onManageTemplates: () => void;
   run: (fn: (h: ComposerHandle) => void) => void;
 }
 
@@ -152,7 +189,9 @@ export function Ribbon(props: {
         {c && p.tab === 'message' ? (
           <>
             <ToolbarButton appearance="primary" disabled={c.state.sending} onClick={() => c.run((h) => h.send())}>Odoslať</ToolbarButton>
+            <SendLaterMenu onPick={(d) => c.run((h) => h.sendLater(d))} />
             <ToolbarButton onClick={() => c.run((h) => h.discard())}>Zahodiť</ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.popOut())}>Samostatné okno</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<AttachIcon />} onClick={() => c.run((h) => h.attach())}>Priložiť súbor</ToolbarButton>
             <Menu>
@@ -166,6 +205,21 @@ export function Ribbon(props: {
                   ))}
                   <MenuItem onClick={() => c.run((h) => h.setSignature(null))}>(bez podpisu)</MenuItem>
                   <MenuItem onClick={p.onSignatures}>Upraviť podpisy…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<TemplateIcon />}>Šablóny</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {c.templates.map((t) => (
+                    <MenuItem key={t.id} onClick={() => c.run((h) => h.insertTemplate(t.id))}>{t.name}</MenuItem>
+                  ))}
+                  {!c.templates.length && <MenuItem disabled>Zatiaľ žiadne</MenuItem>}
+                  <MenuItem onClick={() => c.run((h) => h.saveAsTemplate())}>Uložiť túto správu ako šablónu</MenuItem>
+                  <MenuItem onClick={c.onManageTemplates}>Spravovať šablóny…</MenuItem>
                 </MenuList>
               </MenuPopover>
             </Menu>

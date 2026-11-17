@@ -52,6 +52,27 @@ export interface AppSettings {
   savedSearches?: SavedSearch[];
   /** zoznam správ zoskupený do konverzácií */
   conversations?: boolean;
+  templates?: Template[];
+  vacation?: Vacation;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  subject?: string;
+  html: string;
+}
+
+export interface Vacation {
+  enabled: boolean;
+  /** prázdne = všetky IMAP kontá */
+  accountIds?: string[];
+  /** ISO dátum od / do (vrátane) */
+  from?: string;
+  until?: string;
+  subject: string;
+  html: string;
+  text: string;
 }
 
 export interface Category {
