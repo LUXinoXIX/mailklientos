@@ -51,16 +51,32 @@ export function applyRenderingSwitches() {
     app.disableHardwareAcceleration();
     log('štart: hardvérová akcelerácia VYPNUTÁ (nastavenie)');
   } else if (p.forceGpu) {
+    // Grafický proces beží v sandboxe; bezpečnostný softvér (firemné pravidlá, antivírus vkladajúci DLL)
+    // ho často zablokuje a Chromium potom vykresľuje bez grafickej karty. Bez sandboxu sa spustí.
     app.commandLine.appendSwitch('ignore-gpu-blocklist');
-    log('štart: grafická karta VYNÚTENÁ (ignore-gpu-blocklist)');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+    log('štart: grafická karta VYNÚTENÁ (ignore-gpu-blocklist, disable-gpu-sandbox)');
   }
 }
 
 let gpuCrashes = 0;
 
 /** Sledovanie pádov procesov; pri páde GPU dá vedieť rendereru (ponuka vypnúť akceleráciu). */
+/** Stav grafiky až po spustení okna (pri štarte býva ešte neúplný). */
+export function logGpuLater() {
+  setTimeout(() => {
+    try {
+      const st = app.getGPUFeatureStatus();
+      log('GPU po štarte', { gpu_compositing: st.gpu_compositing, rasterization: st.rasterization, webgl: st.webgl });
+    } catch {
+      /* nič */
+    }
+  }, 8000);
+}
+
 export function watchProcesses() {
   log(`štart: verzia ${app.getVersion()}, Electron ${process.versions.electron}, ${process.platform} ${process.arch}`);
+  logGpuLater();
   app.on('child-process-gone', (_e, d) => {
     log('pád procesu', { type: d.type, reason: d.reason, exitCode: d.exitCode, name: d.name });
     if (d.type === 'GPU' && d.reason !== 'clean-exit') {

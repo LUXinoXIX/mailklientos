@@ -124,7 +124,7 @@ export function AccountRail(props: {
               {props.gpuOff ? 'Zapnúť hardvérovú akceleráciu (reštart)' : 'Vypnúť hardvérovú akceleráciu, ak obraz bliká (reštart)'}
             </MenuItem>
             <MenuItem onClick={props.onToggleGpuForced}>
-              {props.gpuForced ? 'Zrušiť vynútenie grafickej karty (reštart)' : 'Vynútiť grafickú kartu – test proti blikaniu (reštart)'}
+              {props.gpuForced ? 'Zrušiť vynútenie grafickej karty (reštart)' : 'Vynútiť grafickú kartu bez sandboxu – test proti blikaniu (reštart)'}
             </MenuItem>
             <MenuItem onClick={props.onOpenLog}>Otvoriť záznam chýb</MenuItem>
           </MenuList>
