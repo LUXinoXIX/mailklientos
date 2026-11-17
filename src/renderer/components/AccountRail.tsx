@@ -31,6 +31,8 @@ export function AccountRail(props: {
   onSignatures: () => void;
   gpuOff: boolean;
   onToggleGpu: () => void;
+  notifications: boolean;
+  onToggleNotifications: () => void;
   gpuForced: boolean;
   onToggleGpuForced: () => void;
   onOpenLog: () => void;
@@ -119,6 +121,9 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onSettings}>Nastavenia konta…</MenuItem>
             <MenuItem onClick={props.onAdd}>Pridať konto…</MenuItem>
             <MenuItem onClick={props.onSignatures}>Podpisy…</MenuItem>
+            <MenuItem onClick={props.onToggleNotifications}>
+              {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
+            </MenuItem>
             <MenuDivider />
             <MenuItem onClick={props.onToggleGpu}>
               {props.gpuOff ? 'Zapnúť hardvérovú akceleráciu (reštart)' : 'Vypnúť hardvérovú akceleráciu, ak obraz bliká (reštart)'}

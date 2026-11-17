@@ -95,6 +95,24 @@ async function withOneShot<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>,
   }
 }
 
+/** Samostatné spojenie na sledovanie schránky (IDLE). Volajúci ho sám zatvára. */
+export async function connectWatcher(acc: AccountConfig): Promise<Client> {
+  const pass = passwordFor(acc);
+  await ensureTrusted(acc.imap, 'imap');
+  const client = newClient(acc, pass);
+  try {
+    await client.connect();
+    const bad = verifySocket(client.socket ?? client._socket, acc.imap.host, acc.imap.tls);
+    if (bad) throw new UserError(bad, undefined, true);
+    return client;
+  } catch (e) {
+    await closeClient(client);
+    throw toUserError(e, acc.imap);
+  }
+}
+
+export { closeClient };
+
 // ---------------------------------------------------------------------------
 // Trvalé spojenia: jedno na konto, znovu použité pre všetky operácie (rýchle otváranie správ).
 // Po 5 minútach nečinnosti sa zavrie; pri zmene nastavení alebo hesla sa vytvorí nové.

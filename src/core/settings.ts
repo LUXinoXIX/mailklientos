@@ -43,6 +43,8 @@ export interface AppSettings {
   launchers: LauncherItem[];
   signatures: Signature[];
   signatureDefaults: Record<string, SignatureDefaults>;
+  /** upozornenia Windows na novú poštu (predvolene zapnuté) */
+  notifications?: boolean;
 }
 
 /** Oddeľovač podpisu (štandard „-- “ s medzerou). */

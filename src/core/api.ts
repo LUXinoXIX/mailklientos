@@ -148,7 +148,7 @@ export interface MailApi {
   setGpuForced(on: boolean): Promise<void>;
   openLog(): Promise<void>;
   logError(msg: string): Promise<void>;
-  onAppEvent(cb: (ev: { type: 'gpu-crash'; count: number }) => void): () => void;
+  onAppEvent(cb: (ev: AppEvent) => void): () => void;
   // vložené weby
   /** Otvorí stránku v Edge (Windows) alebo v predvolenom prehliadači. */
   webOpenOutside(url: string): Promise<void>;
@@ -156,3 +156,8 @@ export interface MailApi {
   /** Vymaže prihlásenie webovej relácie (odhlásiť konto M365 / web). */
   webClear(partition: string): Promise<void>;
 }
+
+export type AppEvent =
+  | { type: 'gpu-crash'; count: number }
+  | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
+  | { type: 'open-message'; accountId: string; folder: string; uid: number };
