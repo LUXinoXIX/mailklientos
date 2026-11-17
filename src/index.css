@@ -37,15 +37,15 @@ body { overflow: hidden; }
 .acc-tool:hover { background: #fff; }
 
 /* horný pruh (farba konta) */
-.topbar { display: grid; grid-template-columns: minmax(200px, 300px) 1fr auto; align-items: center; gap: 12px; height: 52px; padding: 0 16px; color: #fff; -webkit-app-region: drag; flex: none; }
+.topbar { display: grid; grid-template-columns: minmax(200px, 300px) 1fr auto; align-items: center; gap: 12px; height: 52px; padding: 0 16px; color: #fff; flex: none; }
 .topbar-title { min-width: 0; }
-.topbar-tools { justify-self: end; -webkit-app-region: no-drag; }
+.topbar-tools { justify-self: end; }
 .topbar-btn { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid rgba(255,255,255,0.45); border-radius: 4px; background: transparent; color: #fff; font: inherit; cursor: pointer; white-space: nowrap; }
 .topbar-btn:hover { background: rgba(255,255,255,0.14); }
 .topbar-btn.on { background: #fff; color: #242424; border-color: #fff; }
 .topbar-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-sub { font-size: 12px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topbar-search { max-width: 520px; width: 100%; justify-self: center; -webkit-app-region: no-drag; }
+.topbar-search { max-width: 520px; width: 100%; justify-self: center; }
 
 /* ribbon */
 .ribbon { background: var(--colorNeutralBackground1); border-bottom: 1px solid var(--colorNeutralStroke2); padding: 0 8px; flex: none; }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,6 +82,8 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   if (squirrelEvent) return;
   watchProcesses();
+  // žiadne predvolené menu Electronu (okno má vlastný ribbon)
+  Menu.setApplicationMenu(null);
   // kontrola pravopisu: slovenčina + angličtina (Windows a macOS používajú jazyky systému)
   if (process.platform === 'linux') {
     try {
