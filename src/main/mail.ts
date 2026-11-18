@@ -518,7 +518,7 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
         size: a.size ?? 0,
         contentType: a.contentType,
         index,
-        inline: isInlineImage(a) || undefined,
+        inline: isInlineImage(a, p.html) || undefined,
       })),
   };
 }
@@ -612,12 +612,19 @@ export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
   return true as const;
 }
 
-/** Obrázok, ktorý je súčasťou HTML textu (cid:, multipart/related) – logo v podpise, vložený obrázok. Nie je to „skutočná“ príloha. */
+/**
+ * Obrázok, ktorý je naozaj zobrazený v HTML texte (logo v podpise, vložený obrázok) – nie je to „skutočná“ príloha.
+ * Rozhoduje odkaz z HTML: cid:… alebo data: URL, ktorou mailparser odkaz nahradil. Obrázok, na ktorý text
+ * neodkazuje (aj keď je v multipart/related – zle poskladané správy), ostáva medzi prílohami, aby sa nestratil.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isInlineImage(a: any): boolean {
-  if (!/^image\//i.test(a.contentType ?? '')) return false;
-  if (!a.cid) return false;
-  return a.related === true || a.contentDisposition === 'inline';
+export function isInlineImage(a: any, html: string | false | null | undefined): boolean {
+  if (!html || !/^image\//i.test(a.contentType ?? '') || !a.cid) return false;
+  if (html.includes(`cid:${a.cid}`)) return true;
+  const content = a.content as Buffer | undefined;
+  if (!content?.length) return false;
+  const head = `data:${a.contentType};base64,${content.subarray(0, 150).toString('base64')}`;
+  return html.includes(head);
 }
 
 /** Prílohy pôvodnej správy pri preposlaní. */
@@ -630,7 +637,7 @@ async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid
       const p = await simpleParser(msg.source);
       return (p.attachments ?? [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((a: any) => !isInlineImage(a))
+        .filter((a: any) => !isInlineImage(a, p.html))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((a: any) => ({ filename: (a.filename as string) || 'priloha', content: a.content as Buffer, contentType: a.contentType }));
     } finally {

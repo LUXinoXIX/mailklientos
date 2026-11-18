@@ -690,9 +690,11 @@ export function ReadingPane(props: {
           })}
         </details>
       )}
-      {m.attachments.some((a) => !a.inline || showInline) && (
-        <div className={`attachments ${m.attachments.filter((a) => !a.inline || showInline).length > 4 ? 'many' : ''}`}>
-          {m.attachments.map((a, pos) => ({ a, pos, i: a.index ?? pos })).filter((x) => !x.a.inline || showInline).map(({ a, pos, i }) => (
+      {(() => {
+        const list = m.attachments.map((a, pos) => ({ a, pos, i: a.index ?? pos }));
+        const real = list.filter((x) => !x.a.inline);
+        const inl = list.filter((x) => x.a.inline);
+        const chip = ({ a, pos, i }: (typeof list)[number]) => (
             <span
               key={pos}
               className={`attachment ${a.inline ? 'inline-img' : ''}`}
@@ -727,16 +729,22 @@ export function ReadingPane(props: {
                 Uložiť
               </Button>
             </span>
-          ))}
-        </div>
-      )}
-      {m.attachments.some((a) => a.inline) && (
-        <button className="link inline-toggle" onClick={() => setShowInline(!showInline)}>
-          {showInline
-            ? 'Skryť obrázky z textu správy'
-            : `+ ${m.attachments.filter((a) => a.inline).length} ${m.attachments.filter((a) => a.inline).length === 1 ? 'obrázok' : m.attachments.filter((a) => a.inline).length < 5 ? 'obrázky' : 'obrázkov'} z textu správy (logo v podpise) – zobraziť`}
-        </button>
-      )}
+        );
+        const word = inl.length === 1 ? 'obrázok' : inl.length < 5 ? 'obrázky' : 'obrázkov';
+        return (
+          <>
+            {real.length > 0 && <div className={`attachments ${real.length > 4 ? 'many' : ''}`} aria-label="Prílohy">{real.map(chip)}</div>}
+            {inl.length > 0 && (
+              <div className={`inline-imgs ${showInline ? 'open' : ''}`}>
+                <button className="link inline-toggle" onClick={() => setShowInline(!showInline)} aria-expanded={showInline}>
+                  {showInline ? '▾' : '▸'} {inl.length} {word} z textu správy (logo v podpise a pod.) – nie sú to prílohy
+                </button>
+                {showInline && <div className="inline-list">{inl.map(chip)}</div>}
+              </div>
+            )}
+          </>
+        );
+      })()}
       {m.html && !showImages && (
         <div className="images-bar">
           Vzdialené obrázky sú zablokované kvôli súkromiu. <Button size="small" appearance="transparent" onClick={() => setShowImages(true)}>Zobraziť obrázky</Button>
