@@ -60,7 +60,7 @@ async function tick() {
       const msg = String((e as Error)?.message ?? e);
       log('odoslanie z fronty zlyhalo', it.subject, msg);
       // vrátiť do fronty o 5 minút, používateľa upozorniť
-      save([...load(), { ...it, sendAt: new Date(Date.now() + 5 * 60_000).toISOString(), kind: 'later' }]);
+      save([...load(), { ...it, sendAt: new Date(Date.now() + 5 * 60_000).toISOString(), kind: 'later', retry: true }]);
       emit({ type: 'outbox-failed', id: it.id, subject: it.subject, error: msg });
       if (Notification.isSupported()) new Notification({ title: 'Správu sa nepodarilo odoslať', body: `${it.subject}\n${msg}\nSkúsim znova o 5 minút.` }).show();
     } finally {
@@ -68,6 +68,15 @@ async function tick() {
       emit({ type: 'outbox-changed' });
     }
   }
+}
+
+/** „Odoslať a prijať“: neodoslané správy (po chybe) skúsiť hneď, naplánované nechať na svoj čas. */
+export async function flushRetries(): Promise<number> {
+  const l = load();
+  const n = l.filter((x) => x.retry).length;
+  if (n) save(l.map((x) => (x.retry ? { ...x, sendAt: new Date().toISOString() } : x)));
+  await tick();
+  return n;
 }
 
 export function startOutbox() {

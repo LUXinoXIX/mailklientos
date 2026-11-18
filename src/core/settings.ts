@@ -64,6 +64,8 @@ export interface AppSettings {
   density?: 'comfortable' | 'compact';
   /** riadok s náhľadom textu v zozname */
   previewLine?: boolean;
+  /** dvojklik na správu: samostatné okno (predvolené) alebo karta v hlavnom okne */
+  openMode?: 'window' | 'tab';
 }
 
 export interface ThemeDef {

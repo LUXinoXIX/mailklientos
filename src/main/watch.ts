@@ -1,5 +1,6 @@
 // Okamžité doručenie: pre každé IMAP konto samostatné spojenie, ktoré drží otvorenú Doručenú poštu v režime IDLE.
 // Pri novej správe: udalosť pre rozhranie (obnoviť zoznam a počty) a upozornenie Windows s odosielateľom a predmetom.
+import { getMainWindow } from './mainwin';
 import { BrowserWindow, Notification } from 'electron';
 import type { AccountConfig } from '../core/account';
 import * as store from './accounts';
@@ -28,9 +29,7 @@ function send(ev: unknown) {
   for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('app:event', ev);
 }
 
-function mainWindow() {
-  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
-}
+const mainWindow = getMainWindow;
 
 function notify(acc: AccountConfig, items: Array<{ uid: number; from: string; subject: string }>) {
   const s = loadSettings();

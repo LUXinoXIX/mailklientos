@@ -14,6 +14,7 @@ import { reconnectWatchers, stopAllWatchers, syncWatchers } from './main/watch';
 import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
+import { getMainWindow, setMainWindow } from './main/mainwin';
 
 // Dymový test v CI (MAILKLIENT_SMOKE=m365): dočasné dáta s ukážkovým kontom M365 a otvoreným pravým panelom.
 const SMOKE_MODE = process.env.MAILKLIENT_SMOKE ?? '';
@@ -36,8 +37,22 @@ applyRenderingSwitches();
 // Windows inštalátor Squirrel: pri inštalácii len vytvoriť zástupcov a skončiť.
 const squirrelEvent = handleSquirrelEvent();
 
+const boundsFile = () => path.join(app.getPath('userData'), 'msgwin.json');
+function savedBounds(): Electron.Rectangle | null {
+  try {
+    return JSON.parse(fs.readFileSync(boundsFile(), 'utf8')) as Electron.Rectangle;
+  } catch {
+    return null;
+  }
+}
+
 const createWindow = (query?: Record<string, string>) => {
   const compose = !!query?.compose;
+  const view = !!query?.view;
+  const mainWin = !compose && !view;
+  // okno správy: posledný rozmer, každé ďalšie posunuté, aby sa neprekrývali presne
+  const vb = view ? savedBounds() : null;
+  const shift = view ? (BrowserWindow.getAllWindows().length % 6) * 28 : 0;
   const win = new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: '#f5f5f5',
@@ -49,22 +64,32 @@ const createWindow = (query?: Record<string, string>) => {
       nodeIntegration: false,
       sandbox: true,
     },
-    width: compose ? 980 : 1440,
-    height: compose ? 820 : 900,
-    minWidth: compose ? 640 : 960,
-    minHeight: 600,
-    title: compose ? 'Nová správa – Universum eMail' : 'Universum eMail',
+    width: view ? vb?.width ?? 900 : compose ? 980 : 1440,
+    height: view ? vb?.height ?? 820 : compose ? 820 : 900,
+    ...(view && vb ? { x: vb.x + shift, y: vb.y + shift } : {}),
+    minWidth: view ? 480 : compose ? 640 : 960,
+    minHeight: view ? 400 : 600,
+    title: view ? 'Správa – Universum eMail' : compose ? 'Nová správa – Universum eMail' : 'Universum eMail',
     show: false,
   });
   // štartovací banner len pri hlavnom okne (nie pri okne písania a dymovom teste)
-  const closeSplash = !compose && !SMOKE && BrowserWindow.getAllWindows().length <= 1 ? showSplash() : null;
+  const closeSplash = mainWin && !SMOKE && BrowserWindow.getAllWindows().length <= 1 ? showSplash() : null;
   win.once('ready-to-show', () => {
     if (closeSplash) closeSplash(() => win.show());
     else win.show();
   });
   win.on('unresponsive', () => log('okno neodpovedá'));
   // zatvorenie hlavného okna: aplikácia beží ďalej pri hodinách (pošta, upozornenia, odloženie, plánované odoslanie)
-  if (!compose) {
+  if (view) {
+    win.on('close', () => {
+      try {
+        fs.writeFileSync(boundsFile(), JSON.stringify(win.getNormalBounds()), 'utf8');
+      } catch {
+        /* nevadí */
+      }
+    });
+  }
+  if (mainWin) {
     win.on('close', (e) => {
       if (isQuitting() || SMOKE || loadSettings().runInBackground === false) return;
       e.preventDefault();
@@ -72,6 +97,7 @@ const createWindow = (query?: Record<string, string>) => {
     });
   }
   attachWindow(win);
+  if (mainWin) setMainWindow(win);
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -97,7 +123,7 @@ if (!squirrelEvent && !app.requestSingleInstanceLock()) app.quit();
 
 // Druhé spustenie: zobraziť už otvorené okno.
 app.on('second-instance', () => {
-  const win = BrowserWindow.getAllWindows()[0];
+  const win = getMainWindow();
   if (!win) return;
   if (win.isMinimized()) win.restore();
   win.show();
@@ -126,8 +152,8 @@ app.whenReady().then(() => {
   startOutbox();
   startFollowUps();
   setupTray(() => {
-    const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed() && !x.getTitle().startsWith('Nová správa'));
-    if (!w) return createWindow();
+    const w = getMainWindow();
+    if (!w || w.webContents.getURL().includes('view=1') || w.webContents.getURL().includes('compose=1')) return createWindow();
     if (w.isMinimized()) w.restore();
     w.show();
     w.focus();

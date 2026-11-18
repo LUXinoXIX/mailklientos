@@ -68,7 +68,9 @@ const SHORTCUTS: Array<[string, string]> = [
   ['Delete', 'Odstrániť'],
   ['Ctrl+P', 'Tlačiť'],
   ['Ctrl+E', 'Hľadať'],
-  ['F9', 'Obnoviť'],
+  ['F9', 'Odoslať a prijať'],
+  ['Enter / dvojklik', 'Otvoriť správu v okne (Shift = na karte)'],
+  ['Alt+↑ / Alt+↓', 'Predchádzajúca / nasledujúca správa (v okne správy)'],
   ['Ctrl+1 … 4', 'Pošta, Kalendár, Kontakty, Úlohy'],
 ];
 

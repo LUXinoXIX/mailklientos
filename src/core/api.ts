@@ -94,6 +94,8 @@ export interface SendInput {
 
 /** Správa čakajúca na odoslanie (odložené odoslanie alebo 10 s na späťvzatie). */
 export interface OutboxItem {
+  /** vrátená do fronty po chybe odoslania */
+  retry?: boolean;
   id: string;
   accountId: string;
   sendAt: string;
@@ -163,6 +165,14 @@ export interface MailApi {
   // pošta (IMAP)
   listFolders(accountId: string): Promise<Result<FolderInfo[]>>;
   listMessages(accountId: string, folder: string, limit?: number, preview?: boolean): Promise<Result<MessageSummary[]>>;
+  /** správa v samostatnom okne */
+  messageWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
+  /** odpoveď / preposlanie v samostatnom okne písania */
+  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
+  /** oznámiť ostatným oknám zmenu v priečinku */
+  notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** Odoslať a prijať: znovu pripojiť sledovanie pošty, odoslať správy čakajúce po chybe */
+  sendReceive(): Promise<Result<{ retried: number }>>;
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
