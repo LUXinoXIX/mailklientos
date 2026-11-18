@@ -1634,6 +1634,11 @@ export function App() {
                     onOpenFull={(m, alt) => openFull(m, alt)}
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
+                    onQuick={(m, a) =>
+                      void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
+                    }
+                    sort={settings.listSort}
+                    onSort={(s) => saveSettings({ ...settings, listSort: s })}
                     onLoadMore={!found && hasMore && !demo ? loadMore : undefined}
                     loadingMore={listState.loading}
                     onDeleteKey={() => void del()}
@@ -1702,6 +1707,12 @@ export function App() {
                         { label: `Kopírovať názov „${a?.filename ?? ''}“`, onClick: () => void navigator.clipboard.writeText(a?.filename ?? '') },
                       ]);
                     }}
+                    onDelete={() => void del()}
+                    onArchive={() => void archive()}
+                    onToggleSeen={() => void toggleSeen()}
+                    onToggleFlag={() => void toggleFlag()}
+                    onTogglePin={() => void togglePin()}
+                    onMore={current ? (x, y) => messageMenu([current], x, y) : undefined}
                     onPopOut={full.msg && full.msg.accountId !== DEMO_ID ? () => void api?.messageWindow(full.msg!.accountId, full.msg!.folder, full.msg!.uid) : undefined}
                     onUnsubscribe={
                       full.msg?.unsubscribe && full.msg.accountId !== DEMO_ID

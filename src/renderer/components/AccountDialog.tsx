@@ -312,6 +312,9 @@ export function AccountDialog(props: {
               {ACCOUNT_COLORS.map((c) => (
                 <button key={c} className={`swatch ${acc.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => set({ color: c })} aria-label={c} />
               ))}
+              <label className={`swatch custom ${ACCOUNT_COLORS.includes(acc.color) ? '' : 'on'}`} title="Vlastná farba" style={{ background: ACCOUNT_COLORS.includes(acc.color) ? undefined : acc.color }}>
+                <input type="color" value={acc.color} onChange={(e) => set({ color: e.target.value })} aria-label="Vlastná farba konta" />
+              </label>
             </div>
             <Field label="Ďalšie adresy (aliasy) pre pole Od" hint="Jedna na riadok, napr. Podpora <podpora@firma.sk>. Server musí odosielanie z nich povoliť.">
               <Textarea

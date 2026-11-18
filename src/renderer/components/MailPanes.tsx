@@ -1,11 +1,11 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
-import { Button, Spinner, Tab, TabList } from '@fluentui/react-components';
+import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -208,6 +208,16 @@ export interface DragMessages {
   uids: number[];
 }
 
+export type SortBy = 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category';
+const SORTS: Array<{ id: SortBy; label: string }> = [
+  { id: 'date', label: 'Dátum' },
+  { id: 'from', label: 'Od' },
+  { id: 'subject', label: 'Predmet' },
+  { id: 'category', label: 'Kategória' },
+  { id: 'flag', label: 'Vlajka (dôležité)' },
+  { id: 'unread', label: 'Neprečítané' },
+];
+
 export function MessageList(props: {
   title: string;
   messages: MessageSummary[];
@@ -223,6 +233,10 @@ export function MessageList(props: {
   onDeleteMany?: (msgs: MessageSummary[]) => void;
   /** zmena výberu viacerých správ (počet) */
   onMulti?: (msgs: MessageSummary[]) => void;
+  /** rýchle akcie priamo v riadku (pri prejdení myšou) */
+  onQuick?: (m: MessageSummary, a: 'flag' | 'pin' | 'delete' | 'seen') => void;
+  sort?: { by: SortBy; dir: 'desc' | 'asc' };
+  onSort?: (s: { by: SortBy; dir: 'desc' | 'asc' }) => void;
   headerExtra?: React.ReactNode;
   categories?: Category[];
   conversations?: boolean;
@@ -242,8 +256,23 @@ export function MessageList(props: {
   const groups = useMemo(() => {
     const g = props.conversations ? groupThreads(base) : base.map((m) => [m]);
     for (const x of g) x.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
-    return g.sort((a, b) => Number(b.some(isPinned)) - Number(a.some(isPinned)) || (b[0]!.date ?? '').localeCompare(a[0]!.date ?? ''));
-  }, [base, props.conversations]); // eslint-disable-line react-hooks/exhaustive-deps
+    const by = props.sort?.by ?? 'date';
+    const dir = props.sort?.dir === 'asc' ? -1 : 1;
+    const cats = props.categories ?? [];
+    const catName = (m: MessageSummary) => cats.find((c) => m.keywords?.includes(c.id))?.name ?? '\uffff';
+    const cmp = (a: MessageSummary, b: MessageSummary): number => {
+      const byDate = (b.date ?? '').localeCompare(a.date ?? '');
+      switch (by) {
+        case 'from': return (a.fromName || a.fromAddress).localeCompare(b.fromName || b.fromAddress, 'sk') * dir || byDate;
+        case 'subject': return a.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, '').localeCompare(b.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, ''), 'sk') * dir || byDate;
+        case 'flag': return (Number(b.flagged) - Number(a.flagged)) * dir || byDate;
+        case 'unread': return (Number(!b.seen) - Number(!a.seen)) * dir || byDate;
+        case 'category': return catName(a).localeCompare(catName(b), 'sk') * dir || byDate;
+        default: return byDate * dir;
+      }
+    };
+    return g.sort((a, b) => Number(b.some(isPinned)) - Number(a.some(isPinned)) || cmp(a[0]!, b[0]!));
+  }, [base, props.conversations, props.sort, props.categories]); // eslint-disable-line react-hooks/exhaustive-deps
   const cats = props.categories ?? [];
   // výber viacerých správ: Ctrl+klik pridá/odoberie, Shift+klik vyberie rozsah
   const keyOf = (m: MessageSummary) => `${m.accountId}/${m.folder}/${m.uid}`;
@@ -328,8 +357,27 @@ export function MessageList(props: {
           <div className="msg-row">
             <span className="msg-subject">{m.subject}</span>
             <span className="msg-icons">
-              {isPinned(m) && <PinSmallIcon className="pin" aria-label="Pripnuté" />}
-              {m.flagged && <FlagFilledIcon className="flag" />}
+              {props.onQuick && !opts.child ? (
+                <>
+                  <span role="button" tabIndex={-1} className="qa hover" title={m.seen ? 'Označiť ako neprečítané' : 'Označiť ako prečítané'} aria-label={m.seen ? 'Označiť ako neprečítané' : 'Označiť ako prečítané'} onClick={(e) => (e.stopPropagation(), props.onQuick!(m, 'seen'))}>
+                    {m.seen ? <UnreadSmallIcon /> : <ReadSmallIcon />}
+                  </span>
+                  <span role="button" tabIndex={-1} className="qa hover" title="Odstrániť" aria-label="Odstrániť" onClick={(e) => (e.stopPropagation(), props.onQuick!(m, 'delete'))}>
+                    <DeleteSmallIcon />
+                  </span>
+                  <span role="button" tabIndex={-1} className={`qa ${isPinned(m) ? 'on pin' : 'hover'}`} title={isPinned(m) ? 'Odopnúť' : 'Pripnúť navrch'} aria-label={isPinned(m) ? 'Odopnúť' : 'Pripnúť navrch'} aria-pressed={isPinned(m)} onClick={(e) => (e.stopPropagation(), props.onQuick!(m, 'pin'))}>
+                    {isPinned(m) ? <PinSmallIcon /> : <PinOutlineSmallIcon />}
+                  </span>
+                  <span role="button" tabIndex={-1} className={`qa ${m.flagged ? 'on flag' : 'hover'}`} title={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou'} aria-label={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou'} aria-pressed={m.flagged} onClick={(e) => (e.stopPropagation(), props.onQuick!(m, 'flag'))}>
+                    {m.flagged ? <FlagFilledIcon /> : <FlagSmallIcon />}
+                  </span>
+                </>
+              ) : (
+                <>
+                  {isPinned(m) && <PinSmallIcon className="pin" aria-label="Pripnuté" />}
+                  {m.flagged && <FlagFilledIcon className="flag" />}
+                </>
+              )}
             </span>
           </div>
           {props.previewLine && m.preview && !opts.child && <div className="msg-preview">{m.preview}</div>}
@@ -351,10 +399,44 @@ export function MessageList(props: {
       <div className="list-head">
         <div className="list-title">{props.title}</div>
         {props.headerExtra}
+        <div className="list-tabsrow">
         <TabList size="small" selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as 'all' | 'unread')}>
           <Tab value="all">Všetky</Tab>
           <Tab value="unread">Neprečítané</Tab>
         </TabList>
+        {props.onSort && (
+          <Menu
+            checkedValues={{ by: [props.sort?.by ?? 'date'], dir: [props.sort?.dir ?? 'desc'] }}
+            onCheckedValueChange={(_, d) => {
+              const cur = props.sort ?? { by: 'date' as SortBy, dir: 'desc' as const };
+              if (d.name === 'by' && d.checkedItems[0]) props.onSort!({ ...cur, by: d.checkedItems[0] as SortBy });
+              if (d.name === 'dir' && d.checkedItems[0]) props.onSort!({ ...cur, dir: d.checkedItems[0] as 'desc' | 'asc' });
+            }}
+          >
+            <MenuTrigger disableButtonEnhancement>
+              <button className="sort-btn" title="Zoradiť">
+                <SortIcon /> Podľa: {SORTS.find((x) => x.id === (props.sort?.by ?? 'date'))?.label} {props.sort?.dir === 'asc' ? '↑' : '↓'}
+              </button>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuGroup>
+                  <MenuGroupHeader>Zoradiť podľa</MenuGroupHeader>
+                  {SORTS.map((x) => (
+                    <MenuItemRadio key={x.id} name="by" value={x.id}>{x.label}</MenuItemRadio>
+                  ))}
+                </MenuGroup>
+                <MenuDivider />
+                <MenuGroup>
+                  <MenuGroupHeader>Spôsob zoradenia</MenuGroupHeader>
+                  <MenuItemRadio name="dir" value="asc">{(props.sort?.by ?? 'date') === 'date' ? 'Najstaršie na začiatku' : 'Vzostupne (A → Z)'}</MenuItemRadio>
+                  <MenuItemRadio name="dir" value="desc">{(props.sort?.by ?? 'date') === 'date' ? 'Najnovšie na začiatku' : 'Zostupne (Z → A)'}</MenuItemRadio>
+                </MenuGroup>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        )}
+        </div>
       </div>
       <div
         className="list-body"
@@ -489,6 +571,13 @@ export function ReadingPane(props: {
   onUnsubscribe?: () => void;
   onPopOut?: () => void;
   onAttachmentContext?: (index: number, x: number, y: number) => void;
+  onDelete?: () => void;
+  onArchive?: () => void;
+  onToggleSeen?: () => void;
+  onToggleFlag?: () => void;
+  onTogglePin?: () => void;
+  /** ďalšie akcie (⋯) – menu na súradniciach */
+  onMore?: (x: number, y: number) => void;
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
@@ -521,10 +610,24 @@ export function ReadingPane(props: {
           <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
           <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
           <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
-          {props.onPopOut && <Button size="small" appearance="subtle" icon={<NewWindowSmallIcon />} onClick={props.onPopOut} title="Otvoriť v samostatnom okne (dvojklik na správu)" aria-label="Otvoriť v samostatnom okne" />}
-          {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)">Tlačiť</Button>}
-          {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(true)} title="Uložiť ako PDF">PDF</Button>}
-          {props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
+          <span className="ra-sep" />
+          {props.onDelete && <Button size="small" appearance="subtle" icon={<DeleteIcon />} onClick={props.onDelete} title="Odstrániť (Delete)" aria-label="Odstrániť" />}
+          {props.onArchive && <Button size="small" appearance="subtle" icon={<ArchiveIcon />} onClick={props.onArchive} title="Archivovať" aria-label="Archivovať" />}
+          {props.onToggleSeen && (
+            <Button size="small" appearance="subtle" icon={m.seen ? <MarkUnreadIcon /> : <MarkReadIcon />} onClick={props.onToggleSeen} title={m.seen ? 'Označiť ako neprečítané (Ctrl+U)' : 'Označiť ako prečítané (Ctrl+Q)'} aria-label={m.seen ? 'Označiť ako neprečítané' : 'Označiť ako prečítané'} />
+          )}
+          {props.onToggleFlag && (
+            <Button size="small" appearance="subtle" className={m.flagged ? 'ra-on flag' : ''} icon={m.flagged ? <FlagFilledIcon /> : <FlagIcon />} onClick={props.onToggleFlag} title={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou (Insert)'} aria-label={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou'} aria-pressed={m.flagged} />
+          )}
+          {props.onTogglePin && (
+            <Button size="small" appearance="subtle" className={!!m.keywords?.includes(PIN_KEYWORD) ? 'ra-on pin' : ''} icon={<PinIcon />} onClick={props.onTogglePin} title={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-label={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-pressed={!!m.keywords?.includes(PIN_KEYWORD)} />
+          )}
+          <span className="ra-sep" />
+          {props.onPrint && <Button size="small" appearance="subtle" icon={<PrintIcon />} onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)" aria-label="Tlačiť" />}
+          {props.onPrint && <Button size="small" appearance="subtle" icon={<PdfIcon />} onClick={() => props.onPrint!(true)} title="Uložiť ako PDF" aria-label="Uložiť ako PDF" />}
+          {props.onPopOut && <Button size="small" appearance="subtle" icon={<NewWindowSmallIcon />} onClick={props.onPopOut} title="Otvoriť v samostatnom okne" aria-label="Otvoriť v samostatnom okne" />}
+          {props.onMore && <Button size="small" appearance="subtle" icon={<MoreIcon />} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); props.onMore!(r.left, r.bottom); }} title="Ďalšie akcie" aria-label="Ďalšie akcie" />}
+          {!props.onMore && props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
         </div>
       </div>
       {(() => {

@@ -97,7 +97,11 @@ export function themeVars(t: ThemeDef): CSSProperties {
 }
 
 /** Farby kont (pás kont, avatary, horný pruh). Tmavšie odtiene, aby biely text mal dobrý kontrast. */
-export const ACCOUNT_COLORS = ['#2F6F5E', '#1d4ed8', '#6d28d9', '#b45309', '#be123c', '#0e7490', '#4B5563', '#3f6212'];
+export const ACCOUNT_COLORS = [
+  '#2F6F5E', '#1d4ed8', '#6d28d9', '#b45309', '#be123c', '#0e7490', '#4B5563', '#3f6212',
+  '#0f766e', '#2563eb', '#7c3aed', '#c2410c', '#db2777', '#0369a1', '#15803d', '#a16207',
+  '#9333ea', '#dc2626', '#0891b2', '#4d7c0f', '#b91c1c', '#1e40af', '#86198f', '#374151',
+];
 
 /** Staré svetlé farby z kroku 2 premapované na nové tmavšie (tyrkysová → sivozelená). */
 const LEGACY: Record<string, string> = {
