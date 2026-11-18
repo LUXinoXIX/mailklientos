@@ -658,7 +658,7 @@ export const Composer = forwardRef<
           </div>
         </div>
         {(files.length > 0 || (init.kind === 'forward' && (init.original?.attachments.filter((a) => !a.inline).length ?? 0) > 0)) && (
-          <div className="composer-files" aria-label="Prílohy">
+          <div className={`composer-files ${files.length + (init.kind === 'forward' ? init.original?.attachments.filter((a) => !a.inline).length ?? 0 : 0) > 4 ? 'many' : ''}`} aria-label="Prílohy">
             {init.kind === 'forward' &&
               init.original?.attachments.filter((a) => !a.inline).map((a, i) => (
                 <span key={`fw-${i}`} className="att-card" title={`${a.filename} – príloha preposlanej správy`}>
