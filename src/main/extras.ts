@@ -68,6 +68,19 @@ const IMG = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 
 export async function previewAttachment(acc: AccountConfig, folder: string, uid: number, index: number) {
   const a = await mail.getAttachment(acc, folder, uid, index);
+  return previewBuffer(a.filename, a.content);
+}
+
+/** náhľad súboru priloženého k rozpísanej správe (vybraný z disku, vložený alebo pretiahnutý) */
+export async function previewLocalFile(file: string, filename?: string) {
+  const name = filename || path.basename(file);
+  if (attachmentRisk(name).level !== 'blocked' && !fs.existsSync(file)) throw new mail.UserError(`Súbor „${name}“ sa už na disku nenachádza.`);
+  if (attachmentRisk(name).level === 'blocked') return previewBuffer(name, Buffer.alloc(0));
+  return previewBuffer(name, fs.readFileSync(file));
+}
+
+async function previewBuffer(filename: string, content: Buffer) {
+  const a = { filename, content };
   if (IMG.test(a.filename)) {
     const ext = path.extname(a.filename).slice(1).toLowerCase().replace('jpg', 'jpeg').replace('svg', 'svg+xml');
     return { kind: 'image' as const, src: `data:image/${ext};base64,${a.content.toString('base64')}`, filename: a.filename };

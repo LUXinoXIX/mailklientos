@@ -596,6 +596,29 @@ export function ReadingPane(props: {
   return (
     <section className="reading">
       {props.loading && <div className="progress" role="progressbar" aria-label="Otváram správu" />}
+      <div className="read-actions" role="toolbar" aria-label="Akcie so správou">
+        <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
+        <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
+        <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+        <span className="ra-sep" />
+        {props.onDelete && <Button size="small" appearance="subtle" icon={<DeleteIcon />} onClick={props.onDelete} title="Odstrániť (Delete)" aria-label="Odstrániť" />}
+        {props.onArchive && <Button size="small" appearance="subtle" icon={<ArchiveIcon />} onClick={props.onArchive} title="Archivovať" aria-label="Archivovať" />}
+        {props.onToggleSeen && (
+          <Button size="small" appearance="subtle" icon={m.seen ? <MarkUnreadIcon /> : <MarkReadIcon />} onClick={props.onToggleSeen} title={m.seen ? 'Označiť ako neprečítané (Ctrl+U)' : 'Označiť ako prečítané (Ctrl+Q)'} aria-label={m.seen ? 'Označiť ako neprečítané' : 'Označiť ako prečítané'} />
+        )}
+        {props.onToggleFlag && (
+          <Button size="small" appearance="subtle" className={m.flagged ? 'ra-on flag' : ''} icon={m.flagged ? <FlagFilledIcon /> : <FlagIcon />} onClick={props.onToggleFlag} title={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou (Insert)'} aria-label={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou'} aria-pressed={m.flagged} />
+        )}
+        {props.onTogglePin && (
+          <Button size="small" appearance="subtle" className={!!m.keywords?.includes(PIN_KEYWORD) ? 'ra-on pin' : ''} icon={<PinIcon />} onClick={props.onTogglePin} title={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-label={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-pressed={!!m.keywords?.includes(PIN_KEYWORD)} />
+        )}
+        <span className="ra-sep" />
+        {props.onPrint && <Button size="small" appearance="subtle" icon={<PrintIcon />} onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)" aria-label="Tlačiť" />}
+        {props.onPrint && <Button size="small" appearance="subtle" icon={<PdfIcon />} onClick={() => props.onPrint!(true)} title="Uložiť ako PDF" aria-label="Uložiť ako PDF" />}
+        {props.onPopOut && <Button size="small" appearance="subtle" icon={<NewWindowSmallIcon />} onClick={props.onPopOut} title="Otvoriť v samostatnom okne" aria-label="Otvoriť v samostatnom okne" />}
+        {props.onMore && <Button size="small" appearance="subtle" icon={<MoreIcon />} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); props.onMore!(r.left, r.bottom); }} title="Ďalšie akcie" aria-label="Ďalšie akcie" />}
+        {!props.onMore && props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
+      </div>
       <h2 className="read-subject">{m.subject}</h2>
       <div className="read-head">
         <Avatar name={m.fromName || m.fromAddress} color={props.color} size={40} />
@@ -609,30 +632,7 @@ export function ReadingPane(props: {
             )}
           </div>
           <div className="muted">Komu: {m.to}{m.cc ? ` · Kópia: ${m.cc}` : ''}</div>
-          <div className="muted">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
-        </div>
-        <div className="read-actions">
-          <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
-          <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
-          <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
-          <span className="ra-sep" />
-          {props.onDelete && <Button size="small" appearance="subtle" icon={<DeleteIcon />} onClick={props.onDelete} title="Odstrániť (Delete)" aria-label="Odstrániť" />}
-          {props.onArchive && <Button size="small" appearance="subtle" icon={<ArchiveIcon />} onClick={props.onArchive} title="Archivovať" aria-label="Archivovať" />}
-          {props.onToggleSeen && (
-            <Button size="small" appearance="subtle" icon={m.seen ? <MarkUnreadIcon /> : <MarkReadIcon />} onClick={props.onToggleSeen} title={m.seen ? 'Označiť ako neprečítané (Ctrl+U)' : 'Označiť ako prečítané (Ctrl+Q)'} aria-label={m.seen ? 'Označiť ako neprečítané' : 'Označiť ako prečítané'} />
-          )}
-          {props.onToggleFlag && (
-            <Button size="small" appearance="subtle" className={m.flagged ? 'ra-on flag' : ''} icon={m.flagged ? <FlagFilledIcon /> : <FlagIcon />} onClick={props.onToggleFlag} title={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou (Insert)'} aria-label={m.flagged ? 'Zrušiť vlajku' : 'Označiť vlajkou'} aria-pressed={m.flagged} />
-          )}
-          {props.onTogglePin && (
-            <Button size="small" appearance="subtle" className={!!m.keywords?.includes(PIN_KEYWORD) ? 'ra-on pin' : ''} icon={<PinIcon />} onClick={props.onTogglePin} title={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-label={!!m.keywords?.includes(PIN_KEYWORD) ? 'Odopnúť' : 'Pripnúť navrch'} aria-pressed={!!m.keywords?.includes(PIN_KEYWORD)} />
-          )}
-          <span className="ra-sep" />
-          {props.onPrint && <Button size="small" appearance="subtle" icon={<PrintIcon />} onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)" aria-label="Tlačiť" />}
-          {props.onPrint && <Button size="small" appearance="subtle" icon={<PdfIcon />} onClick={() => props.onPrint!(true)} title="Uložiť ako PDF" aria-label="Uložiť ako PDF" />}
-          {props.onPopOut && <Button size="small" appearance="subtle" icon={<NewWindowSmallIcon />} onClick={props.onPopOut} title="Otvoriť v samostatnom okne" aria-label="Otvoriť v samostatnom okne" />}
-          {props.onMore && <Button size="small" appearance="subtle" icon={<MoreIcon />} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); props.onMore!(r.left, r.bottom); }} title="Ďalšie akcie" aria-label="Ďalšie akcie" />}
-          {!props.onMore && props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
+          <div className="muted read-date">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
         </div>
       </div>
       {(() => {
