@@ -1,4 +1,5 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
+import { kb } from '../platform';
 import {
   Button, Menu, MenuDivider, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
@@ -485,7 +486,7 @@ export function Ribbon(props: {
               </MenuTrigger>
               <MenuPopover>
                 <MenuList>
-                  <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('print')}>Tlačiť správu (Ctrl+P)</MenuItem>
+                  <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('print')}>{kb('Tlačiť správu (Ctrl+P)')}</MenuItem>
                   <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('pdf')}>Uložiť správu ako PDF</MenuItem>
                   <MenuItem disabled={!p.hasMessage} onClick={() => p.onIo('eml')}>Uložiť správu ako .eml</MenuItem>
                   <MenuItem onClick={() => p.onIo('mbox')}>Exportovať priečinok (.mbox)</MenuItem>

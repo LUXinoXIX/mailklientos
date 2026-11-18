@@ -1,4 +1,5 @@
 // Vlastné menu na pravý klik (správy, priečinky, prílohy) – otvorí sa na mieste kurzora.
+import { kb } from '../platform';
 import { Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 
@@ -32,7 +33,7 @@ function Items({ items }: { items: CtxItem[] }) {
           );
         }
         return (
-          <MenuItem key={it.label} icon={it.icon as never} disabled={it.disabled} onClick={it.onClick} secondaryContent={it.hint}>
+          <MenuItem key={it.label} icon={it.icon as never} disabled={it.disabled} onClick={it.onClick} secondaryContent={it.hint ? kb(it.hint) : undefined}>
             {it.label}
           </MenuItem>
         );
