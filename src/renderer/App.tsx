@@ -170,9 +170,23 @@ export function App() {
   const [panelOverlay, setPanelOverlay] = useState(false);
   const [menuOverlay, setMenuOverlay] = useState(false);
   const msgCache = useRef(new Map<string, MessageFull>());
-  const [composeView, setCompose] = useState<{ init: ComposeInit; key: number } | null>(null);
-  const composerRef = useRef<ComposerHandle>(null);
-  const [composerState, setComposerState] = useState<ComposerState>({ importance: false, receipt: false, savedAt: null, sending: false });
+  // rozpísané správy ako karty dole (ako Outlook): viac naraz, prepínanie medzi nimi a správami
+  const [drafts, setDrafts] = useState<Array<{ init: ComposeInit; key: number }>>([]);
+  const [activeDraft, setActiveDraft] = useState<number | null>(null);
+  const composeView = drafts.find((d) => d.key === activeDraft) ?? null;
+  const setCompose = (v: { init: ComposeInit; key: number } | null) => {
+    if (!v) return setActiveDraft(null);
+    setDrafts((d) => [...d, v]);
+    setActiveDraft(v.key);
+  };
+  const removeDraft = (key: number) => {
+    setDrafts((d) => d.filter((x) => x.key !== key));
+    setActiveDraft((a) => (a === key ? null : a));
+  };
+  const composerRefs = useRef<Record<number, ComposerHandle | null>>({});
+  const composerRef = { current: activeDraft != null ? composerRefs.current[activeDraft] ?? null : null };
+  const [composerStates, setComposerStates] = useState<Record<number, ComposerState>>({});
+  const composerState: ComposerState = (activeDraft != null && composerStates[activeDraft]) || { importance: false, receipt: false, savedAt: null, sending: false };
   const openKey = useRef('');
   const [gpuOff, setGpuOff] = useState(false);
   const [gpuForced, setGpuForced] = useState(false);
@@ -1060,13 +1074,7 @@ export function App() {
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
     // už je otvorená rozpísaná správa: presunúť ju do samostatného okna (nič sa nestratí), potom otvoriť novú
-    if (composeView && composerRef.current) {
-      void composerRef.current.park().then((ok) => {
-        if (ok) window.setTimeout(() => composeNow(kind), 0);
-        else setStatus('Rozpísanú správu sa nepodarilo odložiť – najprv ju odošlite, zavrite (×) alebo zahoďte.');
-      });
-      return;
-    }
+    // predchádzajúca rozpísaná správa ostane ako karta dole
     composeNow(kind);
   }
   function composeNow(kind: ComposeKind) {
@@ -1630,25 +1638,30 @@ export function App() {
                     loadingMore={listState.loading}
                     onDeleteKey={() => void del()}
                   />
-                  {composeView ? (
+                  <div className="reading-slot">
+                  {drafts.map((d) => (
+                    <div key={d.key} className="draft-pane" style={{ display: d.key === activeDraft ? undefined : 'none' }}>
                     <Composer
-                      key={composeView.key}
-                      ref={composerRef}
-                      init={composeView.init}
+                      ref={(h) => {
+                        composerRefs.current[d.key] = h;
+                      }}
+                      init={d.init}
                       accounts={imapAccounts.filter((a) => a.id !== DEMO_ID).length ? imapAccounts.filter((a) => a.id !== DEMO_ID) : imapAccounts}
                       settings={settings}
                       contacts={contacts}
                       zimbra={zimbraOk}
-                      onState={setComposerState}
+                      onState={(st) => setComposerStates((m) => ({ ...m, [d.key]: st }))}
                       onQueued={(it) => it.kind === 'undo' && setUndo(it)}
                       onSaveTemplate={saveTemplate}
                       onClose={(st) => {
-                        setCompose(null);
-                        setRibbonTab('home');
+                        removeDraft(d.key);
+                        if (d.key === activeDraft) setRibbonTab('home');
                         if (st) setStatus(st);
                       }}
                     />
-                  ) : (
+                    </div>
+                  ))}
+                  {!composeView && (
                   <ReadingPane
                     message={full.msg}
                     loading={full.loading}
@@ -1708,7 +1721,47 @@ export function App() {
                     }}
                   />
                   )}
+                  </div>
                 </div>
+                {drafts.length > 0 && (
+                  <div className="draft-tabs" role="tablist" aria-label="Rozpísané správy">
+                    {drafts.map((d) => {
+                      const st = composerStates[d.key];
+                      const t = st?.subject?.trim() || (d.init.subject ?? '').trim() || '(Bez predmetu)';
+                      const on = d.key === activeDraft;
+                      return (
+                        <div
+                          key={d.key}
+                          role="tab"
+                          tabIndex={0}
+                          aria-selected={on}
+                          className={`draft-tab ${on ? 'on' : ''}`}
+                          title={t}
+                          onClick={() => {
+                            setActiveTab(null);
+                            setActiveDraft(d.key);
+                            setRibbonTab('message');
+                          }}
+                          onAuxClick={(e) => e.button === 1 && composerRefs.current[d.key]?.close()}
+                        >
+                          <span className="pen" aria-hidden="true">✎</span>
+                          <span className="t">{t}</span>
+                          <button
+                            className="x"
+                            aria-label={`Zavrieť ${t} (uloží sa do Konceptov)`}
+                            title="Zavrieť – rozpísaná správa sa uloží do Konceptov"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              composerRefs.current[d.key]?.close();
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 </div>
               ) : (
                 curImapModule === 'tasks' ? (
