@@ -192,6 +192,8 @@ export interface MailApi {
   testNotification(): Promise<Result<string>>;
   printMessage(accountId: string, folder: string, uid: number, pdf: boolean): Promise<Result<string>>;
   previewAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<{ kind: 'image' | 'window' | 'external'; src?: string; filename: string }>>;
+  /** náhľad súboru priloženého k rozpísanej správe */
+  previewFile(file: string, filename?: string): Promise<Result<{ kind: 'image' | 'window' | 'external'; src?: string; filename: string }>>;
   unsubscribe(accountId: string, u: { url?: string; mailto?: string; oneClick?: boolean }): Promise<Result<string>>;
   backupExport(): Promise<Result<string>>;
   backupImport(): Promise<Result<{ accounts: number; restored: boolean }>>;

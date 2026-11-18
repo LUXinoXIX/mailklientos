@@ -14,10 +14,11 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { ImapAccountPublic } from '../../core/account';
 import type { DraftRef, MessageFull, OutboxItem, PickedFile, SendInput } from '../../core/api';
 import { signatureToHtml, type AppSettings } from '../../core/settings';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, ImportantIcon, LowPriorityIcon, CloseSmallIcon, DeleteIcon, NewWindowIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, PreviewSmallIcon, BulletsIcon, ImportantIcon, LowPriorityIcon, CloseSmallIcon, DeleteIcon, NewWindowIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
 import { BriefcasePicker } from './BriefcasePicker';
+import { useAttachmentGuard } from './AttachmentGuard';
 
 export type ComposeKind = 'new' | 'reply' | 'replyAll' | 'forward';
 
@@ -275,6 +276,20 @@ export const Composer = forwardRef<
   }
 >(function Composer(props, ref) {
   const api = window.mailApi;
+  const { guard: attGuard, dialog: attGuardDialog } = useAttachmentGuard();
+  const [attPreview, setAttPreview] = useState<{ src: string; name: string } | null>(null);
+  const [attErr, setAttErr] = useState('');
+  type PrevRes = { ok: true; data: { kind: string; src?: string; filename: string } } | { ok: false; error: string } | undefined;
+  const runPreview = async (run: () => Promise<PrevRes>) => {
+    setAttErr('');
+    const r = await run();
+    if (r?.ok && r.data.kind === 'image' && r.data.src) setAttPreview({ src: r.data.src, name: r.data.filename });
+    else if (r && !r.ok) setAttErr(r.error);
+  };
+  /** vlastný súbor si používateľ práve vybral sám → bez varovania (spustiteľné súbory hlavný proces aj tak neotvorí);
+      príloha preposlanej cudzej správy → rovnaké varovanie ako pri čítaní */
+  const showPreview = (filename: string, run: () => Promise<PrevRes>, onSave?: () => void) =>
+    onSave ? attGuard(filename, () => runPreview(run), onSave) : void runPreview(run);
   const { init } = props;
   const [accountId, setAccountId] = useState(init.accountId ?? props.accounts[0]?.id ?? '');
   const [to, setTo] = useState<Contact[]>(() => splitAddresses(init.to ?? ''));
@@ -688,12 +703,18 @@ export const Composer = forwardRef<
                 <span key={`fw-${i}`} className="att-card" title={`${a.filename} – príloha preposlanej správy`}>
                   <span className={`att-ext ${extClass(a.filename)}`}>{extLabel(a.filename)}</span>
                   <span className="att-meta"><span className="att-name">{a.filename}</span><span className="att-size">{fmtSize(a.size)}</span></span>
+                  <button className="icon-x att-prev" aria-label={`Náhľad ${a.filename}`} title="Náhľad" onClick={() => { const o = init.original!; showPreview(a.filename, async () => api?.previewAttachment(o.accountId, o.folder, o.uid, a.index ?? i), () => void api?.saveAttachment(o.accountId, o.folder, o.uid, a.index ?? i)); }}>
+                    <PreviewSmallIcon />
+                  </button>
                 </span>
               ))}
             {files.map((f, i) => (
               <span key={`${f.path}-${i}`} className="att-card" title={f.filename}>
                 <span className={`att-ext ${extClass(f.filename)}`}>{extLabel(f.filename)}</span>
                 <span className="att-meta"><span className="att-name">{f.filename}</span><span className="att-size">{fmtSize(f.size)}</span></span>
+                <button className="icon-x att-prev" aria-label={`Náhľad ${f.filename}`} title="Náhľad" onClick={() => showPreview(f.filename, async () => api?.previewFile(f.path, f.filename))}>
+                  <PreviewSmallIcon />
+                </button>
                 <button className="icon-x" aria-label={`Odobrať ${f.filename}`} title="Odobrať prílohu" onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>
                   <CloseSmallIcon />
                 </button>
@@ -701,6 +722,14 @@ export const Composer = forwardRef<
             ))}
           </div>
         )}
+        {attErr && <div className="att-err" role="alert">{attErr}</div>}
+        {attPreview && (
+          <div className="att-preview" onClick={() => setAttPreview(null)} role="dialog" aria-label={`Náhľad ${attPreview.name}`}>
+            <div className="att-preview-bar">{attPreview.name} <span className="muted">– kliknutím zavrieť</span></div>
+            <img src={attPreview.src} alt={attPreview.name} />
+          </div>
+        )}
+        {attGuardDialog}
         {editor && <FormatBar editor={editor} onImage={() => imageInput.current?.click()} />}
         <div className="composer-editor">
           <EditorContent editor={editor} />

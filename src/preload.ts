@@ -22,6 +22,7 @@ const api: MailApi = {
   testNotification: () => inv('diag:testNotification'),
   printMessage: (id, folder, uid, pdf) => inv('mail:print', id, folder, uid, pdf),
   previewAttachment: (id, folder, uid, index) => inv('mail:preview', id, folder, uid, index),
+  previewFile: (file, filename) => inv('mail:previewFile', file, filename),
   unsubscribe: (id, u) => inv('mail:unsubscribe', id, u),
   backupExport: () => inv('backup:export'),
   backupImport: () => inv('backup:import'),
