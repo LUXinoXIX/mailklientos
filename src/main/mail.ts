@@ -507,11 +507,19 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     invite: inviteOf(p),
     unsubscribe: unsubscribeOf(p),
     auth: authOf(p),
-    attachments: (p.attachments ?? []).filter((a: any) => !/^text\/calendar/i.test(a.contentType ?? '')).map((a: any) => ({
-      filename: a.filename || 'príloha',
-      size: a.size ?? 0,
-      contentType: a.contentType,
-    })),
+    // index = poradie v pôvodnej správe (getAttachment); inline = obrázok vložený v texte (logo v podpise a pod.)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    attachments: (p.attachments ?? []).map((a: any, index: number) => ({ a, index }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter(({ a }: any) => !/^text\/calendar/i.test(a.contentType ?? ''))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map(({ a, index }: any) => ({
+        filename: a.filename || 'príloha',
+        size: a.size ?? 0,
+        contentType: a.contentType,
+        index,
+        inline: isInlineImage(a) || undefined,
+      })),
   };
 }
 
@@ -604,6 +612,14 @@ export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
   return true as const;
 }
 
+/** Obrázok, ktorý je súčasťou HTML textu (cid:, multipart/related) – logo v podpise, vložený obrázok. Nie je to „skutočná“ príloha. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isInlineImage(a: any): boolean {
+  if (!/^image\//i.test(a.contentType ?? '')) return false;
+  if (!a.cid) return false;
+  return a.related === true || a.contentDisposition === 'inline';
+}
+
 /** Prílohy pôvodnej správy pri preposlaní. */
 async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid: number }) {
   return withImap(acc, async (c) => {
@@ -614,7 +630,7 @@ async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid
       const p = await simpleParser(msg.source);
       return (p.attachments ?? [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((a: any) => a.contentDisposition !== 'inline' || !a.cid)
+        .filter((a: any) => !isInlineImage(a))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((a: any) => ({ filename: (a.filename as string) || 'priloha', content: a.content as Buffer, contentType: a.contentType }));
     } finally {

@@ -435,7 +435,7 @@ export const Composer = forwardRef<
 
   /** Text sľubuje prílohu, ale žiadna nie je (ako Outlook/Thunderbird). */
   function missingAttachment(input: SendInput) {
-    if (files.length || (init.kind === 'forward' && (init.original?.attachments.length ?? 0) > 0)) return false;
+    if (files.length || (init.kind === 'forward' && (init.original?.attachments.filter((a) => !a.inline).length ?? 0) > 0)) return false;
     // len vlastný text, nie citovaná pôvodná správa
     const own = (input.text.split(/\n-{2,}|\nOd: |\nFrom: /)[0] ?? '') + ' ' + input.subject;
     return /(v\s+prílohe|v\s+prilohe|prikladám|prikladam|priložen|prilozen|príloh[ua]|prilohu|attach)/i.test(own);
@@ -657,10 +657,10 @@ export const Composer = forwardRef<
             <input className="subject-input" aria-label="Predmet" placeholder="Pridajte predmet" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
         </div>
-        {(files.length > 0 || (init.kind === 'forward' && (init.original?.attachments.length ?? 0) > 0)) && (
+        {(files.length > 0 || (init.kind === 'forward' && (init.original?.attachments.filter((a) => !a.inline).length ?? 0) > 0)) && (
           <div className="composer-files" aria-label="Prílohy">
             {init.kind === 'forward' &&
-              init.original?.attachments.map((a, i) => (
+              init.original?.attachments.filter((a) => !a.inline).map((a, i) => (
                 <span key={`fw-${i}`} className="att-card" title={`${a.filename} – príloha preposlanej správy`}>
                   <span className={`att-ext ${extClass(a.filename)}`}>{extLabel(a.filename)}</span>
                   <span className="att-meta"><span className="att-name">{a.filename}</span><span className="att-size">{fmtSize(a.size)}</span></span>

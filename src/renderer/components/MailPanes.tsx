@@ -581,6 +581,7 @@ export function ReadingPane(props: {
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
+  const [showInline, setShowInline] = useState(false);
   const m = props.message;
   const api = window.mailApi;
   // Pri načítaní ostáva viditeľná predchádzajúca správa (žiadne biele bliknutie), hore len pásik priebehu.
@@ -689,12 +690,13 @@ export function ReadingPane(props: {
           })}
         </details>
       )}
-      {m.attachments.length > 0 && (
+      {m.attachments.some((a) => !a.inline || showInline) && (
         <div className="attachments">
-          {m.attachments.map((a, i) => (
+          {m.attachments.map((a, pos) => ({ a, pos, i: a.index ?? pos })).filter((x) => !x.a.inline || showInline).map(({ a, pos, i }) => (
             <span
-              key={i}
-              className="attachment"
+              key={pos}
+              className={`attachment ${a.inline ? 'inline-img' : ''}`}
+              title={a.inline ? 'Obrázok z textu správy (napr. logo v podpise)' : undefined}
               onContextMenu={(e) => {
                 if (!props.onAttachmentContext || demo) return;
                 e.preventDefault();
@@ -727,6 +729,13 @@ export function ReadingPane(props: {
             </span>
           ))}
         </div>
+      )}
+      {m.attachments.some((a) => a.inline) && (
+        <button className="link inline-toggle" onClick={() => setShowInline(!showInline)}>
+          {showInline
+            ? 'Skryť obrázky z textu správy'
+            : `+ ${m.attachments.filter((a) => a.inline).length} ${m.attachments.filter((a) => a.inline).length === 1 ? 'obrázok' : m.attachments.filter((a) => a.inline).length < 5 ? 'obrázky' : 'obrázkov'} z textu správy (logo v podpise) – zobraziť`}
+        </button>
       )}
       {m.html && !showImages && (
         <div className="images-bar">
