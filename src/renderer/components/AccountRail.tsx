@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { AccountPublic } from '../../core/account';
 import { AddIcon, AllInboxIcon, InfoIcon, PinIcon, SettingsIcon } from '../icons';
 import { accountColor } from '../theme';
+import { AccountIconContent } from './AccountIcon';
 
 export const ALL = 'all';
 
@@ -213,7 +214,7 @@ export function AccountRail(props: {
           <Tooltip key={a.id} content={`${a.name} – ${a.email}${n ? ` · ${fmt(n)} neprečítaných` : ''}`} relationship="label" positioning="after">
             <button className={`acc-btn ${on ? 'on' : ''} ${drag === a.id ? 'dragging' : ''}`} onClick={() => props.onSelect(a.id)} aria-pressed={on} {...dragProps(a)}>
               <span className="acc-sq" style={on ? { background: color, color: '#fff', borderColor: color } : { borderLeftColor: color }}>
-                {initials(a.name)}
+                <AccountIconContent cfg={a} fallback={initials(a.name)} />
                 {n > 0 && <span className="acc-new" style={{ background: on ? '#fff' : color }} />}
               </span>
               <span className="acc-label">{kindWord(a) || a.name}</span>
