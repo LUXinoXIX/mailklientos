@@ -23,7 +23,7 @@ jobs:
           - os: windows-latest
             label: windows
           # macOS: Apple Silicon (M1–M4), bez podpisu Apple (ad-hoc podpis, prvé spustenie cez „Aj tak otvoriť“)
-          - os: macos-latest
+          - os: macos-15
             label: macos
           - os: ubuntu-latest
             label: linux
