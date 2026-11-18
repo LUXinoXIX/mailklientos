@@ -14,8 +14,8 @@ module.exports = {
     extraResource: ['assets/tray.png'],
     // macOS: názov v Docku, Finderi a v hornom menu (priečinok nastavení ostáva podľa productName)
     extendInfo: {
+      // CFBundleName nemeniť – Electron podľa neho hľadá pomocné procesy („MailKlient Helper“)
       CFBundleDisplayName: 'Universum eMail',
-      CFBundleName: 'Universum eMail',
       NSHumanReadableCopyright: 'Universum',
     },
     win32metadata: {
