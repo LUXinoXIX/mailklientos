@@ -23,8 +23,10 @@ jobs:
           - os: windows-latest
             label: windows
           # macOS: Apple Silicon (M1–M4), bez podpisu Apple (ad-hoc podpis, prvé spustenie cez „Aj tak otvoriť“)
-          - os: macos-15
+          # Mac s čipom M sú na GitHube často bez voľnej kapacity → zostavuje sa na Intel Macu krížovo pre arm64
+          - os: macos-15-intel
             label: macos
+            makeargs: -- --arch=arm64
           - os: ubuntu-latest
             label: linux
     runs-on: ${{ matrix.os }}
@@ -75,7 +77,7 @@ jobs:
 
       - name: Zostavenie inštalátora
         run: |
-          npm run make 2>&1 | tee ci/make.log
+          npm run make ${{ matrix.makeargs }} 2>&1 | tee ci/make.log
           exit ${PIPESTATUS[0]}
 
       # macOS bez Apple Developer účtu: ad-hoc podpis celej aplikácie (na Macoch s čipom M musí byť každý
@@ -92,18 +94,6 @@ jobs:
           mkdir -p out/make/zip/darwin
           ditto -c -k --sequesterRsrc --keepParent "$app" "out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip"
           ls -la out/make/zip/darwin | tee -a ci/macsign.log
-
-      - name: macOS – dymový test spustenia
-        if: matrix.label == 'macos'
-        continue-on-error: true
-        run: |
-          app=$(ls -d out/*-darwin-*/*.app | head -1)
-          bin=$(ls "$app/Contents/MacOS/" | head -1)
-          "$app/Contents/MacOS/$bin" --enable-logging=stderr > ci/smoke.log 2>&1 &
-          pid=$!
-          sleep 25
-          screencapture -x ci/screenshot.png || true
-          if kill -0 $pid 2>/dev/null; then echo "beží" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA" | tee -a ci/smoke.log; exit 1; fi
 
       # Dymový test: aplikácia musí naštartovať a 25 s bežať bez pádu (Linux, virtuálny displej).
       - name: Dymový test spustenia
