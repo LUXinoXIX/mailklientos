@@ -1,5 +1,6 @@
 // Písanie správy priamo v čítacom paneli (ako Outlook): formátovaný text (TipTap), príjemcovia s dopĺňaním,
 // podpis podľa konta, citácia pôvodnej správy v štýle Outlooku, prílohy (aj pretiahnutím), priebežné koncepty.
+import { kb } from '../platform';
 import { Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverSurface, PopoverTrigger, Input, Select, Tooltip } from '@fluentui/react-components';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -187,9 +188,9 @@ export function FormatBar({ editor, onImage, table = true }: { editor: Editor; o
         {SIZES.map((f) => <option key={f} value={f}>{f}</option>)}
       </Select>
       <span className="fmt-sep" />
-      <Tb label="Tučné (Ctrl+B)" active={editor.isActive('bold')} onClick={() => chain().toggleBold().run()} style={{ fontWeight: 700 }}>B</Tb>
-      <Tb label="Kurzíva (Ctrl+I)" active={editor.isActive('italic')} onClick={() => chain().toggleItalic().run()} style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>I</Tb>
-      <Tb label="Podčiarknuté (Ctrl+U)" active={editor.isActive('underline')} onClick={() => chain().toggleUnderline().run()} style={{ textDecoration: 'underline' }}>U</Tb>
+      <Tb label={kb("Tučné (Ctrl+B)")} active={editor.isActive('bold')} onClick={() => chain().toggleBold().run()} style={{ fontWeight: 700 }}>B</Tb>
+      <Tb label={kb("Kurzíva (Ctrl+I)")} active={editor.isActive('italic')} onClick={() => chain().toggleItalic().run()} style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>I</Tb>
+      <Tb label={kb("Podčiarknuté (Ctrl+U)")} active={editor.isActive('underline')} onClick={() => chain().toggleUnderline().run()} style={{ textDecoration: 'underline' }}>U</Tb>
       <Tb label="Prečiarknuté" active={editor.isActive('strike')} onClick={() => chain().toggleStrike().run()} style={{ textDecoration: 'line-through' }}>S</Tb>
       <Menu>
         <MenuTrigger disableButtonEnhancement>
@@ -707,7 +708,7 @@ export const Composer = forwardRef<
         <div className="composer-foot">
           <Button size="small" icon={<AttachIcon />} onClick={() => void attach()}>Priložiť súbor</Button>
           {zimbraOn && <Button size="small" onClick={() => setBriefcase(true)}>Z Aktovky</Button>}
-          <span className="muted small">Súbory aj obrázky môžeš pretiahnuť sem alebo vložiť cez Ctrl+V.</span>
+          <span className="muted small">Súbory aj obrázky môžeš pretiahnuť sem alebo vložiť cez {kb("Ctrl+V")}.</span>
         </div>
         {briefcase && (
           <BriefcasePicker

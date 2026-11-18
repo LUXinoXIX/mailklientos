@@ -1,4 +1,5 @@
 // O programe: verzia, autori, použité technológie a licencie.
+import { kb } from '../platform';
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import icon from '../app-icon.svg';
@@ -84,7 +85,7 @@ export function ShortcutsDialog(props: { onClose: () => void }) {
             <table className="keys">
               <tbody>
                 {SHORTCUTS.map(([k, d]) => (
-                  <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>
+                  <tr key={k}><td><kbd>{kb(k)}</kbd></td><td>{d}</td></tr>
                 ))}
               </tbody>
             </table>
