@@ -30,14 +30,15 @@ export function moduleUrl(m: M365Module, host: 'office' | 'live' = 'office'): st
     case 'people': return o ? 'https://outlook.office.com/people/' : 'https://outlook.live.com/people/';
     case 'todo': return o ? 'https://to-do.office.com/tasks/' : 'https://to-do.live.com/tasks/';
     case 'teams': return o ? 'https://teams.microsoft.com/' : 'https://teams.live.com/';
-    case 'onedrive': return o ? 'https://www.office.com/launch/onedrive' : 'https://onedrive.live.com/';
-    case 'word': return 'https://www.office.com/launch/word';
-    case 'excel': return 'https://www.office.com/launch/excel';
-    case 'powerpoint': return 'https://www.office.com/launch/powerpoint';
+    case 'onedrive': return o ? 'https://www.office.com/launch/onedrive?auth=2' : 'https://onedrive.live.com/';
+    // auth=2 = pracovné/školské konto, auth=1 = osobné konto Microsoft
+    case 'word': return `https://www.office.com/launch/word?auth=${o ? 2 : 1}`;
+    case 'excel': return `https://www.office.com/launch/excel?auth=${o ? 2 : 1}`;
+    case 'powerpoint': return `https://www.office.com/launch/powerpoint?auth=${o ? 2 : 1}`;
     case 'copilot': return o ? 'https://m365.cloud.microsoft/chat' : 'https://copilot.microsoft.com/';
-    case 'planner': return o ? 'https://planner.cloud.microsoft/' : 'https://to-do.live.com/tasks/';
-    case 'sharepoint': return 'https://www.office.com/launch/sharepoint';
-    case 'onenote': return o ? 'https://www.office.com/launch/onenote' : 'https://www.onenote.com/notebooks';
+    case 'planner': return 'https://tasks.office.com/'; // klasický Planner, len firemné kontá
+    case 'sharepoint': return 'https://www.office.com/launch/sharepoint?auth=2';
+    case 'onenote': return o ? 'https://www.office.com/launch/onenote?auth=2' : 'https://www.onenote.com/notebooks';
     case 'forms': return 'https://forms.office.com/';
     case 'loop': return 'https://loop.cloud.microsoft/';
   }

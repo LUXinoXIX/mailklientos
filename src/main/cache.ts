@@ -237,7 +237,7 @@ export function removeFolder(account: string, folder?: string) {
 }
 
 /** Fulltext: slová ako predpony („rozpo“ nájde „Rozpočet“), bez ohľadu na diakritiku a veľkosť písmen. */
-export function search(query: string, opts: { account?: string; folder?: string; limit?: number } = {}): MessageSummary[] {
+export function search(query: string, opts: { account?: string; folder?: string; limit?: number; field?: string } = {}): MessageSummary[] {
   const words = query
     .normalize('NFC')
     .split(/[\s"'()*:^+-]+/)
@@ -245,7 +245,10 @@ export function search(query: string, opts: { account?: string; folder?: string;
     .filter((w) => w.length > 0)
     .slice(0, 8);
   if (!words.length) return [];
-  const match = words.map((w) => `"${w.replace(/"/g, '')}"*`).join(' AND ');
+  const cols: Record<string, string> = { all: '', people: '{subject sender recipients}', subject: '{subject}', body: '{body}', from: '{sender}', to: '{recipients}' };
+  const col = cols[opts.field ?? 'all'] ?? '';
+  const terms = words.map((w) => `"${w.replace(/"/g, '')}"*`).join(' AND ');
+  const match = col ? `${col} : (${terms})` : terms;
   return safe((d) => {
     const where = ['fts MATCH ?'];
     const args: (string | number)[] = [match];

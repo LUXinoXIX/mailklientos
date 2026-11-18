@@ -12,7 +12,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
-import { syncWatchers, testNotification } from './watch';
+import { reconnectWatchers, syncWatchers, testNotification } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
 import { snooze } from './snooze';
@@ -93,8 +93,8 @@ export function registerIpc() {
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));
   handle('mail:list', (id: string, folder: string, limit?: number, preview?: boolean) => mail.listMessages(store.getImap(id), folder, limit, preview));
   handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
-  handle('mail:search', (q: string, accountId?: string, folder?: string) => cache.search(q, { account: accountId, folder }));
-  handle('mail:searchServer', (id: string, folder: string, q: string) => mail.searchServer(store.getImap(id), folder, q));
+  handle('mail:search', (q: string, accountId?: string, folder?: string, field?: string) => cache.search(q, { account: accountId, folder, field }));
+  handle('mail:searchServer', (id: string, folder: string, q: string, field?: string) => mail.searchServer(store.getImap(id), folder, q, 200, field));
   handle('mail:keywords', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
     mail.setKeywords(store.getImap(id), folder, uids, add, remove));
   handle('mail:thread', (id: string, messageId: string) => cache.threadOf(id, messageId));
@@ -109,6 +109,23 @@ export function registerIpc() {
   handle('outbox:queue', (id: string, input: SendInput, sendAt: string, kind: 'undo' | 'later') => outbox.queue(id, input, new Date(sendAt), kind));
   handle('outbox:cancel', (outId: string) => outbox.cancel(outId));
   handle('outbox:list', () => outbox.list());
+  handle('window:message', (id: string, folder: string, uid: number) => {
+    openComposeWindow?.({ view: '1', acc: id, folder, uid: String(uid) });
+    return true as const;
+  });
+  handle('window:reply', (id: string, folder: string, uid: number, mode: string) => {
+    openComposeWindow?.({ compose: '1', mode, acc: id, folder, uid: String(uid) });
+    return true as const;
+  });
+  // zmena správy v inom okne → ostatné okná obnovia zoznam
+  handle('mail:changed', (id: string, folder: string) => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('app:event', { type: 'mail-changed', accountId: id, folder, newCount: 0 });
+    return true as const;
+  });
+  handle('mail:sendReceive', async () => {
+    reconnectWatchers();
+    return { retried: await outbox.flushRetries() };
+  });
   handle('window:compose', (id: string, folder: string, uid: number) => {
     openComposeWindow?.({ compose: '1', acc: id, folder, uid: String(uid) });
     return true as const;

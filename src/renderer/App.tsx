@@ -3,7 +3,7 @@ import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
-import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
+import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, SEARCH_FIELDS, type SearchField, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
 import { Composer, type ComposeInit, type ComposeKind, type ComposerHandle, type ComposerState } from './components/Composer';
@@ -17,6 +17,8 @@ import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
 import { CryptoDialog } from './components/CryptoDialog';
 import { AboutDialog, ShortcutsDialog } from './components/AboutDialog';
+import { MailIcon } from './icons';
+import { MessageView, type MessageRef } from './components/MessageView';
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
@@ -25,7 +27,7 @@ import { CalendarView } from './components/CalendarView';
 import { ContactsView } from './components/ContactsView';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
 import { accountColor, getTheme, themeById, themeVars, type ThemeKey } from './theme';
@@ -60,7 +62,7 @@ type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
-  | { kind: 'm365'; edit?: M365Account }
+  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
@@ -84,7 +86,37 @@ const SMOKE_MODE = new URLSearchParams(window.location.search).get('smoke') ?? '
 const SMOKE = SMOKE_MODE === 'm365';
 // samostatné okno písania (koncept otvorený z hlavného okna)
 const POP = new URLSearchParams(window.location.search);
-const POP_COMPOSE = POP.get('compose') === '1' ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')) } : null;
+const POP_COMPOSE =
+  POP.get('compose') === '1'
+    ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')), mode: (POP.get('mode') ?? '') as '' | 'reply' | 'replyAll' | 'forward' }
+    : null;
+// samostatné okno so správou
+const POP_VIEW = POP.get('view') === '1' ? { accountId: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')) } : null;
+/** počet správ načítaných naraz do zoznamu (ďalšie po posunutí na koniec) */
+const PAGE = 200;
+
+/** Odpoveď / preposlanie: adresáti a predmet ako v Outlooku. */
+function replyInit(m: MessageFull, kind: 'reply' | 'replyAll' | 'forward', accountId: string | undefined, myEmail: string): ComposeInit {
+  const me = myEmail.toLowerCase();
+  const subject =
+    kind === 'forward'
+      ? /^(fw|fwd|pd):/i.test(m.subject) ? m.subject : `PD: ${m.subject}`
+      : /^(re|odp):/i.test(m.subject) ? m.subject : `RE: ${m.subject}`;
+  const cc =
+    kind === 'replyAll'
+      ? [...splitAddrs(m.to), ...splitAddrs(m.cc)]
+          .filter((a) => !a.toLowerCase().includes(me) && !a.toLowerCase().includes(m.fromAddress.toLowerCase()))
+          .join(', ')
+      : '';
+  return {
+    kind,
+    accountId,
+    original: m,
+    to: kind === 'forward' ? '' : m.fromName ? `"${m.fromName.replace(/"/g, '')}" <${m.fromAddress}>` : m.fromAddress,
+    cc,
+    subject,
+  };
+}
 
 export function App() {
   const api = window.mailApi;
@@ -117,6 +149,10 @@ export function App() {
   // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
   const [undo, setUndo] = useState<OutboxItem | null>(null);
   const [updateReady, setUpdateReady] = useState<string | null>(null);
+  const [msgTabs, setMsgTabs] = useState<Array<{ key: string; ref: MessageRef; title: string }>>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [limits, setLimits] = useState<Record<string, number>>({});
+  const [hasMore, setHasMore] = useState(false);
   const [followupEv, setFollowupEv] = useState<{ subject: string; to: string; accountId: string } | null>(null);
   const [searchAll, setSearchAll] = useState(false);
   const [outboxTick, setOutboxTick] = useState(0);
@@ -317,7 +353,7 @@ export function App() {
   // správy
   const showMail = !activeM365 && (activeImap ? (imapModule[activeImap.id] ?? 'mail') === 'mail' : true);
   useEffect(() => {
-    if (!showMail) return;
+    if (!showMail || POP_VIEW || POP_COMPOSE) return;
     let cancelled = false;
     (async () => {
       if (demo) {
@@ -334,14 +370,16 @@ export function App() {
       }
       const byDate = (a: MessageSummary, b: MessageSummary) => (b.date ?? '').localeCompare(a.date ?? '');
       // 1) okamžite z lokálnej cache (aj offline)
-      const cached = await Promise.all(targets.map((t) => api.listCached(t.id, t.folder, 50)));
+      const limit = limits[`${selection.accountId}/${selection.folder}`] ?? PAGE;
+      const cached = await Promise.all(targets.map((t) => api.listCached(t.id, t.folder, limit)));
       if (cancelled) return;
       const fromCache = cached.flatMap((r) => (r.ok ? r.data : [])).sort(byDate);
       if (fromCache.length && !mailTick) setMessages(fromCache);
       if (!mailTick || !messages.length) setListState({ loading: true });
       // 2) aktuálny stav zo servera (uloží sa aj do cache)
-      const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, 50, !!settings.previewLine)));
+      const results = await Promise.all(targets.map((t) => api.listMessages(t.id, t.folder, limit, !!settings.previewLine)));
       if (cancelled) return;
+      setHasMore(results.some((r) => r.ok && r.data.length >= limit));
       const errors = results.flatMap((r, i) => (r.ok ? [] : [`${accounts.find((a) => a.id === targets[i]!.id)?.name}: ${r.error}`]));
       const all = results.flatMap((r, i) => (r.ok ? r.data : cached[i]?.ok ? cached[i].data : [])).sort(byDate);
       setMessages(all);
@@ -351,7 +389,45 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [selection, accounts, demo, api, refreshKey, showMail, mailTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selection, accounts, demo, api, refreshKey, showMail, mailTick, limits]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Odoslať a prijať: všetky kontá, neodoslané správy znova. */
+  async function sendReceive() {
+    if (!api) return;
+    setStatus('Odosielam a prijímam…');
+    const r = await api.sendReceive();
+    setRefreshKey((x) => x + 1);
+    setMailTick((t) => t + 1);
+    setStatus(r.ok ? (r.data.retried ? `Prijaté; znova odosielam ${r.data.retried} neodoslan${r.data.retried === 1 ? 'ú správu' : 'é správy'}.` : 'Pošta skontrolovaná na všetkých kontách.') : r.error);
+  }
+
+  function loadMore() {
+    const k = `${selection.accountId}/${selection.folder}`;
+    setLimits((l) => ({ ...l, [k]: (l[k] ?? PAGE) + 500 }));
+    setMailTick((t) => t + 1);
+  }
+
+  /** Dvojklik: samostatné okno (predvolené) alebo karta; Shift = opačne. */
+  function openFull(m: MessageSummary, alt = false) {
+    if (!api || m.accountId === DEMO_ID) return;
+    if (isDrafts(m)) return void editDraft(m);
+    const mode = settings.openMode ?? 'window';
+    const asWindow = alt ? mode !== 'window' : mode === 'window';
+    if (asWindow) return void api.messageWindow(m.accountId, m.folder, m.uid);
+    const key = `${m.accountId}/${m.folder}/${m.uid}`;
+    setMsgTabs((t) => (t.some((x) => x.key === key) ? t : [...t, { key, ref: { accountId: m.accountId, folder: m.folder, uid: m.uid }, title: m.subject }]));
+    setActiveTab(key);
+  }
+  function closeMsgTab(key: string) {
+    setMsgTabs((t) => {
+      const rest = t.filter((x) => x.key !== key);
+      if (activeTab === key) {
+        const i = t.findIndex((x) => x.key === key);
+        setActiveTab(rest[i]?.key ?? rest[i - 1]?.key ?? null);
+      }
+      return rest;
+    });
+  }
 
   // otvorenie správy z upozornenia Windows
   useEffect(() => {
@@ -506,7 +582,8 @@ export function App() {
   function saveCurrentSearch() {
     const q = search.trim();
     if (!q) return;
-    const s2: SavedSearch = { id: Math.random().toString(36).slice(2, 10), name: q, query: q, accountId: selection.accountId === ALL ? undefined : selection.accountId };
+    const fl = SEARCH_FIELDS.find((x) => x.id === searchField);
+    const s2: SavedSearch = { id: Math.random().toString(36).slice(2, 10), name: searchField === 'all' ? q : `${q} (${fl?.label.toLowerCase()})`, query: q, accountId: selection.accountId === ALL ? undefined : selection.accountId, field: searchField };
     saveSettings({ ...settings, savedSearches: [...(settings.savedSearches ?? []), s2] });
     setStatus(`Hľadanie „${q}“ uložené medzi priečinky.`);
   }
@@ -674,7 +751,7 @@ export function App() {
   // počet neprečítaných: ikona pri hodinách a odznak na paneli úloh
   const totalUnread = Object.values(unread).reduce((a, b) => a + (b || 0), 0);
   useEffect(() => {
-    if (!api || POP_COMPOSE) return;
+    if (!api || POP_COMPOSE || POP_VIEW) return;
     let badge: string | undefined;
     if (totalUnread > 0) {
       const c = document.createElement('canvas');
@@ -705,7 +782,8 @@ export function App() {
     const k = e.key.toLowerCase();
     if (ctrl && e.key === 'Enter' && composeView) return e.preventDefault(), composerRef.current?.send();
     if (ctrl && k === 'e') return e.preventDefault(), document.querySelector<HTMLInputElement>('.topbar-search input')?.focus();
-    if (typing || dialog.kind !== 'none') return;
+    if (typing || dialog.kind !== 'none' || activeTab) return;
+    if (e.key === 'Enter' && current && !ctrl) return e.preventDefault(), openFull(current, e.shiftKey);
     if (ctrl && k === 'n') return e.preventDefault(), compose('new');
     if (ctrl && e.shiftKey && k === 'r') return e.preventDefault(), full.msg && compose('replyAll');
     if (ctrl && k === 'r') return e.preventDefault(), full.msg && compose('reply');
@@ -716,7 +794,7 @@ export function App() {
     if (e.key === 'Insert') return e.preventDefault(), current && void toggleFlag();
     if (e.key === 'Delete' && current) return e.preventDefault(), void del();
     if (ctrl && e.shiftKey && k === 'v') return e.preventDefault(), setStatus('Presun: použite Domov → Presunúť alebo pretiahnite správu na priečinok.');
-    if (e.key === 'F9') return e.preventDefault(), setRefreshKey((x) => x + 1);
+    if (e.key === 'F9') return e.preventDefault(), void sendReceive();
     if (ctrl && ['1', '2', '3', '4'].includes(e.key) && activeImap) {
       e.preventDefault();
       const mod = (['mail', 'calendar', 'contacts', 'tasks'] as ImapModule[])[Number(e.key) - 1]!;
@@ -787,28 +865,8 @@ export function App() {
       setCompose({ init: { kind: 'new', accountId }, key: Date.now() });
       return;
     }
-    const me = (imapAccounts.find((a) => a.id === m.accountId)?.email ?? '').toLowerCase();
-    const subject =
-      kind === 'forward'
-        ? /^(fw|fwd|pd):/i.test(m.subject) ? m.subject : `PD: ${m.subject}`
-        : /^(re|odp):/i.test(m.subject) ? m.subject : `RE: ${m.subject}`;
-    const cc =
-      kind === 'replyAll'
-        ? [...splitAddrs(m.to), ...splitAddrs(m.cc)]
-            .filter((a) => !a.toLowerCase().includes(me) && !a.toLowerCase().includes(m.fromAddress.toLowerCase()))
-            .join(', ')
-        : '';
-    setCompose({
-      init: {
-        kind,
-        accountId,
-        original: m,
-        to: kind === 'forward' ? '' : m.fromName ? `"${m.fromName.replace(/"/g, '')}" <${m.fromAddress}>` : m.fromAddress,
-        cc,
-        subject,
-      },
-      key: Date.now(),
-    });
+    const me = imapAccounts.find((a) => a.id === m.accountId)?.email ?? '';
+    setCompose({ init: replyInit(m, kind, accountId, me), key: Date.now() });
   }
 
   // dymový test v CI: otvorená odpoveď na ukážkovú správu
@@ -862,6 +920,9 @@ export function App() {
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
   const searchScope = selection.accountId === ALL || searchAll ? undefined : selection.accountId;
+  const [searchField, setSearchField] = useState<SearchField>('all');
+  useEffect(() => setSearchField(settings.searchField ?? 'all'), [settings.searchField]);
+  const serverAuto = settings.searchServerAuto !== false;
   useEffect(() => {
     const q = search.trim();
     if (!api || demo || q.length < 2) {
@@ -869,17 +930,34 @@ export function App() {
       return;
     }
     const t = window.setTimeout(() => {
-      void api.searchLocal(q, searchScope).then((r) => r.ok && setFound({ q, list: r.data }));
-    }, 250);
+      void api.searchLocal(q, searchScope, undefined, searchField).then((r) => {
+        if (!r.ok) return;
+        setFound({ q, list: r.data });
+        if (serverAuto) void searchOnServer({ q, list: r.data });
+      });
+    }, serverAuto ? 600 : 250);
     return () => window.clearTimeout(t);
-  }, [search, searchScope, api, demo, mailTick]);
+  }, [search, searchScope, api, demo, mailTick, searchField, serverAuto]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function searchOnServer() {
-    if (!api || !found) return;
-    const q = found.q;
-    setFound({ ...found, server: 'loading' });
+  // nedávne hľadania: uložiť, keď sa hľadanie chvíľu nemení
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) return;
+    const t = window.setTimeout(() => {
+      const h = settings.searchHistory ?? [];
+      if (h[0] === q) return;
+      saveSettings({ ...settings, searchHistory: [q, ...h.filter((x) => x !== q)].slice(0, 10) });
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function searchOnServer(base?: { q: string; list: MessageSummary[] }) {
+    const cur = base ?? found;
+    if (!api || !cur) return;
+    const q = cur.q;
+    setFound({ ...cur, server: 'loading' });
     const targets = searchScope ? [{ id: searchScope, folder: selection.folder }] : accounts.filter(isImap).map((a) => ({ id: a.id, folder: 'INBOX' }));
-    const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, q)));
+    const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, q, searchField)));
     setFound((f) => {
       if (!f || f.q !== q) return f;
       const key = (m: MessageSummary) => `${m.accountId}|${m.folder}|${m.uid}`;
@@ -947,17 +1025,28 @@ export function App() {
   // samostatné okno písania: načítať koncept a zobraziť len editor
   const [popInit, setPopInit] = useState<ComposeInit | null>(null);
   const [popDone, setPopDone] = useState(false);
+  const popStarted = useRef(false);
   useEffect(() => {
     if (POP_COMPOSE && popDone && !undo && !composeView) window.setTimeout(() => window.close(), 300);
   }, [popDone, undo, composeView]);
   useEffect(() => {
-    if (!POP_COMPOSE || !api) return;
+    if (!POP_COMPOSE || !api || popStarted.current) return;
+    if (POP_COMPOSE.mode && !accounts.length) return;
+    popStarted.current = true;
+    if (POP_COMPOSE.mode) {
+      void api.getMessage(POP_COMPOSE.acc, POP_COMPOSE.folder, POP_COMPOSE.uid).then((r) => {
+        if (!r.ok) return setStatus(r.error);
+        const me = accounts.find((a) => a.id === POP_COMPOSE.acc);
+        setPopInit(replyInit(r.data, POP_COMPOSE.mode as 'reply', POP_COMPOSE.acc, me && isImap(me) ? me.email : ''));
+      });
+      return;
+    }
     void api.openDraft(POP_COMPOSE.acc, POP_COMPOSE.folder, POP_COMPOSE.uid).then((r) => {
       if (!r.ok) return setStatus(r.error);
       const d = r.data.msg;
       setPopInit({ kind: 'new', accountId: POP_COMPOSE.acc, to: d.to, cc: d.cc, subject: d.subject === '(bez predmetu)' ? '' : d.subject, html: d.html ?? `<p>${d.text}</p>`, draft: { folder: POP_COMPOSE.folder, uid: POP_COMPOSE.uid }, files: r.data.files });
     });
-  }, [api]);
+  }, [api, accounts.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (POP_COMPOSE) {
     const imapOnly = accounts.filter(isImap);
     return (
@@ -994,6 +1083,16 @@ export function App() {
     );
   }
 
+  if (POP_VIEW) {
+    return (
+      <FluentProvider theme={getTheme(themeDef)}>
+        <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''} pop-view`} style={themeVars(themeDef)}>
+          <MessageView start={POP_VIEW} standalone color={colorOf(POP_VIEW.accountId)} categories={categoriesOf(settings)} />
+        </div>
+      </FluentProvider>
+    );
+  }
+
   const m365State = activeM365 ? tabs[activeM365.id] ?? initialTabs(activeM365) : null;
   const m365ActiveModule = m365State ? m365State.tabs.find((t) => t.key === m365State.active)?.module ?? null : null;
 
@@ -1021,7 +1120,7 @@ export function App() {
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? '365' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
@@ -1033,12 +1132,22 @@ export function App() {
         />
         <div className="workspace">
           <TopBar
-            kind={activeM365 ? 'OUTLOOK WEB' : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
             search={search}
             onSearch={activeM365 ? undefined : setSearch}
+            searchOptions={{
+              field: searchField,
+              onField: (f) => saveSettings({ ...settings, searchField: f }),
+              serverAuto,
+              onServerAuto: (v) => saveSettings({ ...settings, searchServerAuto: v }),
+              history: settings.searchHistory ?? [],
+              onHistory: (q) => setSearch(q),
+              onClearHistory: () => saveSettings({ ...settings, searchHistory: [] }),
+              onSaveFolder: search.trim() ? saveCurrentSearch : undefined,
+            }}
             rightOpen={rightOpen}
             onToggleRight={() => setRightOpen(!rightOpen)}
           />
@@ -1083,6 +1192,9 @@ export function App() {
               }}
               runInBackground={settings.runInBackground !== false}
               onRunInBackground={(v) => saveSettings({ ...settings, runInBackground: v })}
+              openMode={settings.openMode ?? 'window'}
+              onOpenMode={(v) => saveSettings({ ...settings, openMode: v })}
+              onSendReceive={() => void sendReceive()}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
@@ -1139,7 +1251,7 @@ export function App() {
           )}
           <main className={`body ${rightOpen ? 'with-right' : ''}`}>
             {activeM365 ? (
-              <ModuleRail modules={M365_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
                 modules={IMAP_MODULES}
@@ -1171,7 +1283,45 @@ export function App() {
                 />
               ))}
               {activeM365 ? null : showMail ? (
-                <div className="mail">
+                <div className="mail-wrap">
+                {msgTabs.length > 0 && (
+                  <div className="msgtabs" role="tablist" aria-label="Otvorené správy">
+                    <button role="tab" aria-selected={!activeTab} className={`msgtab ${!activeTab ? 'on' : ''}`} onClick={() => setActiveTab(null)}>
+                      <MailIcon fontSize={16} /> <span className="t">Pošta</span>
+                    </button>
+                    {msgTabs.map((t) => (
+                      <div
+                        key={t.key}
+                        role="tab"
+                        tabIndex={0}
+                        aria-selected={activeTab === t.key}
+                        className={`msgtab ${activeTab === t.key ? 'on' : ''}`}
+                        title={t.title}
+                        onClick={() => setActiveTab(t.key)}
+                        onAuxClick={(e) => e.button === 1 && closeMsgTab(t.key)}
+                      >
+                        <span className="t">{t.title}</span>
+                        <button className="x" aria-label={`Zavrieť ${t.title}`} onClick={(e) => (e.stopPropagation(), closeMsgTab(t.key))}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {msgTabs.map((t) => (
+                  <div key={t.key} className="msgtab-pane" style={{ display: activeTab === t.key ? undefined : 'none' }}>
+                    <MessageView
+                      start={t.ref}
+                      color={colorOf(t.ref.accountId)}
+                      categories={categoriesOf(settings)}
+                      onTitle={(title) => setMsgTabs((all) => all.map((x) => (x.key === t.key ? { ...x, title } : x)))}
+                      onPopOut={(r) => {
+                        void api?.messageWindow(r.accountId, r.folder, r.uid);
+                        closeMsgTab(t.key);
+                      }}
+                      onClose={() => closeMsgTab(t.key)}
+                    />
+                  </div>
+                ))}
+                <div className="mail" style={{ display: activeTab ? 'none' : undefined }}>
                   <FolderPane
                     account={activeImap}
                     accounts={imapAccounts}
@@ -1192,6 +1342,7 @@ export function App() {
                     activeSearch={search.trim()}
                     onSavedSearch={(x) => {
                       if (x.accountId && x.accountId !== selection.accountId) setSelection({ accountId: x.accountId, folder: 'INBOX' });
+                      setSearchField(x.field ?? 'all');
                       setSearch(x.query);
                     }}
                     onRemoveSearch={(x) => saveSettings({ ...settings, savedSearches: (settings.savedSearches ?? []).filter((y) => y.id !== x.id) })}
@@ -1223,6 +1374,9 @@ export function App() {
                     selected={current}
                     colorOf={colorOf}
                     onOpen={(m) => void (isDrafts(m) ? editDraft(m) : open(m))}
+                    onOpenFull={(m, alt) => openFull(m, alt)}
+                    onLoadMore={!found && hasMore && !demo ? loadMore : undefined}
+                    loadingMore={listState.loading}
                     onDeleteKey={() => void del()}
                   />
                   {composeView ? (
@@ -1266,6 +1420,7 @@ export function App() {
                         : undefined
                     }
                     onPrint={(pdf) => void runIo(pdf ? 'pdf' : 'print')}
+                    onPopOut={full.msg && full.msg.accountId !== DEMO_ID ? () => void api?.messageWindow(full.msg!.accountId, full.msg!.folder, full.msg!.uid) : undefined}
                     onUnsubscribe={
                       full.msg?.unsubscribe && full.msg.accountId !== DEMO_ID
                         ? async () => {
@@ -1284,6 +1439,7 @@ export function App() {
                     }}
                   />
                   )}
+                </div>
                 </div>
               ) : (
                 curImapModule === 'tasks' ? (
@@ -1426,7 +1582,7 @@ export function App() {
         <AddAccountChooser
           onClose={closeDialog}
           onImap={() => openDialog({ kind: 'imap' })}
-          onM365={() => openDialog({ kind: 'm365' })}
+          onM365={(host) => openDialog({ kind: 'm365', host })}
         />
       )}
       {dialog.kind === 'imap' && (
@@ -1454,6 +1610,7 @@ export function App() {
         <M365Dialog
           key={dialogKey}
           edit={dialog.edit}
+          host={dialog.host}
           usedColors={accounts.map((a) => accountColor(a.color))}
           onClose={closeDialog}
           onSaved={(a) => {

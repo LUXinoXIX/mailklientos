@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -216,6 +216,11 @@ export function MessageList(props: {
   conversations?: boolean;
   density?: 'comfortable' | 'compact';
   previewLine?: boolean;
+  /** dvojklik (shift = opačný spôsob než v nastavení) */
+  onOpenFull?: (m: MessageSummary, alt: boolean) => void;
+  /** v priečinku sú staršie správy, ktoré ešte nie sú načítané */
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }) {
   const [tab, setTab] = useState<'all' | 'unread'>('all');
   const [open, setOpen] = useState<string | null>(null);
@@ -246,6 +251,8 @@ export function MessageList(props: {
           if (opts.count && opts.count > 1 && opts.gk) setOpen((o) => (o === opts.gk ? o : opts.gk!));
           props.onOpen(m);
         }}
+        onDoubleClick={(e) => props.onOpenFull?.(m, e.shiftKey)}
+        onAuxClick={(e) => e.button === 1 && props.onOpenFull?.(m, true)}
       >
         {!opts.child && <Avatar name={m.fromName || m.fromAddress} color={props.colorOf(m.accountId)} />}
         <div className="msg-main">
@@ -306,22 +313,41 @@ export function MessageList(props: {
         onKeyDown={(e) => {
           if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
         }}
+        onScroll={(e) => {
+          // na konci zoznamu automaticky načítať staršie správy
+          const el = e.currentTarget;
+          if (props.onLoadMore && !props.loadingMore && el.scrollHeight - el.scrollTop - el.clientHeight < 120) props.onLoadMore();
+        }}
       >
         {props.loading && <div className="progress" role="progressbar" aria-label="Načítavam" />}
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
         {props.loading && base.length === 0 && <div className="empty">Načítavam…</div>}
         {!props.loading && !props.error && base.length === 0 && <div className="empty">Žiadne správy</div>}
-        {groups.map((g) => {
+        {groups.map((g, i) => {
           const head = g[0]!;
           const gk = `${head.accountId}/${head.folder}/${head.uid}`;
-          if (g.length === 1) return row(head);
-          return (
-            <div key={`g-${gk}`} className="thread">
-              {row(head, { count: g.length, unreadInThread: g.some((m) => !m.seen), gk })}
-              {open === gk && g.slice(1).map((m) => row(m, { child: true }))}
-            </div>
-          );
+          const pinned = g.some(isPinned);
+          // nadpisy sekcií: Pripnuté hore, potom ostatné
+          const section =
+            pinned && i === 0 ? <div key="sec-pin" className="list-section">📌 Pripnuté</div>
+            : !pinned && i > 0 && groups[i - 1]!.some(isPinned) ? <div key="sec-rest" className="list-section">Ostatné</div>
+            : null;
+          const body =
+            g.length === 1 ? row(head) : (
+              <div key={`g-${gk}`} className="thread">
+                {row(head, { count: g.length, unreadInThread: g.some((m) => !m.seen), gk })}
+                {open === gk && g.slice(1).map((m) => row(m, { child: true }))}
+              </div>
+            );
+          return section ? [section, body] : body;
         })}
+        {props.onLoadMore && base.length > 0 && (
+          <div className="load-more">
+            <Button size="small" appearance="subtle" disabled={props.loadingMore} onClick={props.onLoadMore}>
+              {props.loadingMore ? 'Načítavam staršie správy…' : 'Načítať staršie správy'}
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -404,6 +430,7 @@ export function ReadingPane(props: {
   onBlockSender?: () => void;
   onPrint?: (pdf: boolean) => void;
   onUnsubscribe?: () => void;
+  onPopOut?: () => void;
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
@@ -436,6 +463,7 @@ export function ReadingPane(props: {
           <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
           <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
           <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+          {props.onPopOut && <Button size="small" appearance="subtle" icon={<NewWindowSmallIcon />} onClick={props.onPopOut} title="Otvoriť v samostatnom okne (dvojklik na správu)" aria-label="Otvoriť v samostatnom okne" />}
           {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(false)} title="Tlačiť (Ctrl+P)">Tlačiť</Button>}
           {props.onPrint && <Button size="small" appearance="subtle" onClick={() => props.onPrint!(true)} title="Uložiť ako PDF">PDF</Button>}
           {props.onBlockSender && <Button size="small" appearance="subtle" onClick={props.onBlockSender} title="Pridať odosielateľa medzi blokovaných v Zimbre">Blokovať</Button>}
