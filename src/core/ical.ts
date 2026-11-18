@@ -40,6 +40,7 @@ export interface Contact {
   phones: string[];
   org?: string;
   title?: string;
+  note?: string;
   href?: string;
   etag?: string;
   bookId?: string;
@@ -71,7 +72,8 @@ function parseLines(text: string): Prop[] {
     const head = line.slice(0, i);
     const value = line.slice(i + 1);
     const parts = head.match(/(?:[^;"]|"[^"]*")+/g) ?? [head];
-    const name = (parts[0] ?? '').toUpperCase();
+    // skupina pred názvom (item1.EMAIL z Apple) sa ignoruje
+    const name = (parts[0] ?? '').toUpperCase().replace(/^[A-Z0-9-]+\./, '');
     const params: Record<string, string> = {};
     for (const p of parts.slice(1)) {
       const eq = p.indexOf('=');
@@ -410,6 +412,7 @@ export function parseVCards(text: string): Contact[] {
         phones: c.props.filter((p) => p.name === 'TEL').map((p) => p.value.replace(/^tel:/i, '').trim()).filter(Boolean),
         org: get(c, 'ORG') ? unescapeText(get(c, 'ORG')!.value.split(';')[0] ?? '') : undefined,
         title: get(c, 'TITLE') ? unescapeText(get(c, 'TITLE')!.value) : undefined,
+        note: get(c, 'NOTE') ? unescapeText(get(c, 'NOTE')!.value) : undefined,
       };
     });
 }
@@ -422,6 +425,7 @@ export function buildVCard(c: Contact): string {
   for (const p of c.phones) L.push(`TEL:${p}`);
   if (c.org) L.push(`ORG:${escapeText(c.org)}`);
   if (c.title) L.push(`TITLE:${escapeText(c.title)}`);
+  if (c.note) L.push(`NOTE:${escapeText(c.note)}`);
   L.push('END:VCARD');
   return L.map(fold).join('\r\n') + '\r\n';
 }

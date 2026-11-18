@@ -29,12 +29,15 @@ import { MyDayPane, type MyDayEvent } from './components/MyDayPane';
 import { useAttachmentGuard } from './components/AttachmentGuard';
 import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
-import { ContactsView } from './components/ContactsView';
+import { AddressBook } from './components/AddressBook';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
   IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
+
+/** kľúč modulu pri voľbe „Všetky“ kontá (Pošta / Úlohy / Kontakty) */
+const ALL_MODULES = '__all__';
 import { accountColor, getTheme, themeById, themeVars, type ThemeKey } from './theme';
 
 declare global {
@@ -376,7 +379,7 @@ export function App() {
   }, [activeImap?.id, demo, api, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // správy
-  const showMail = !activeM365 && (activeImap ? (imapModule[activeImap.id] ?? 'mail') === 'mail' : true);
+  const showMail = !activeM365 && (imapModule[activeImap?.id ?? ALL_MODULES] ?? 'mail') === 'mail';
   useEffect(() => {
     if (!showMail || POP_VIEW || POP_COMPOSE) return;
     let cancelled = false;
@@ -1107,10 +1110,11 @@ export function App() {
     if (e.key === 'Delete' && current) return e.preventDefault(), void del();
     if (ctrl && e.shiftKey && k === 'v') return e.preventDefault(), setStatus('Presun: použite Domov → Presunúť alebo pretiahnite správu na priečinok.');
     if (e.key === 'F9') return e.preventDefault(), void sendReceive();
-    if (ctrl && ['1', '2', '3', '4'].includes(e.key) && activeImap) {
+    if (ctrl && ['1', '2', '3', '4'].includes(e.key) && !activeM365) {
       e.preventDefault();
       const mod = (['mail', 'calendar', 'contacts', 'tasks'] as ImapModule[])[Number(e.key) - 1]!;
-      setImapModule((x) => ({ ...x, [activeImap.id]: mod }));
+      if (mod === 'calendar' && !activeImap) return;
+      setImapModule((x) => ({ ...x, [activeImap?.id ?? ALL_MODULES]: mod }));
     }
   };
   useEffect(() => {
@@ -1223,8 +1227,25 @@ export function App() {
       void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
   }, [api, accounts, demo]);
 
+  // lokálny adresár (v programe) a naposledy použité adresy – na dopĺňanie aj do modulu Kontakty
+  const [bookTick, setBookTick] = useState(0);
+  const [localBook, setLocalBook] = useState<Contact[]>([]);
+  useEffect(() => {
+    if (!api) return;
+    void api.localContacts().then((r) => r.ok && setLocalBook(r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email })))));
+    if (bookTick && !demo) for (const a of accounts.filter(isImap)) void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
+  }, [api, bookTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bookAccounts = useMemo(() => imapAccounts.filter((a) => a.id !== DEMO_ID), [imapAccounts]);
+  const recentContacts = useMemo<Contact[]>(() => {
+    try {
+      return (JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]).filter((c) => c.email);
+    } catch {
+      return [];
+    }
+  }, [composeView, bookTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const contacts = useMemo<Contact[]>(() => {
-    let known: Contact[] = [...Object.values(davContacts).flat()];
+    let known: Contact[] = [...localBook, ...Object.values(davContacts).flat()];
     try {
       known = [...(JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]), ...known];
     } catch {
@@ -1232,7 +1253,7 @@ export function App() {
     }
     const all = [...known, ...messages.map((m) => ({ name: m.fromName, email: m.fromAddress }))].filter((c) => c.email);
     return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
-  }, [messages, composeView, davContacts]);
+  }, [messages, composeView, davContacts, localBook]);
 
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
@@ -1338,7 +1359,7 @@ export function App() {
       ? `${activeImap.email} · IMAP${activeImap.imap.host ? ` · ${activeImap.imap.host}` : ''}`
       : `${imapAccounts.length} IMAP ${imapAccounts.length === 1 ? 'konto' : imapAccounts.length < 5 ? 'kontá' : 'kont'}`;
 
-  const curImapModule: ImapModule = activeImap ? imapModule[activeImap.id] ?? 'mail' : 'mail';
+  const curImapModule: ImapModule = imapModule[activeImap?.id ?? ALL_MODULES] ?? 'mail';
   // samostatné okno písania: načítať koncept a zobraziť len editor
   const [popInit, setPopInit] = useState<ComposeInit | null>(null);
   const [popDone, setPopDone] = useState(false);
@@ -1588,10 +1609,10 @@ export function App() {
               <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
-                modules={IMAP_MODULES}
+                modules={activeImap ? IMAP_MODULES : IMAP_MODULES.filter((m) => m.key !== 'calendar')}
                 active={curImapModule}
                 color={topColor}
-                onSelect={(k) => activeImap && setImapModule((m) => ({ ...m, [activeImap.id]: k }))}
+                onSelect={(k) => setImapModule((m) => ({ ...m, [activeImap?.id ?? ALL_MODULES]: k }))}
               />
             )}
             <div className="content">
@@ -1920,15 +1941,18 @@ export function App() {
                   <TasksView settings={settings} onSettings={saveSettings} onOpenMessage={openTaskMessage} />
                 ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'calendar' ? (
                   <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
-                ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'contacts' ? (
-                  <ContactsView
-                    key={activeImap.id}
-                    account={activeImap}
-                    zimbra={!!zimbraOk[activeImap.id]}
+                ) : curImapModule === 'contacts' ? (
+                  <AddressBook
+                    accounts={bookAccounts}
+                    zimbraOk={zimbraOk}
+                    recent={recentContacts}
+                    defaultAccountId={activeImap?.id ?? imapAccounts.find((a) => a.id !== DEMO_ID)?.id}
                     onStatus={setStatus}
-                    onCompose={(to) => {
-                      setImapModule((m) => ({ ...m, [activeImap.id]: 'mail' }));
-                      setCompose({ init: { kind: 'new', accountId: activeImap.id, to }, key: Date.now() });
+                    onChanged={() => setBookTick((t) => t + 1)}
+                    onCompose={(to, accId) => {
+                      const acc = accId ?? activeImap?.id ?? imapAccounts[0]?.id;
+                      setImapModule((m) => ({ ...m, [activeImap?.id ?? ALL_MODULES]: 'mail' }));
+                      setCompose({ init: { kind: 'new', accountId: acc, to }, key: Date.now() });
                       setRibbonTab('message');
                     }}
                   />
