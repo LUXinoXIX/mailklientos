@@ -26,6 +26,8 @@ import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
 import { RightPanel, type AgendaData, type PanelChoice } from './components/RightPanel';
 import { MyDayPane, type MyDayEvent } from './components/MyDayPane';
+import { useAttachmentGuard } from './components/AttachmentGuard';
+import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
 import { ContactsView } from './components/ContactsView';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
@@ -129,6 +131,7 @@ export function App() {
   const [rightActive, setRightActive] = usePersisted('rightActive', 'copilot');
   const [activeId, setActiveId] = usePersisted<string>('activeAccount', '');
   const [ribbonTab, setRibbonTab] = useState<RibbonTab>('home');
+  const { guard: attGuard, dialog: attGuardDialog } = useAttachmentGuard();
   const [imapModule, setImapModule] = useState<Record<string, ImapModule>>({});
   const [tabs, setTabs] = useState<Record<string, TabsState>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -471,6 +474,17 @@ export function App() {
     const c = msgCache.current.get(ck);
     if (c) msgCache.current.set(ck, { ...c, ...patch });
   };
+
+  // prepnutie priečinka, konta alebo modulu počas písania: rozpísaná správa ostane ako karta dole
+  // a horný pás sa vráti na Domov (Odoslať a prijať, Nová správa…)
+  const navKey = `${selection.accountId}|${selection.folder}|${activeKey}|${imapModule[activeKey] ?? 'mail'}`;
+  const prevNav = useRef(navKey);
+  useEffect(() => {
+    if (prevNav.current === navKey) return;
+    prevNav.current = navKey;
+    if (composeView) setCompose(null);
+    setRibbonTab((t) => (t === 'message' || t === 'insert' ? 'home' : t));
+  }, [navKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function open(m: MessageSummary) {
     if (composeView) {
@@ -1682,6 +1696,11 @@ export function App() {
                     unread={unread}
                     selection={selection}
                     onSelect={(s) => {
+                      // klik na priečinok (aj ten istý) počas písania: správa ostane ako karta dole, pás → Domov
+                      if (composeView) {
+                        setCompose(null);
+                        setRibbonTab('home');
+                      }
                       setSelection(s);
                       setSearch('');
                       setCurrent(undefined);
@@ -1792,7 +1811,11 @@ export function App() {
                       const a = m.attachments.find((x, pos) => (x.index ?? pos) === i);
                       const real = m.attachments.map((x, pos) => ({ x, i: x.index ?? pos })).filter((y) => !y.x.inline);
                       showCtx(x, y, [
-                        { label: 'Otvoriť', onClick: () => void api.openAttachment(m.accountId, m.folder, m.uid, i) },
+                        {
+                          label: attachmentRisk(a?.filename ?? '').level === 'blocked' ? 'Otvoriť (zablokované – nebezpečný typ)' : 'Otvoriť…',
+                          disabled: attachmentRisk(a?.filename ?? '').level === 'blocked',
+                          onClick: () => attGuard(a?.filename ?? '', () => void api.openAttachment(m.accountId, m.folder, m.uid, i), () => void api.saveAttachment(m.accountId, m.folder, m.uid, i)),
+                        },
                         { label: 'Uložiť ako…', onClick: () => void api.saveAttachment(m.accountId, m.folder, m.uid, i) },
                         { label: 'Uložiť všetky prílohy…', disabled: real.length < 2, onClick: async () => {
                           for (const { i: k } of real) {
@@ -1981,6 +2004,7 @@ export function App() {
       )}
       {dialog.kind === 'about' && <AboutDialog onClose={closeDialog} />}
       <ContextMenu state={ctx} onClose={closeCtx} />
+      {attGuardDialog}
       {ask && (
         <Dialog open onOpenChange={(_, d) => !d.open && setAsk(null)}>
           <DialogSurface style={{ maxWidth: 420 }}>

@@ -34,6 +34,8 @@ export interface MessageSummary {
   keywords?: string[];
   /** začiatok textu správy (riadok s náhľadom v zozname) */
   preview?: string;
+  /** správa má skutočné prílohy (spinka v zozname; logá z podpisu sa nerátajú) */
+  hasAttachments?: boolean;
 }
 
 export interface MessageFull extends MessageSummary {
