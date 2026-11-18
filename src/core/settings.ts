@@ -72,6 +72,10 @@ export interface AppSettings {
   searchServerAuto?: boolean;
   /** nedávne hľadania (najnovšie prvé) */
   searchHistory?: string[];
+  /** zoznam kont s menami natrvalo rozbalený (inak úzky pás a vysúvanie po kliknutí) */
+  accountListPinned?: boolean;
+  /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
+  paneWidths?: { folders?: number; list?: number; right?: number };
 }
 
 export interface ThemeDef {

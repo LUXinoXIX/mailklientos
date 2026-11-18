@@ -1,7 +1,7 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
 import { Button, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
@@ -45,6 +45,7 @@ export function FolderPane(props: {
   scheduled?: OutboxItem[];
   onScheduled?: (it: OutboxItem, edit: boolean) => void;
   quota?: { used: number; limit: number } | null;
+  onFolderContext?: (accountId: string, f: FolderInfo, x: number, y: number) => void;
 }) {
   const a = props.account;
   const [over, setOver] = useState<string | null>(null);
@@ -134,6 +135,11 @@ export function FolderPane(props: {
             style={{ paddingLeft: 14 + fo.depth * 14 }}
             {...dropProps(a.id, fo.path)}
             onClick={() => props.onSelect({ accountId: a.id, folder: fo.path })}
+            onContextMenu={(e) => {
+              if (!props.onFolderContext) return;
+              e.preventDefault();
+              props.onFolderContext(a.id, fo, e.clientX, e.clientY);
+            }}
           >
             {folderIcon(fo)} <span className="grow">{fo.name}</span>
             {fo.specialUse === '\\Inbox' && (props.unread[a.id] ?? 0) > 0 && <span className="count">{props.unread[a.id]}</span>}
@@ -211,6 +217,12 @@ export function MessageList(props: {
   colorOf: (accountId: string) => string;
   onOpen: (m: MessageSummary) => void;
   onDeleteKey?: () => void;
+  /** pravý klik: označené správy (alebo tá pod kurzorom) */
+  onContext?: (msgs: MessageSummary[], x: number, y: number) => void;
+  /** Delete pri viacerých označených */
+  onDeleteMany?: (msgs: MessageSummary[]) => void;
+  /** zmena výberu viacerých správ (počet) */
+  onMulti?: (msgs: MessageSummary[]) => void;
   headerExtra?: React.ReactNode;
   categories?: Category[];
   conversations?: boolean;
@@ -233,8 +245,36 @@ export function MessageList(props: {
     return g.sort((a, b) => Number(b.some(isPinned)) - Number(a.some(isPinned)) || (b[0]!.date ?? '').localeCompare(a[0]!.date ?? ''));
   }, [base, props.conversations]); // eslint-disable-line react-hooks/exhaustive-deps
   const cats = props.categories ?? [];
+  // výber viacerých správ: Ctrl+klik pridá/odoberie, Shift+klik vyberie rozsah
+  const keyOf = (m: MessageSummary) => `${m.accountId}/${m.folder}/${m.uid}`;
+  const [multi, setMulti] = useState<string[]>([]);
+  const anchor = useRef<string | null>(null);
+  const order = useMemo(() => groups.flatMap((g) => g), [groups]);
+  const multiMsgs = useMemo(() => order.filter((m) => multi.includes(keyOf(m))), [order, multi]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => props.onMulti?.(multiMsgs), [multiMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const clickRow = (m: MessageSummary, e: React.MouseEvent) => {
+    const k = keyOf(m);
+    if (e.ctrlKey || e.metaKey) {
+      const base = multi.length ? multi : props.selected ? [keyOf(props.selected)] : [];
+      setMulti(base.includes(k) ? base.filter((x) => x !== k) : [...base, k]);
+      anchor.current = k;
+      return true;
+    }
+    if (e.shiftKey) {
+      const from = anchor.current ?? (props.selected ? keyOf(props.selected) : k);
+      const i = order.findIndex((x) => keyOf(x) === from);
+      const j = order.findIndex((x) => keyOf(x) === k);
+      if (i >= 0 && j >= 0) {
+        setMulti(order.slice(Math.min(i, j), Math.max(i, j) + 1).map(keyOf));
+        return true;
+      }
+    }
+    setMulti([]);
+    anchor.current = k;
+    return false;
+  };
   const row = (m: MessageSummary, opts: { count?: number; unreadInThread?: boolean; child?: boolean; gk?: string } = {}) => {
-    const sel = props.selected && props.selected.uid === m.uid && props.selected.accountId === m.accountId && props.selected.folder === m.folder;
+    const sel = multi.length > 1 ? multi.includes(keyOf(m)) : props.selected && props.selected.uid === m.uid && props.selected.accountId === m.accountId && props.selected.folder === m.folder;
     const mc = cats.filter((c) => m.keywords?.includes(c.id));
     const unread = opts.unreadInThread ?? !m.seen;
     return (
@@ -247,9 +287,18 @@ export function MessageList(props: {
           e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
           e.dataTransfer.effectAllowed = 'move';
         }}
-        onClick={() => {
+        onClick={(e) => {
+          if (clickRow(m, e)) return;
           if (opts.count && opts.count > 1 && opts.gk) setOpen((o) => (o === opts.gk ? o : opts.gk!));
           props.onOpen(m);
+        }}
+        onContextMenu={(e) => {
+          if (!props.onContext) return;
+          e.preventDefault();
+          const k = keyOf(m);
+          if (multi.length > 1 && multi.includes(k)) return props.onContext(multiMsgs, e.clientX, e.clientY);
+          setMulti([]);
+          props.onContext([m], e.clientX, e.clientY);
         }}
         onDoubleClick={(e) => props.onOpenFull?.(m, e.shiftKey)}
         onAuxClick={(e) => e.button === 1 && props.onOpenFull?.(m, true)}
@@ -311,7 +360,15 @@ export function MessageList(props: {
         className="list-body"
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
+          if (e.key === 'Delete' && multiMsgs.length > 1 && props.onDeleteMany) {
+            props.onDeleteMany(multiMsgs);
+            setMulti([]);
+          } else if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
+          if (e.key === 'Escape') setMulti([]);
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            e.preventDefault();
+            setMulti(order.map(keyOf));
+          }
         }}
         onScroll={(e) => {
           // na konci zoznamu automaticky načítať staršie správy
@@ -431,6 +488,7 @@ export function ReadingPane(props: {
   onPrint?: (pdf: boolean) => void;
   onUnsubscribe?: () => void;
   onPopOut?: () => void;
+  onAttachmentContext?: (index: number, x: number, y: number) => void;
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
@@ -531,7 +589,15 @@ export function ReadingPane(props: {
       {m.attachments.length > 0 && (
         <div className="attachments">
           {m.attachments.map((a, i) => (
-            <span key={i} className="attachment">
+            <span
+              key={i}
+              className="attachment"
+              onContextMenu={(e) => {
+                if (!props.onAttachmentContext || demo) return;
+                e.preventDefault();
+                props.onAttachmentContext(i, e.clientX, e.clientY);
+              }}
+            >
               <button
                 className="attachment-open"
                 disabled={demo}

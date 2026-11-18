@@ -45,6 +45,8 @@ export interface AccountConfig {
   davUrl?: string;
   /** adresa Zimbry (https://server); prázdne = server IMAP */
   zimbraUrl?: string;
+  /** krátky štítok v zbalenom páse kont (prázdne = typ konta: ZIMBRA, IMAP) */
+  short?: string;
 }
 
 export interface Identity {
@@ -64,6 +66,8 @@ export interface M365Account {
   color: string;
   /** Adresa Outlooku: outlook.office.com (firemné M365) alebo outlook.live.com (osobné). */
   host?: 'office' | 'live';
+  /** krátky štítok v zbalenom páse kont (prázdne = MS365 / MSO) */
+  short?: string;
 }
 
 export type AnyAccount = AccountConfig | M365Account;

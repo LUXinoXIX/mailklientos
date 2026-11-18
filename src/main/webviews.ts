@@ -2,6 +2,7 @@
 // Vykresľujú sa vnútri stránky (nie ako samostatná vrstva nad oknom) – na Windows tak nedochádza
 // k blikaniu okna pri ich zobrazení/skrytí a dialógy aplikácie ich môžu prekryť.
 // Každý web má vlastnú trvalú reláciu (partition): oddelené prihlásenie a cookies.
+import { attachContextMenu } from './contextmenu';
 import path from 'node:path';
 import { BrowserWindow, session, shell, type Session, type WebContents } from 'electron';
 import type { WebEvent } from '../core/api';
@@ -104,7 +105,10 @@ export function attachWindow(w: BrowserWindow) {
     prefs.backgroundThrottling = false;
     prepareSession(params.partition!);
   });
-  w.webContents.on('did-attach-webview', (_e, guest) => setupGuest(guest));
+  w.webContents.on('did-attach-webview', (_e, guest) => {
+    setupGuest(guest);
+    attachContextMenu(guest, { web: true });
+  });
 }
 
 /** Otvorí stránku v Edge (Windows) alebo v predvolenom prehliadači. */
