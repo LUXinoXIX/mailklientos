@@ -72,6 +72,8 @@ export interface AppSettings {
   searchServerAuto?: boolean;
   /** nedávne hľadania (najnovšie prvé) */
   searchHistory?: string[];
+  /** zoznam kont s menami natrvalo rozbalený (inak úzky pás a vysúvanie po kliknutí) */
+  accountListPinned?: boolean;
 }
 
 export interface ThemeDef {

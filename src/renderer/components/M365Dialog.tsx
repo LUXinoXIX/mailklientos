@@ -58,6 +58,7 @@ export function M365Dialog(props: {
   const e = props.edit;
   const [name, setName] = useState(e?.name ?? (props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
   const [email, setEmail] = useState(e?.email ?? '');
+  const [short, setShort] = useState(e?.short ?? '');
   const [host, setHost] = useState<'office' | 'live'>(e?.host ?? props.host ?? 'office');
   const [color, setColor] = useState(accountColor(e?.color ?? ACCOUNT_COLORS.find((c) => !props.usedColors.includes(c)) ?? ACCOUNT_COLORS[1]!));
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export function M365Dialog(props: {
       email: email.trim(),
       color,
       host,
+      short: short.trim() || undefined,
     };
     setBusy(true);
     const r = await window.mailApi.saveAccount(acc);
@@ -110,6 +112,9 @@ export function M365Dialog(props: {
             </MessageBar>
             <Field label="Názov v páse kont">
               <Input value={name} onChange={(_, d) => setName(d.value)} />
+            </Field>
+            <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov. Prázdne = MS365 (firemné) alebo MSO (osobné).">
+              <Input value={short} maxLength={8} placeholder={host === 'live' ? 'MSO' : 'MS365'} onChange={(_, d) => setShort(d.value.toUpperCase())} />
             </Field>
             <Field label="E-mail (len na zobrazenie)">
               <Input value={email} placeholder="meno@firma.sk" onChange={(_, d) => setEmail(d.value)} />

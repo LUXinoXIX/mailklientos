@@ -1128,6 +1128,8 @@ export function App() {
           gpuForced={gpuForced}
           onToggleGpuForced={() => void api?.setGpuForced(!gpuForced)}
           onOpenLog={() => void api?.openLog()}
+          pinned={!!settings.accountListPinned}
+          onPin={(v) => saveSettings({ ...settings, accountListPinned: v })}
           onMenuOpen={setMenuOverlay}
         />
         <div className="workspace">
