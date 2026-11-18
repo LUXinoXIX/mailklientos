@@ -566,3 +566,6 @@ kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid
 .splitter:hover::after, .splitter:focus-visible::after { background: var(--colorBrandBackground); width: 2px; left: 2px; }
 body.resizing { cursor: col-resize; user-select: none; }
 body.resizing webview, body.resizing iframe { pointer-events: none; }
+.composer-top .grow { flex: 1; }
+.composer-x { border: 0; background: transparent; font-size: 22px; line-height: 1; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; color: var(--colorNeutralForeground2); }
+.composer-x:hover { background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground1); }
