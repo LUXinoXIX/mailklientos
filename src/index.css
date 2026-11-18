@@ -500,3 +500,20 @@ body { overflow: hidden; }
 .reading { position: relative; }
 .keys td { padding: 4px 14px 4px 0; font-size: 13px; }
 kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--colorNeutralStroke1); border-bottom-width: 2px; border-radius: 4px; background: var(--colorNeutralBackground2); }
+.load-more { display: flex; justify-content: center; padding: 10px; }
+.msgview { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex: 1; height: 100%; background: var(--colorNeutralBackground1); }
+.msgview > .reading { flex: 1; min-height: 0; }
+.msgview-bar { border-bottom: 1px solid var(--colorNeutralStroke2); padding: 2px 8px; flex-wrap: wrap; background: var(--colorNeutralBackground2); }
+.msgview-status { font-size: 12px; color: var(--colorNeutralForeground3); margin-left: 8px; }
+.pop-view { height: 100%; display: flex; flex-direction: column; }
+.pop-view .pop-view-top { height: 6px; flex: none; }
+.msgtabs { display: flex; gap: 2px; padding: 4px 8px 0; background: var(--colorNeutralBackground3); border-bottom: 1px solid var(--colorNeutralStroke2); overflow-x: auto; flex: none; }
+.msgtab { display: flex; align-items: center; gap: 6px; max-width: 240px; padding: 5px 8px 5px 12px; border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--colorNeutralForeground2); cursor: pointer; }
+.msgtab.on { background: var(--colorNeutralBackground1); border-color: var(--colorNeutralStroke2); color: var(--colorNeutralForeground1); margin-bottom: -1px; }
+.msgtab .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msgtab .x { border: none; background: none; cursor: pointer; color: inherit; padding: 0 2px; border-radius: 3px; line-height: 1; }
+.msgtab .x:hover { background: var(--colorNeutralBackground3Hover); }
+.mail-wrap { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex: 1; height: 100%; }
+.mail-wrap > .mail { flex: 1; min-height: 0; }
+.mail-wrap > .msgview { flex: 1; }
+.msgtab-pane { flex: 1; min-height: 0; display: flex; }

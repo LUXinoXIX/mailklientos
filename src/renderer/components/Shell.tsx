@@ -8,7 +8,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  SendReceiveIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import type { Category, QuickStep, Signature, Template } from '../../core/settings';
@@ -204,6 +204,9 @@ export function Ribbon(props: {
   onPreviewLine: (v: boolean) => void;
   runInBackground: boolean;
   onRunInBackground: (v: boolean) => void;
+  openMode: 'window' | 'tab';
+  onOpenMode: (v: 'window' | 'tab') => void;
+  onSendReceive: () => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -413,6 +416,7 @@ export function Ribbon(props: {
               </Menu>
             )}
             <ToolbarDivider />
+            <ToolbarButton icon={<SendReceiveIcon />} onClick={p.onSendReceive} title="Skontrolovať poštu na všetkých kontách a odoslať čakajúce správy (F9)">Odoslať a prijať</ToolbarButton>
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
             <Menu>
@@ -462,6 +466,9 @@ export function Ribbon(props: {
             </ToolbarButton>
             <ToolbarButton onClick={() => p.onPreviewLine(!p.previewLine)} aria-pressed={p.previewLine}>
               {p.previewLine ? '✓ ' : ''}Náhľad textu v zozname
+            </ToolbarButton>
+            <ToolbarButton onClick={() => p.onOpenMode(p.openMode === 'window' ? 'tab' : 'window')} title="Dvojklik alebo Enter na správu; so Shiftom opačne">
+              Dvojklik otvorí: {p.openMode === 'window' ? 'nové okno' : 'kartu'}
             </ToolbarButton>
             <ToolbarButton onClick={() => p.onRunInBackground(!p.runInBackground)} aria-pressed={p.runInBackground}>
               {p.runInBackground ? '✓ ' : ''}Po zatvorení bežať pri hodinách

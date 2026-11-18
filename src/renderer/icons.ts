@@ -1,6 +1,12 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  ArrowUp24Regular as PrevIcon,
+  ArrowDown24Regular as NextIcon,
+  Print24Regular as PrintIcon,
+  WindowNew24Regular as NewWindowIcon,
+  WindowNew16Regular as NewWindowSmallIcon,
+  MailArrowDoubleBack24Regular as SendReceiveIcon,
   Info24Regular as InfoIcon,
   ArrowRepeatAll24Regular as LoopIcon,
   Sparkle24Regular as CopilotIcon,
