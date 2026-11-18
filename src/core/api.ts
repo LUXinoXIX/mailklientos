@@ -243,6 +243,14 @@ export interface MailApi {
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
   calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
   cardList(accountId: string): Promise<Result<Contact[]>>;
+  /** lokálny adresár v programe (userData/contacts.json) */
+  localContacts(): Promise<Result<Contact[]>>;
+  localPut(items: Contact[]): Promise<Result<Contact[]>>;
+  localRemove(uids: string[]): Promise<Result<true>>;
+  /** výber súboru .vcf/.csv na import kontaktov; text už dekódovaný; null = zrušené */
+  contactsPickImport(): Promise<Result<{ filename: string; text: string } | null>>;
+  /** uloženie exportu kontaktov; '' = zrušené */
+  contactsSaveExport(name: string, text: string): Promise<Result<string>>;
   cardSave(accountId: string, bookId: string, contact: Contact): Promise<Result<Contact>>;
   cardDelete(accountId: string, href: string): Promise<Result<true>>;
   setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;

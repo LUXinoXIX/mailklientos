@@ -766,3 +766,35 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 /* náhľad prílohy v rozpísanej správe */
 .att-card .att-prev { color: var(--colorNeutralForeground2); }
 .att-card .att-prev:hover { color: var(--colorBrandForeground1); }
+
+/* Kontakty – spoločný adresár pre všetky kontá */
+.ab-sources { width: 220px; flex: none; border-right: 1px solid var(--colorNeutralStroke2); overflow: auto; padding: 8px 6px; display: flex; flex-direction: column; gap: 1px; background: var(--colorNeutralBackground2); }
+.ab-h { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--colorNeutralForeground3); padding: 10px 8px 4px; }
+.ab-src { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 6px 8px; border-radius: 6px; font: inherit; font-size: 13px; text-align: left; cursor: pointer; color: inherit; }
+.ab-src:hover { background: var(--colorNeutralBackground1Hover); }
+.ab-src.on { background: var(--colorBrandBackground2); font-weight: 600; }
+.ab-src .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-ico { display: inline-flex; width: 16px; justify-content: center; color: var(--colorNeutralForeground2); }
+.ab .dot, .ci .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.ab-note { margin-top: auto; padding: 12px 8px 4px; line-height: 1.4; }
+.ab .contacts-list { width: 320px; display: flex; flex-direction: column; }
+.ab-tools { display: flex; align-items: center; gap: 6px; padding: 0 10px 8px; border-bottom: 1px solid var(--colorNeutralStroke3); }
+.ab-count { text-align: right; }
+.ab-dots { display: inline-flex; gap: 3px; flex: none; }
+.ab .contact-row .grow { flex: 1; }
+.ab-empty { padding: 24px 12px; text-align: center; line-height: 2; }
+.ab-stored { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.ab-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); }
+.ab-notetext { white-space: pre-wrap; margin-top: 6px; padding: 8px 10px; background: var(--colorNeutralBackground2); border-radius: 6px; max-width: 520px; }
+/* sprievodca importom */
+.ci { display: flex; flex-direction: column; gap: 14px; }
+.ci-h { font-weight: 600; margin-bottom: 6px; }
+.ci-badge { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--colorPaletteGreenBackground2, #dff6dd); color: var(--colorPaletteGreenForeground2, #0e700e); }
+.ci-map { max-height: 210px; overflow: auto; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.ci-map-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 170px; gap: 8px; align-items: center; padding: 3px 8px; border-bottom: 1px solid var(--colorNeutralStroke3); }
+.ci-col, .ci-ex { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-opts { gap: 16px; }
+.ci-preview { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 4px 8px; }
+.ci-prev-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; padding: 3px 0; font-size: 13px; }
+.ci-prev-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-sum { padding: 8px 10px; border-radius: 6px; background: var(--colorNeutralBackground2); }
