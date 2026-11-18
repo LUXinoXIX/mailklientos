@@ -24,7 +24,8 @@ import { ContextMenu, type CtxItem, type CtxState } from './components/ContextMe
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
-import { RightPanel, type AgendaData } from './components/RightPanel';
+import { RightPanel, type AgendaData, type PanelChoice } from './components/RightPanel';
+import { MyDayPane, type MyDayEvent } from './components/MyDayPane';
 import { CalendarView } from './components/CalendarView';
 import { ContactsView } from './components/ContactsView';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
@@ -152,7 +153,7 @@ export function App() {
   const [undo, setUndo] = useState<OutboxItem | null>(null);
   const [updateReady, setUpdateReady] = useState<string | null>(null);
   // šírky stĺpcov (ťahadlá medzi stĺpcami), uložené v nastaveniach
-  const PW = { folders: 230, list: 340, right: 360 };
+  const PW = { folders: 230, list: 340, right: 360, myday: 290 };
   const [widths, setWidths] = useState(PW);
   useEffect(() => setWidths({ ...PW, ...(settings.paneWidths ?? {}) }), [settings.paneWidths]); // eslint-disable-line react-hooks/exhaustive-deps
   const saveWidth = (k: keyof typeof PW, v: number) => saveSettings({ ...settings, paneWidths: { ...(settings.paneWidths ?? {}), [k]: v } });
@@ -217,7 +218,7 @@ export function App() {
         setOutboxTick((t) => t + 1);
       } else if (ev.type === 'update') {
         if (ev.state === 'ready') setUpdateReady(ev.version || 'nová verzia');
-        else if (ev.state === 'downloading') setStatus('Sťahujem novú verziu MailKlienta na pozadí…');
+        else if (ev.state === 'downloading') setStatus('Sťahujem novú verziu programu Universum eMail na pozadí…');
       } else if (ev.type === 'followup') {
         setFollowupEv(ev);
       } else if (ev.type === 'progress') {
@@ -955,6 +956,87 @@ export function App() {
     onToggleTask: (t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }),
   };
 
+  // pravý panel: spoločný alebo vlastný pre konto (vlastný môže zdieľať viac kont)
+  const rPanels = settings.rightPanels ?? [];
+  const rPanelId = settings.rightPanelOf?.[activeKey] ?? 'shared';
+  const rPanel = rPanels.find((p) => p.id === rPanelId);
+  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers } : settings;
+  const savePanelView = (v: AppSettings) =>
+    saveSettings(
+      rPanel
+        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers } : p)) }
+        : { ...settings, webs: v.webs, launchers: v.launchers },
+    );
+  const allPanelWebs = [...settings.webs, ...rPanels.flatMap((p) => p.webs)];
+  const panelKeyName = (k: string) => (k === ALL ? 'Všetky kontá' : railAccounts.find((a) => a.id === k)?.name ?? '');
+  const panelUsers = (id: string) =>
+    [ALL, ...railAccounts.map((a) => a.id)]
+      .filter((k) => (k !== ALL || imapAccounts.length > 1) && (settings.rightPanelOf?.[k] ?? 'shared') === id)
+      .map(panelKeyName)
+      .filter(Boolean);
+  const panelChoice: PanelChoice = {
+    accountName: panelKeyName(activeKey) || 'toto konto',
+    current: rPanel ? rPanel.id : 'shared',
+    panels: rPanels.map((p) => ({ id: p.id, name: p.name, users: panelUsers(p.id) })),
+    sharedUsers: panelUsers('shared'),
+    onChoose: (id) => {
+      const of = { ...(settings.rightPanelOf ?? {}) };
+      if (id === 'shared') delete of[activeKey];
+      else of[activeKey] = id;
+      saveSettings({ ...settings, rightPanelOf: of });
+    },
+    onNew: (copy) => {
+      const nid = () => Math.random().toString(36).slice(2, 10);
+      const id = `p-${nid()}`;
+      const base = panelKeyName(activeKey) || 'Vlastný panel';
+      const name = rPanels.some((p) => p.name === base) ? `${base} ${rPanels.length + 1}` : base;
+      // kópia dostane nové id webov = vlastné prihlásenie, oddelené od pôvodného panela
+      const webs = copy ? panelView.webs.map((w) => ({ ...w, id: nid() })) : [];
+      const launchers = copy ? panelView.launchers.map((l) => ({ ...l, id: nid() })) : [];
+      saveSettings({ ...settings, rightPanels: [...rPanels, { id, name, webs, launchers }], rightPanelOf: { ...(settings.rightPanelOf ?? {}), [activeKey]: id } });
+      if (webs[0]) setRightActive(webs[0].id);
+    },
+    onRename: (id, name) => saveSettings({ ...settings, rightPanels: rPanels.map((p) => (p.id === id ? { ...p, name } : p)) }),
+    onDelete: (id) => {
+      const of = Object.fromEntries(Object.entries(settings.rightPanelOf ?? {}).filter(([, v]) => v !== id));
+      saveSettings({ ...settings, rightPanels: rPanels.filter((p) => p.id !== id), rightPanelOf: of });
+    },
+  };
+
+  // náhľad kalendára a úloh vedľa čítacieho panela (len pošta IMAP/Zimbra)
+  const myDay = settings.myDay ?? { calendar: false, tasks: false };
+  const myDayOn = myDay.calendar || myDay.tasks;
+  const [myMonth, setMyMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [myEvents, setMyEvents] = useState<{ loading: boolean; error?: string; list: MyDayEvent[] }>({ loading: false, list: [] });
+  const myDayAccs = (activeImap ? [activeImap] : accounts.filter(isImap)).filter((a) => a.id !== DEMO_ID);
+  const myDayKey = myDayAccs.map((a) => a.id).join(',');
+  useEffect(() => {
+    if (!api || demo || !myDay.calendar || !myDayAccs.length) return;
+    let alive = true;
+    const run = async () => {
+      const from = new Date(myMonth.getFullYear(), myMonth.getMonth(), 1 - 7);
+      const to = new Date(myMonth.getFullYear(), myMonth.getMonth() + 1, 8);
+      setMyEvents((x) => ({ ...x, loading: true }));
+      const rs = await Promise.all(myDayAccs.map((a) => api.calEvents(a.id, [], from.toISOString(), to.toISOString())));
+      if (!alive) return;
+      const list = rs.flatMap((r, i) => (r.ok ? r.data.map((e) => ({ ...e, accountColor: accountColor(myDayAccs[i]!.color) })) : []));
+      const errs = rs.filter((r) => !r.ok).length;
+      setMyEvents({ loading: false, list, error: errs && !list.length ? 'Kalendár sa nepodarilo načítať.' : undefined });
+    };
+    void run();
+    const t = window.setInterval(() => void run(), 10 * 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [api, demo, myDay.calendar, myDayKey, myMonth, agendaTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const myDayModule = (mod: ImapModule) => {
+    const a = activeImap ?? myDayAccs[0];
+    if (!a) return;
+    if (!activeImap) setSelection({ accountId: a.id, folder: 'INBOX' });
+    setImapModule((x) => ({ ...x, [a.id]: mod }));
+  };
+
   // pripomenutie bez odpovede → úloha na dnes
   useEffect(() => {
     if (!followupEv) return;
@@ -1418,6 +1500,8 @@ export function App() {
               openMode={settings.openMode ?? 'window'}
               onOpenMode={(v) => saveSettings({ ...settings, openMode: v })}
               onSendReceive={() => void sendReceive()}
+              myDay={myDay}
+              onMyDay={(v) => saveSettings({ ...settings, myDay: v })}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
@@ -1456,7 +1540,7 @@ export function App() {
           )}
           {updateReady && (
             <div className="banner">
-              Je pripravená nová verzia MailKlienta.{' '}
+              Je pripravená nová verzia programu Universum eMail.{' '}
               <button className="link" onClick={() => void api?.updateInstall()}>Reštartovať a aktualizovať</button>{' '}
               <button className="link" onClick={() => setUpdateReady(null)}>Neskôr</button>
             </div>
@@ -1557,7 +1641,7 @@ export function App() {
                     />
                   </div>
                 ))}
-                <div className="mail" style={{ display: activeTab ? 'none' : undefined, gridTemplateColumns: `${widths.folders}px ${widths.list}px minmax(0, 1fr)` }}>
+                <div className="mail" style={{ display: activeTab ? 'none' : undefined, gridTemplateColumns: `${widths.folders}px ${widths.list}px minmax(0, 1fr)${myDayOn ? ` ${widths.myday}px` : ''}` }}>
                   <Splitter
                     at={widths.folders}
                     value={widths.folders}
@@ -1568,6 +1652,19 @@ export function App() {
                     onChange={(v) => setWidths((w) => ({ ...w, folders: v }))}
                     onDone={(v) => saveWidth('folders', v)}
                   />
+                  {myDayOn && (
+                    <Splitter
+                      side="right"
+                      at={widths.myday}
+                      value={widths.myday}
+                      min={220}
+                      max={520}
+                      label="Šírka panela kalendára a úloh"
+                      def={PW.myday}
+                      onChange={(v) => setWidths((w) => ({ ...w, myday: v }))}
+                      onDone={(v) => saveWidth('myday', v)}
+                    />
+                  )}
                   <Splitter
                     at={widths.folders + widths.list}
                     value={widths.list}
@@ -1634,6 +1731,11 @@ export function App() {
                     onOpenFull={(m, alt) => openFull(m, alt)}
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
+                    onQuick={(m, a) =>
+                      void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
+                    }
+                    sort={settings.listSort}
+                    onSort={(s) => saveSettings({ ...settings, listSort: s })}
                     onLoadMore={!found && hasMore && !demo ? loadMore : undefined}
                     loadingMore={listState.loading}
                     onDeleteKey={() => void del()}
@@ -1687,12 +1789,13 @@ export function App() {
                     onAttachmentContext={(i, x, y) => {
                       const m = full.msg;
                       if (!m || !api) return;
-                      const a = m.attachments[i];
+                      const a = m.attachments.find((x, pos) => (x.index ?? pos) === i);
+                      const real = m.attachments.map((x, pos) => ({ x, i: x.index ?? pos })).filter((y) => !y.x.inline);
                       showCtx(x, y, [
                         { label: 'Otvoriť', onClick: () => void api.openAttachment(m.accountId, m.folder, m.uid, i) },
                         { label: 'Uložiť ako…', onClick: () => void api.saveAttachment(m.accountId, m.folder, m.uid, i) },
-                        { label: 'Uložiť všetky prílohy…', disabled: m.attachments.length < 2, onClick: async () => {
-                          for (let k = 0; k < m.attachments.length; k++) {
+                        { label: 'Uložiť všetky prílohy…', disabled: real.length < 2, onClick: async () => {
+                          for (const { i: k } of real) {
                             const r = await api.saveAttachment(m.accountId, m.folder, m.uid, k);
                             if (r.ok && r.data === null) break;
                           }
@@ -1702,6 +1805,12 @@ export function App() {
                         { label: `Kopírovať názov „${a?.filename ?? ''}“`, onClick: () => void navigator.clipboard.writeText(a?.filename ?? '') },
                       ]);
                     }}
+                    onDelete={() => void del()}
+                    onArchive={() => void archive()}
+                    onToggleSeen={() => void toggleSeen()}
+                    onToggleFlag={() => void toggleFlag()}
+                    onTogglePin={() => void togglePin()}
+                    onMore={current ? (x, y) => messageMenu([current], x, y) : undefined}
                     onPopOut={full.msg && full.msg.accountId !== DEMO_ID ? () => void api?.messageWindow(full.msg!.accountId, full.msg!.folder, full.msg!.uid) : undefined}
                     onUnsubscribe={
                       full.msg?.unsubscribe && full.msg.accountId !== DEMO_ID
@@ -1722,6 +1831,26 @@ export function App() {
                   />
                   )}
                   </div>
+                  {myDayOn && (
+                    <MyDayPane
+                      calendar={myDay.calendar}
+                      tasks={myDay.tasks}
+                      events={myEvents.list}
+                      loading={myEvents.loading}
+                      error={myEvents.error}
+                      month={myMonth}
+                      onMonth={setMyMonth}
+                      taskList={settings.tasks ?? []}
+                      onToggleTask={(t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done, dirty: true } : x)) })}
+                      onOpenTask={(t) => (t.message ? openTaskMessage(t.message) : myDayModule('tasks'))}
+                      onAddTask={(title, due) =>
+                        saveSettings({ ...settings, tasks: [...(settings.tasks ?? []), { id: Math.random().toString(36).slice(2, 10), title, due, done: false, created: new Date().toISOString() }] })
+                      }
+                      onOpenCalendar={() => myDayModule('calendar')}
+                      onOpenTasks={() => myDayModule('tasks')}
+                      onHide={(part) => saveSettings({ ...settings, myDay: { ...myDay, [part]: false } })}
+                    />
+                  )}
                 </div>
                 {drafts.length > 0 && (
                   <div className="draft-tabs" role="tablist" aria-label="Rozpísané správy">
@@ -1790,8 +1919,10 @@ export function App() {
             </div>
             {rightOpen && (
               <RightPanel
-                settings={settings}
-                onSettings={saveSettings}
+                settings={panelView}
+                onSettings={savePanelView}
+                allWebs={allPanelWebs}
+                choice={panelChoice}
                 active={rightActive}
                 onActive={setRightActive}
                 overlay={overlay}

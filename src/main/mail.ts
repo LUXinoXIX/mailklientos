@@ -507,11 +507,19 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     invite: inviteOf(p),
     unsubscribe: unsubscribeOf(p),
     auth: authOf(p),
-    attachments: (p.attachments ?? []).filter((a: any) => !/^text\/calendar/i.test(a.contentType ?? '')).map((a: any) => ({
-      filename: a.filename || 'príloha',
-      size: a.size ?? 0,
-      contentType: a.contentType,
-    })),
+    // index = poradie v pôvodnej správe (getAttachment); inline = obrázok vložený v texte (logo v podpise a pod.)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    attachments: (p.attachments ?? []).map((a: any, index: number) => ({ a, index }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter(({ a }: any) => !/^text\/calendar/i.test(a.contentType ?? ''))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map(({ a, index }: any) => ({
+        filename: a.filename || 'príloha',
+        size: a.size ?? 0,
+        contentType: a.contentType,
+        index,
+        inline: isInlineImage(a, p.html) || undefined,
+      })),
   };
 }
 
@@ -604,6 +612,21 @@ export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
   return true as const;
 }
 
+/**
+ * Obrázok, ktorý je naozaj zobrazený v HTML texte (logo v podpise, vložený obrázok) – nie je to „skutočná“ príloha.
+ * Rozhoduje odkaz z HTML: cid:… alebo data: URL, ktorou mailparser odkaz nahradil. Obrázok, na ktorý text
+ * neodkazuje (aj keď je v multipart/related – zle poskladané správy), ostáva medzi prílohami, aby sa nestratil.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isInlineImage(a: any, html: string | false | null | undefined): boolean {
+  if (!html || !/^image\//i.test(a.contentType ?? '') || !a.cid) return false;
+  if (html.includes(`cid:${a.cid}`)) return true;
+  const content = a.content as Buffer | undefined;
+  if (!content?.length) return false;
+  const head = `data:${a.contentType};base64,${content.subarray(0, 150).toString('base64')}`;
+  return html.includes(head);
+}
+
 /** Prílohy pôvodnej správy pri preposlaní. */
 async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid: number }) {
   return withImap(acc, async (c) => {
@@ -614,7 +637,7 @@ async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid
       const p = await simpleParser(msg.source);
       return (p.attachments ?? [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((a: any) => a.contentDisposition !== 'inline' || !a.cid)
+        .filter((a: any) => !isInlineImage(a, p.html))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((a: any) => ({ filename: (a.filename as string) || 'priloha', content: a.content as Buffer, contentType: a.contentType }));
     } finally {

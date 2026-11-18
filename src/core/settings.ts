@@ -40,9 +40,22 @@ export interface SignatureDefaults {
   reply?: string;
 }
 
-export interface AppSettings {
+/** vlastný pravý panel (weby + programy), ktorý môže používať jedno alebo viac kont */
+export interface RightPanelDef {
+  id: string;
+  name: string;
   webs: WebItem[];
   launchers: LauncherItem[];
+}
+
+export interface AppSettings {
+  /** spoločný pravý panel (pre kontá bez vlastného) */
+  webs: WebItem[];
+  launchers: LauncherItem[];
+  /** vlastné pravé panely */
+  rightPanels?: RightPanelDef[];
+  /** ktorý panel používa konto (id konta alebo „Všetky“ → id panela; chýba = spoločný) */
+  rightPanelOf?: Record<string, string>;
   signatures: Signature[];
   signatureDefaults: Record<string, SignatureDefaults>;
   /** upozornenia Windows na novú poštu (predvolene zapnuté) */
@@ -74,6 +87,10 @@ export interface AppSettings {
   searchHistory?: string[];
   /** zoznam kont s menami natrvalo rozbalený (inak úzky pás a vysúvanie po kliknutí) */
   accountListPinned?: boolean;
+  /** náhľad kalendára / úloh vedľa čítacieho panela v pošte */
+  myDay?: { calendar: boolean; tasks: boolean };
+  /** zoradenie zoznamu správ */
+  listSort?: { by: 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category'; dir: 'desc' | 'asc' };
   /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
   paneWidths?: { folders?: number; list?: number; right?: number };
 }

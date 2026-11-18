@@ -1,4 +1,6 @@
 // Výber typu nového konta a dialóg pre konto Microsoft 365 (vložený Outlook na webe).
+import { AccountIconPicker, type IconCfg } from './AccountIcon';
+import { initials } from './AccountRail';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar,
   MessageBarBody, Radio, RadioGroup,
@@ -59,6 +61,7 @@ export function M365Dialog(props: {
   const [name, setName] = useState(e?.name ?? (props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
   const [email, setEmail] = useState(e?.email ?? '');
   const [short, setShort] = useState(e?.short ?? '');
+  const [icon, setIcon] = useState<IconCfg>({ iconKind: e?.iconKind, iconText: e?.iconText, iconPreset: e?.iconPreset, iconImage: e?.iconImage });
   const [host, setHost] = useState<'office' | 'live'>(e?.host ?? props.host ?? 'office');
   const [color, setColor] = useState(accountColor(e?.color ?? ACCOUNT_COLORS.find((c) => !props.usedColors.includes(c)) ?? ACCOUNT_COLORS[1]!));
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +79,7 @@ export function M365Dialog(props: {
       color,
       host,
       short: short.trim() || undefined,
+      ...icon,
     };
     setBusy(true);
     const r = await window.mailApi.saveAccount(acc);
@@ -113,6 +117,9 @@ export function M365Dialog(props: {
             <Field label="Názov v páse kont">
               <Input value={name} onChange={(_, d) => setName(d.value)} />
             </Field>
+            <Field label="Ikonka v páse kont">
+              <AccountIconPicker value={icon} color={color} fallback={initials(name || '?')} onChange={setIcon} />
+            </Field>
             <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov. Prázdne = MS365 (firemné) alebo MSO (osobné).">
               <Input value={short} maxLength={8} placeholder={host === 'live' ? 'MSO' : 'MS365'} onChange={(_, d) => setShort(d.value.toUpperCase())} />
             </Field>
@@ -130,6 +137,9 @@ export function M365Dialog(props: {
                 {ACCOUNT_COLORS.map((c) => (
                   <button key={c} className={`swatch ${c === color ? 'on' : ''}`} style={{ background: c }} onClick={() => setColor(c)} aria-label={`Farba ${c}`} />
                 ))}
+                <label className={`swatch custom ${ACCOUNT_COLORS.includes(color) ? '' : 'on'}`} title="Vlastná farba" style={{ background: ACCOUNT_COLORS.includes(color) ? undefined : color }}>
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Vlastná farba konta" />
+                </label>
               </div>
             </Field>
             {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}

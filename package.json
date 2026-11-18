@@ -1,7 +1,7 @@
 {
   "name": "mailklient",
   "productName": "MailKlient",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Universum eMail – e-mailový klient (IMAP, Zimbra, Microsoft 365)",
   "main": ".vite/build/main.js",
   "private": true,
