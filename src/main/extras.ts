@@ -1,5 +1,6 @@
 // Doplnky: tlač a PDF, náhľad príloh, odhlásenie z newslettera, pripomenutie bez odpovede, záloha nastavení,
 // ikona v oznamovacej oblasti s počtom neprečítaných.
+import { attachmentRisk } from '../core/attrisk';
 import { getMainWindow } from './mainwin';
 import fs from 'node:fs';
 import https from 'node:https';
@@ -71,6 +72,8 @@ export async function previewAttachment(acc: AccountConfig, folder: string, uid:
     const ext = path.extname(a.filename).slice(1).toLowerCase().replace('jpg', 'jpeg').replace('svg', 'svg+xml');
     return { kind: 'image' as const, src: `data:image/${ext};base64,${a.content.toString('base64')}`, filename: a.filename };
   }
+  const risk = attachmentRisk(a.filename);
+  if (risk.level === 'blocked') throw new mail.UserError(`Prílohu „${a.filename}“ program neotvorí: ${risk.reasons.join(' ')} Ak ju naozaj potrebuješ, ulož ju a nechaj skontrolovať antivírusom.`);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'universum-nahlad-'));
   const file = path.join(dir, a.filename.replace(/[\\/:*?"<>|]/g, '_'));
   fs.writeFileSync(file, a.content);

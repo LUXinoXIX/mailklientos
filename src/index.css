@@ -723,3 +723,30 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .inline-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border: 1px dashed var(--colorNeutralStroke2); border-radius: 6px; max-height: 84px; overflow-y: auto; }
 .inline-list .attachment { background: transparent !important; box-shadow: none; border-style: dashed; font-size: 12px; padding: 0 2px 0 6px; color: var(--colorNeutralForeground2); }
 .inline-list .attachment .fui-Button { min-width: 0; padding: 0 6px; font-size: 12px; height: 22px; }
+
+/* dôležitosť v hlavičke rozpísanej správy */
+.prio-btn { white-space: nowrap; color: var(--colorNeutralForeground3) !important; }
+.prio-btn.prio-high { color: #c50f1f !important; font-weight: 600; background: #fde7e9 !important; }
+.prio-btn.prio-low { color: var(--colorBrandForeground1) !important; background: var(--colorBrandBackground2) !important; }
+/* spinka v zozname správ */
+.msg-att { flex: none; width: 13px; height: 13px; margin-left: 4px; color: var(--colorNeutralForeground3); }
+.msg-item:not(.seen) .msg-att { color: var(--colorNeutralForeground2); }
+
+/* príloha: názov nie je odkaz – otvára sa len tlačidlom Náhľad (s varovaním) */
+.attachment-name { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; min-width: 0; cursor: default; user-select: text; }
+.attachment-name svg { flex: none; }
+.attachment-fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.att-err { margin: 0 16px 8px; padding: 6px 10px; border-radius: 6px; background: #fde7e9; color: #a4262c; font-size: 13px; }
+/* varovanie pred otvorením prílohy */
+.att-guard.blocked { border-top: 4px solid #c50f1f; }
+.att-guard.macro, .att-guard.normal { border-top: 4px solid #f7b500; }
+.att-guard-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; background: var(--colorNeutralBackground3); border-radius: 6px; margin-bottom: 8px; word-break: break-all; }
+.att-guard-ext { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); white-space: nowrap; }
+.att-guard-ext.blocked { background: #c50f1f; color: #fff; border-color: #c50f1f; font-weight: 600; }
+.att-guard-ext.macro { background: #fff4ce; border-color: #f7b500; }
+.att-guard-reason { margin: 4px 0; font-weight: 600; color: #a4262c; }
+
+/* zmena poradia kont ťahaním: čiara, kam sa konto vloží */
+[data-drop='before'] { box-shadow: 0 -3px 0 0 var(--colorBrandStroke1) !important; }
+[data-drop='after'] { box-shadow: 0 3px 0 0 var(--colorBrandStroke1) !important; }
+.acc-btn.dragging, .acc-list .dragging { opacity: .45; }

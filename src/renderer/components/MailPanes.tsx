@@ -1,11 +1,12 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
+import { useAttachmentGuard } from './AttachmentGuard';
 import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -352,6 +353,7 @@ export function MessageList(props: {
               {m.fromName || m.fromAddress}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
+            {m.hasAttachments && <AttachTinyIcon className="msg-att" aria-label="Má prílohu" title="Správa má prílohu" />}
             <span className="msg-date">{fmtDate(m.date)}</span>
           </div>
           <div className="msg-row">
@@ -582,6 +584,8 @@ export function ReadingPane(props: {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
   const [showInline, setShowInline] = useState(false);
+  const [attErr, setAttErr] = useState<string | null>(null);
+  const { guard, dialog: attGuard } = useAttachmentGuard();
   const m = props.message;
   const api = window.mailApi;
   // Pri načítaní ostáva viditeľná predchádzajúca správa (žiadne biele bliknutie), hore len pásik priebehu.
@@ -705,27 +709,30 @@ export function ReadingPane(props: {
                 props.onAttachmentContext(i, e.clientX, e.clientY);
               }}
             >
-              <button
-                className="attachment-open"
-                disabled={demo}
-                title="Otvoriť"
-                onClick={() => void api?.openAttachment(m.accountId, m.folder, m.uid, i)}
-              >
-                <AttachIcon /> {a.filename} <span className="muted">({Math.ceil(a.size / 1024)} kB)</span>
-              </button>
+              <span className="attachment-name" title={`${a.filename} – otvorí sa tlačidlom Náhľad`}>
+                <AttachIcon /> <span className="attachment-fn">{a.filename}</span> <span className="muted">({Math.ceil(a.size / 1024)} kB)</span>
+              </span>
               <Button
                 size="small"
                 appearance="transparent"
+                icon={<PreviewSmallIcon />}
                 disabled={demo}
                 title="Náhľad: obrázky priamo tu, PDF v okne náhľadu, Office v nainštalovanom programe"
-                onClick={async () => {
-                  const r = await api?.previewAttachment(m.accountId, m.folder, m.uid, i);
-                  if (r?.ok && r.data.kind === 'image' && r.data.src) setPreview({ src: r.data.src, name: r.data.filename });
-                }}
+                onClick={() =>
+                  guard(
+                    a.filename,
+                    async () => {
+                      const r = await api?.previewAttachment(m.accountId, m.folder, m.uid, i);
+                      if (r?.ok && r.data.kind === 'image' && r.data.src) setPreview({ src: r.data.src, name: r.data.filename });
+                      else if (r && !r.ok) setAttErr(r.error);
+                    },
+                    () => void api?.saveAttachment(m.accountId, m.folder, m.uid, i),
+                  )
+                }
               >
                 Náhľad
               </Button>
-              <Button size="small" appearance="transparent" disabled={demo} onClick={() => void api?.saveAttachment(m.accountId, m.folder, m.uid, i)}>
+              <Button size="small" appearance="transparent" icon={<SaveSmallIcon />} disabled={demo} title="Uložiť na disk (nič sa nespustí)" onClick={() => void api?.saveAttachment(m.accountId, m.folder, m.uid, i)}>
                 Uložiť
               </Button>
             </span>
@@ -748,6 +755,12 @@ export function ReadingPane(props: {
       {m.html && !showImages && (
         <div className="images-bar">
           Vzdialené obrázky sú zablokované kvôli súkromiu. <Button size="small" appearance="transparent" onClick={() => setShowImages(true)}>Zobraziť obrázky</Button>
+        </div>
+      )}
+      {attGuard}
+      {attErr && (
+        <div className="att-err" role="alert">
+          ⛔ {attErr} <Button size="small" appearance="transparent" onClick={() => setAttErr(null)}>Zavrieť</Button>
         </div>
       )}
       {preview && (
