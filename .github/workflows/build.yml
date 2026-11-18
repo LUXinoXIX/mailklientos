@@ -23,10 +23,7 @@ jobs:
           - os: windows-latest
             label: windows
           # macOS: Apple Silicon (M1–M4), bez podpisu Apple (ad-hoc podpis, prvé spustenie cez „Aj tak otvoriť“)
-          # Mac s čipom M sú na GitHube často bez voľnej kapacity → zostavuje sa na Intel Macu krížovo pre arm64
-          - os: macos-15-intel
-            label: macos
-            makeargs: -- --arch=arm64
+          # macOS (Apple Silicon) sa zostavuje v jobe linux – Mac runnery GitHubu bývajú bez kapacity
           - os: ubuntu-latest
             label: linux
     runs-on: ${{ matrix.os }}
@@ -77,23 +74,8 @@ jobs:
 
       - name: Zostavenie inštalátora
         run: |
-          npm run make ${{ matrix.makeargs }} 2>&1 | tee ci/make.log
+          npm run make 2>&1 | tee ci/make.log
           exit ${PIPESTATUS[0]}
-
-      # macOS bez Apple Developer účtu: ad-hoc podpis celej aplikácie (na Macoch s čipom M musí byť každý
-      # kód podpísaný, inak macOS hlási „aplikácia je poškodená“) a nový ZIP s menom pre používateľa.
-      - name: macOS – ad-hoc podpis a ZIP
-        if: matrix.label == 'macos'
-        run: |
-          app=$(ls -d out/*-darwin-*/*.app | head -1)
-          echo "aplikácia: $app" | tee ci/macsign.log
-          codesign --force --deep --sign - "$app" 2>&1 | tee -a ci/macsign.log
-          codesign --verify --deep --strict --verbose=2 "$app" 2>&1 | tee -a ci/macsign.log
-          ver=$(node -p "require('./package.json').version")
-          rm -rf out/make/zip/darwin
-          mkdir -p out/make/zip/darwin
-          ditto -c -k --sequesterRsrc --keepParent "$app" "out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip"
-          ls -la out/make/zip/darwin | tee -a ci/macsign.log
 
       # Dymový test: aplikácia musí naštartovať a 25 s bežať bez pádu (Linux, virtuálny displej).
       - name: Dymový test spustenia
@@ -122,6 +104,32 @@ jobs:
           sleep 15
           import -window root ci/screenshot-compose.png || true
           if kill -0 $pid 2>/dev/null; then echo "beží (compose)" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA (compose)" | tee -a ci/smoke.log; exit 1; fi
+
+      # macOS pre Apple Silicon (M1–M4) zostavený na Linuxe: Electron Forge zabalí aplikáciu pre darwin/arm64,
+      # rcodesign (open source, bez Apple účtu) ju ad-hoc podpíše – na Macoch s čipom M musí byť kód podpísaný,
+      # inak macOS hlási „aplikácia je poškodená“. Prvé spustenie: Nastavenia → Súkromie a bezpečnosť → Aj tak otvoriť.
+      - name: macOS (Apple Silicon) – zostavenie a ad-hoc podpis
+        if: matrix.label == 'linux'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          npx electron-forge package --platform=darwin --arch=arm64 2>&1 | tee ci/mac-package.log
+          app=$(ls -d out/*-darwin-arm64/*.app | head -1)
+          echo "aplikácia: $app" | tee -a ci/mac-package.log
+          tag=$(gh release list -R indygreg/apple-platform-rs --limit 60 --json tagName --jq '[.[] | select(.tagName|startswith("apple-codesign/"))][0].tagName')
+          echo "rcodesign: $tag" | tee -a ci/mac-package.log
+          mkdir -p "$RUNNER_TEMP/rc"
+          gh release download "$tag" -R indygreg/apple-platform-rs -p '*x86_64-unknown-linux-musl.tar.gz' -D "$RUNNER_TEMP/rc"
+          tar -xzf "$RUNNER_TEMP"/rc/*.tar.gz -C "$RUNNER_TEMP/rc"
+          rc=$(find "$RUNNER_TEMP/rc" -name rcodesign -type f | head -1)
+          "$rc" sign "$app" 2>&1 | tail -20 | tee -a ci/mac-package.log
+          "$rc" verify "$app" 2>&1 | tail -5 | tee -a ci/mac-package.log || true
+          ver=$(node -p "require('./package.json').version")
+          mkdir -p out/make/zip/darwin
+          (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip" "$(basename "$app")")
+          ls -la out/make/zip/darwin | tee -a ci/mac-package.log
 
       - name: Zoznam výstupov
         if: always()
