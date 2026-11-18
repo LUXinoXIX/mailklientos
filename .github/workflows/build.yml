@@ -116,7 +116,9 @@ jobs:
         run: |
           set -o pipefail
           npx electron-forge package --platform=darwin --arch=arm64 2>&1 | tee ci/mac-package.log
-          app=$(ls -d out/*-darwin-arm64/*.app | head -1)
+          src=$(ls -d out/*-darwin-arm64/*.app | head -1)
+          app="$(dirname "$src")/Universum eMail.app"
+          mv "$src" "$app"
           echo "aplikácia: $app" | tee -a ci/mac-package.log
           tag=$(gh release list -R indygreg/apple-platform-rs --limit 60 --json tagName --jq '[.[] | select(.tagName|startswith("apple-codesign/"))][0].tagName')
           echo "rcodesign: $tag" | tee -a ci/mac-package.log
@@ -125,7 +127,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP"/rc/*.tar.gz -C "$RUNNER_TEMP/rc"
           rc=$(find "$RUNNER_TEMP/rc" -name rcodesign -type f | head -1)
           "$rc" sign "$app" 2>&1 | tail -20 | tee -a ci/mac-package.log
-          "$rc" verify "$app" 2>&1 | tail -5 | tee -a ci/mac-package.log || true
+          "$rc" print-signature-info "$app/Contents/MacOS/MailKlient" 2>&1 | grep -i -m3 "signature\|ad-hoc\|cdhash" | tee -a ci/mac-package.log || true
           ver=$(node -p "require('./package.json').version")
           mkdir -p out/make/zip/darwin
           (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip" "$(basename "$app")")
