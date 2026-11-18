@@ -9,6 +9,7 @@ import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
   SendReceiveIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  CalendarSmallIcon, TasksSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
 import { SEARCH_FIELDS, type Category, type QuickStep, type SearchField, type Signature, type Template } from '../../core/settings';
@@ -138,7 +139,7 @@ function SendLaterMenu(props: { onPick: (d: Date) => void }) {
             <input type="datetime-local" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Dátum a čas odoslania" />
             <Button size="small" disabled={!custom} onClick={() => custom && props.onPick(new Date(custom))}>Naplánovať</Button>
           </div>
-          <div className="muted small pad">MailKlient musí byť v tom čase spustený.</div>
+          <div className="muted small pad">Universum eMail musí byť v tom čase spustený.</div>
         </MenuList>
       </MenuPopover>
     </Menu>
@@ -260,6 +261,9 @@ export function Ribbon(props: {
   openMode: 'window' | 'tab';
   onOpenMode: (v: 'window' | 'tab') => void;
   onSendReceive: () => void;
+  /** náhľad kalendára / úloh vedľa čítacieho panela (len pošta IMAP/Zimbra) */
+  myDay?: { calendar: boolean; tasks: boolean };
+  onMyDay?: (v: { calendar: boolean; tasks: boolean }) => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -384,6 +388,7 @@ export function Ribbon(props: {
         ) : p.tab === 'home' || (!c && (p.tab === 'message' || p.tab === 'insert')) ? (
           <>
             <ToolbarButton appearance="primary" icon={<ComposeIcon />} onClick={p.onCompose}>Nová správa</ToolbarButton>
+            <ToolbarButton className="sr-btn" icon={<SendReceiveIcon />} onClick={p.onSendReceive} title="Skontrolovať poštu na všetkých kontách a odoslať čakajúce správy (F9)">Odoslať a prijať</ToolbarButton>
             <ToolbarDivider />
             <ToolbarButton icon={<ReplyIcon />} disabled={!p.hasMessage} onClick={p.onReply}>Odpovedať</ToolbarButton>
             <ToolbarButton icon={<ReplyAllIcon />} disabled={!p.hasMessage} onClick={p.onReplyAll}>Všetkým</ToolbarButton>
@@ -469,7 +474,6 @@ export function Ribbon(props: {
               </Menu>
             )}
             <ToolbarDivider />
-            <ToolbarButton icon={<SendReceiveIcon />} onClick={p.onSendReceive} title="Skontrolovať poštu na všetkých kontách a odoslať čakajúce správy (F9)">Odoslať a prijať</ToolbarButton>
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
             <Menu>
@@ -509,6 +513,16 @@ export function Ribbon(props: {
               {p.rightOpen ? 'Skryť pravý panel' : 'Zobraziť pravý panel'}
             </ToolbarButton>
             <ToolbarButton onClick={() => p.onCompact(!p.compact)}>{p.compact ? 'Plný ribbon' : 'Kompaktný ribbon'}</ToolbarButton>
+            {p.onMyDay && (
+              <>
+                <ToolbarButton icon={<CalendarSmallIcon />} onClick={() => p.onMyDay!({ ...p.myDay!, calendar: !p.myDay!.calendar })} aria-pressed={p.myDay!.calendar} title="Náhľad kalendára vedľa čítacieho panela">
+                  {p.myDay!.calendar ? '✓ ' : ''}Kalendár pri pošte
+                </ToolbarButton>
+                <ToolbarButton icon={<TasksSmallIcon />} onClick={() => p.onMyDay!({ ...p.myDay!, tasks: !p.myDay!.tasks })} aria-pressed={p.myDay!.tasks} title="Náhľad úloh vedľa čítacieho panela">
+                  {p.myDay!.tasks ? '✓ ' : ''}Úlohy pri pošte
+                </ToolbarButton>
+              </>
+            )}
             <ToolbarButton icon={<ConversationIcon />} onClick={() => p.onConversations(!p.conversations)} aria-pressed={p.conversations}>
               {p.conversations ? '✓ ' : ''}Konverzácie
             </ToolbarButton>
