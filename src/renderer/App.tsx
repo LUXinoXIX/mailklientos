@@ -3,7 +3,7 @@ import { FluentProvider } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
-import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
+import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, SEARCH_FIELDS, type SearchField, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
 import { AccountDialog } from './components/AccountDialog';
 import { Composer, type ComposeInit, type ComposeKind, type ComposerHandle, type ComposerState } from './components/Composer';
@@ -582,7 +582,8 @@ export function App() {
   function saveCurrentSearch() {
     const q = search.trim();
     if (!q) return;
-    const s2: SavedSearch = { id: Math.random().toString(36).slice(2, 10), name: q, query: q, accountId: selection.accountId === ALL ? undefined : selection.accountId };
+    const fl = SEARCH_FIELDS.find((x) => x.id === searchField);
+    const s2: SavedSearch = { id: Math.random().toString(36).slice(2, 10), name: searchField === 'all' ? q : `${q} (${fl?.label.toLowerCase()})`, query: q, accountId: selection.accountId === ALL ? undefined : selection.accountId, field: searchField };
     saveSettings({ ...settings, savedSearches: [...(settings.savedSearches ?? []), s2] });
     setStatus(`Hľadanie „${q}“ uložené medzi priečinky.`);
   }
@@ -919,6 +920,9 @@ export function App() {
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
   const searchScope = selection.accountId === ALL || searchAll ? undefined : selection.accountId;
+  const [searchField, setSearchField] = useState<SearchField>('all');
+  useEffect(() => setSearchField(settings.searchField ?? 'all'), [settings.searchField]);
+  const serverAuto = settings.searchServerAuto !== false;
   useEffect(() => {
     const q = search.trim();
     if (!api || demo || q.length < 2) {
@@ -926,17 +930,34 @@ export function App() {
       return;
     }
     const t = window.setTimeout(() => {
-      void api.searchLocal(q, searchScope).then((r) => r.ok && setFound({ q, list: r.data }));
-    }, 250);
+      void api.searchLocal(q, searchScope, undefined, searchField).then((r) => {
+        if (!r.ok) return;
+        setFound({ q, list: r.data });
+        if (serverAuto) void searchOnServer({ q, list: r.data });
+      });
+    }, serverAuto ? 600 : 250);
     return () => window.clearTimeout(t);
-  }, [search, searchScope, api, demo, mailTick]);
+  }, [search, searchScope, api, demo, mailTick, searchField, serverAuto]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function searchOnServer() {
-    if (!api || !found) return;
-    const q = found.q;
-    setFound({ ...found, server: 'loading' });
+  // nedávne hľadania: uložiť, keď sa hľadanie chvíľu nemení
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) return;
+    const t = window.setTimeout(() => {
+      const h = settings.searchHistory ?? [];
+      if (h[0] === q) return;
+      saveSettings({ ...settings, searchHistory: [q, ...h.filter((x) => x !== q)].slice(0, 10) });
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function searchOnServer(base?: { q: string; list: MessageSummary[] }) {
+    const cur = base ?? found;
+    if (!api || !cur) return;
+    const q = cur.q;
+    setFound({ ...cur, server: 'loading' });
     const targets = searchScope ? [{ id: searchScope, folder: selection.folder }] : accounts.filter(isImap).map((a) => ({ id: a.id, folder: 'INBOX' }));
-    const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, q)));
+    const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, q, searchField)));
     setFound((f) => {
       if (!f || f.q !== q) return f;
       const key = (m: MessageSummary) => `${m.accountId}|${m.folder}|${m.uid}`;
@@ -1117,6 +1138,16 @@ export function App() {
             color={topColor}
             search={search}
             onSearch={activeM365 ? undefined : setSearch}
+            searchOptions={{
+              field: searchField,
+              onField: (f) => saveSettings({ ...settings, searchField: f }),
+              serverAuto,
+              onServerAuto: (v) => saveSettings({ ...settings, searchServerAuto: v }),
+              history: settings.searchHistory ?? [],
+              onHistory: (q) => setSearch(q),
+              onClearHistory: () => saveSettings({ ...settings, searchHistory: [] }),
+              onSaveFolder: search.trim() ? saveCurrentSearch : undefined,
+            }}
             rightOpen={rightOpen}
             onToggleRight={() => setRightOpen(!rightOpen)}
           />
@@ -1311,6 +1342,7 @@ export function App() {
                     activeSearch={search.trim()}
                     onSavedSearch={(x) => {
                       if (x.accountId && x.accountId !== selection.accountId) setSelection({ accountId: x.accountId, folder: 'INBOX' });
+                      setSearchField(x.field ?? 'all');
                       setSearch(x.query);
                     }}
                     onRemoveSearch={(x) => saveSettings({ ...settings, savedSearches: (settings.savedSearches ?? []).filter((y) => y.id !== x.id) })}

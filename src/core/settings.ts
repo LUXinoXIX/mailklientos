@@ -66,6 +66,12 @@ export interface AppSettings {
   previewLine?: boolean;
   /** dvojklik na správu: samostatné okno (predvolené) alebo karta v hlavnom okne */
   openMode?: 'window' | 'tab';
+  /** kde hľadať */
+  searchField?: SearchField;
+  /** po hľadaní v uložených správach hneď hľadať aj na serveri (predvolene áno) */
+  searchServerAuto?: boolean;
+  /** nedávne hľadania (najnovšie prvé) */
+  searchHistory?: string[];
 }
 
 export interface ThemeDef {
@@ -161,7 +167,20 @@ export interface SavedSearch {
   name: string;
   query: string;
   accountId?: string;
+  /** kde hľadať (predvolene všade) */
+  field?: SearchField;
 }
+
+/** Kde hľadať: ako v eM Cliente / Thunderbirde. */
+export type SearchField = 'all' | 'people' | 'subject' | 'body' | 'from' | 'to';
+export const SEARCH_FIELDS: Array<{ id: SearchField; label: string }> = [
+  { id: 'all', label: 'Predmet, odosielateľ, príjemcovia a text' },
+  { id: 'people', label: 'Predmet, odosielateľ a príjemcovia' },
+  { id: 'subject', label: 'Predmet' },
+  { id: 'body', label: 'Text správy' },
+  { id: 'from', label: 'Odosielateľ' },
+  { id: 'to', label: 'Príjemcovia' },
+];
 
 export const PIN_KEYWORD = '$Pinned';
 
