@@ -311,16 +311,23 @@ export function MessageList(props: {
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
         {props.loading && base.length === 0 && <div className="empty">Načítavam…</div>}
         {!props.loading && !props.error && base.length === 0 && <div className="empty">Žiadne správy</div>}
-        {groups.map((g) => {
+        {groups.map((g, i) => {
           const head = g[0]!;
           const gk = `${head.accountId}/${head.folder}/${head.uid}`;
-          if (g.length === 1) return row(head);
-          return (
-            <div key={`g-${gk}`} className="thread">
-              {row(head, { count: g.length, unreadInThread: g.some((m) => !m.seen), gk })}
-              {open === gk && g.slice(1).map((m) => row(m, { child: true }))}
-            </div>
-          );
+          const pinned = g.some(isPinned);
+          // nadpisy sekcií: Pripnuté hore, potom ostatné
+          const section =
+            pinned && i === 0 ? <div key="sec-pin" className="list-section">📌 Pripnuté</div>
+            : !pinned && i > 0 && groups[i - 1]!.some(isPinned) ? <div key="sec-rest" className="list-section">Ostatné</div>
+            : null;
+          const body =
+            g.length === 1 ? row(head) : (
+              <div key={`g-${gk}`} className="thread">
+                {row(head, { count: g.length, unreadInThread: g.some((m) => !m.seen), gk })}
+                {open === gk && g.slice(1).map((m) => row(m, { child: true }))}
+              </div>
+            );
+          return section ? [section, body] : body;
         })}
       </div>
     </section>
