@@ -559,3 +559,10 @@ kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid
 .acc-list-tools { display: flex; gap: 4px; padding: 0 10px; }
 .app.dark .acc-sq { background: var(--colorNeutralBackground3); border-color: var(--colorNeutralStroke1); color: var(--colorNeutralForeground1); }
 .app.dark .acc-row:hover { background: rgba(255,255,255,.06); }
+.mail { position: relative; }
+.body { position: relative; }
+.splitter { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 20; cursor: col-resize; touch-action: none; }
+.splitter::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; background: transparent; transition: background .12s; }
+.splitter:hover::after, .splitter:focus-visible::after { background: var(--colorBrandBackground); width: 2px; left: 2px; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing webview, body.resizing iframe { pointer-events: none; }

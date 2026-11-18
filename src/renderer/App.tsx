@@ -19,6 +19,7 @@ import { CryptoDialog } from './components/CryptoDialog';
 import { AboutDialog, ShortcutsDialog } from './components/AboutDialog';
 import { MailIcon } from './icons';
 import { MessageView, type MessageRef } from './components/MessageView';
+import { Splitter } from './components/Splitter';
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
@@ -149,6 +150,11 @@ export function App() {
   // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
   const [undo, setUndo] = useState<OutboxItem | null>(null);
   const [updateReady, setUpdateReady] = useState<string | null>(null);
+  // šírky stĺpcov (ťahadlá medzi stĺpcami), uložené v nastaveniach
+  const PW = { folders: 230, list: 340, right: 360 };
+  const [widths, setWidths] = useState(PW);
+  useEffect(() => setWidths({ ...PW, ...(settings.paneWidths ?? {}) }), [settings.paneWidths]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveWidth = (k: keyof typeof PW, v: number) => saveSettings({ ...settings, paneWidths: { ...(settings.paneWidths ?? {}), [k]: v } });
   const [msgTabs, setMsgTabs] = useState<Array<{ key: string; ref: MessageRef; title: string }>>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [limits, setLimits] = useState<Record<string, number>>({});
@@ -1251,7 +1257,20 @@ export function App() {
           {secretsWarning && (
             <div className="banner warn">Systémové úložisko hesiel nie je dostupné: heslá sa držia len do zatvorenia aplikácie.</div>
           )}
-          <main className={`body ${rightOpen ? 'with-right' : ''}`}>
+          <main className={`body ${rightOpen ? 'with-right' : ''}`} style={rightOpen ? { gridTemplateColumns: `68px minmax(0, 1fr) ${widths.right}px` } : undefined}>
+            {rightOpen && (
+              <Splitter
+                side="right"
+                at={widths.right}
+                value={widths.right}
+                min={260}
+                max={900}
+                label="Šírka pravého panela"
+                def={PW.right}
+                onChange={(v) => setWidths((w) => ({ ...w, right: v }))}
+                onDone={(v) => saveWidth('right', v)}
+              />
+            )}
             {activeM365 ? (
               <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
@@ -1323,7 +1342,27 @@ export function App() {
                     />
                   </div>
                 ))}
-                <div className="mail" style={{ display: activeTab ? 'none' : undefined }}>
+                <div className="mail" style={{ display: activeTab ? 'none' : undefined, gridTemplateColumns: `${widths.folders}px ${widths.list}px minmax(0, 1fr)` }}>
+                  <Splitter
+                    at={widths.folders}
+                    value={widths.folders}
+                    min={150}
+                    max={480}
+                    label="Šírka panela priečinkov"
+                    def={PW.folders}
+                    onChange={(v) => setWidths((w) => ({ ...w, folders: v }))}
+                    onDone={(v) => saveWidth('folders', v)}
+                  />
+                  <Splitter
+                    at={widths.folders + widths.list}
+                    value={widths.list}
+                    min={220}
+                    max={900}
+                    label="Šírka zoznamu správ"
+                    def={PW.list}
+                    onChange={(v) => setWidths((w) => ({ ...w, list: v }))}
+                    onDone={(v) => saveWidth('list', v)}
+                  />
                   <FolderPane
                     account={activeImap}
                     accounts={imapAccounts}
