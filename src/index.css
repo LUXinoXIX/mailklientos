@@ -683,3 +683,5 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .panel-chooser-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; border-radius: 4px; padding: 3px 6px; cursor: pointer; font: inherit; font-size: 13px; color: inherit; min-width: 0; }
 .panel-chooser-btn:hover { background: var(--colorNeutralBackground1Hover); }
 .panel-chooser-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-toggle { display: block; text-align: left; padding: 0; margin: 0 16px 8px; font-size: 12px; color: var(--colorNeutralForeground3) !important; }
+.attachment.inline-img { border-style: dashed; opacity: .85; }

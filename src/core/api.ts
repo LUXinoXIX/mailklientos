@@ -41,7 +41,8 @@ export interface MessageFull extends MessageSummary {
   cc: string;
   html: string | null;
   text: string;
-  attachments: { filename: string; size: number; contentType: string }[];
+  /** index = poradie v pôvodnej správe (pre otvorenie/uloženie); inline = obrázok z textu správy (logo v podpise) */
+  attachments: { filename: string; size: number; contentType: string; index?: number; inline?: boolean }[];
   messageId?: string;
   /** pozvánka na udalosť (iMIP, text/calendar v správe) */
   invite?: { method: string; event: CalEvent; ics: string };

@@ -29,7 +29,7 @@ function printable(m: MessageFull) {
     ['Komu', m.to],
     ...(m.cc ? [['Kópia', m.cc]] : []),
     ['Predmet', m.subject],
-    ...(m.attachments.length ? [['Prílohy', m.attachments.map((a) => a.filename).join(', ')]] : []),
+    ...(m.attachments.some((a) => !a.inline) ? [['Prílohy', m.attachments.filter((a) => !a.inline).map((a) => a.filename).join(', ')]] : []),
   ];
   const body = m.html ? m.html.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '').replace(/<script[\s\S]*?<\/script>/gi, '') : `<pre style="white-space:pre-wrap;font-family:inherit">${esc(m.text)}</pre>`;
   return `<!doctype html><html><head><meta charset="utf-8"><style>

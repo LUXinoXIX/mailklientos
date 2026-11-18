@@ -1789,12 +1789,13 @@ export function App() {
                     onAttachmentContext={(i, x, y) => {
                       const m = full.msg;
                       if (!m || !api) return;
-                      const a = m.attachments[i];
+                      const a = m.attachments.find((x, pos) => (x.index ?? pos) === i);
+                      const real = m.attachments.map((x, pos) => ({ x, i: x.index ?? pos })).filter((y) => !y.x.inline);
                       showCtx(x, y, [
                         { label: 'Otvoriť', onClick: () => void api.openAttachment(m.accountId, m.folder, m.uid, i) },
                         { label: 'Uložiť ako…', onClick: () => void api.saveAttachment(m.accountId, m.folder, m.uid, i) },
-                        { label: 'Uložiť všetky prílohy…', disabled: m.attachments.length < 2, onClick: async () => {
-                          for (let k = 0; k < m.attachments.length; k++) {
+                        { label: 'Uložiť všetky prílohy…', disabled: real.length < 2, onClick: async () => {
+                          for (const { i: k } of real) {
                             const r = await api.saveAttachment(m.accountId, m.folder, m.uid, k);
                             if (r.ok && r.data === null) break;
                           }
