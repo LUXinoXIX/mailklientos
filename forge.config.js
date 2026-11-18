@@ -7,11 +7,17 @@ module.exports = {
   packagerConfig: {
     asar: true,
     appBundleId: 'io.github.luxinoxix.mailklient',
-    // ikona aplikácie (Windows .ico, Linux/macOS .png); zobrazovaný názov „Universum eMail“.
+    // ikona aplikácie (Windows .ico, macOS .icns, Linux .png); zobrazovaný názov „Universum eMail“.
     // productName ostáva „MailKlient“ – podľa neho sa volá priečinok s nastaveniami a .exe (aktualizácie).
     icon: 'assets/icon',
     // ikona pre oznamovaciu oblasť (tray) – mimo asar, v priečinku resources
     extraResource: ['assets/tray.png'],
+    // macOS: názov v Docku, Finderi a v hornom menu (priečinok nastavení ostáva podľa productName)
+    extendInfo: {
+      // CFBundleName nemeniť – Electron podľa neho hľadá pomocné procesy („MailKlient Helper“)
+      CFBundleDisplayName: 'Universum eMail',
+      NSHumanReadableCopyright: 'Universum',
+    },
     win32metadata: {
       ProductName: 'Universum eMail',
       FileDescription: 'Universum eMail',
@@ -32,7 +38,7 @@ module.exports = {
         iconUrl: 'https://raw.githubusercontent.com/LUXinoXIX/mailklientos/main/assets/icon.ico',
       },
     },
-    // macOS a Linux: zatiaľ prenosný ZIP (podpis pre macOS príde neskôr).
+    // macOS a Linux: prenosný ZIP (macOS: v CI sa aplikácia ad-hoc podpíše a ZIP vytvorí znova).
     { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux'] },
     {
       name: '@electron-forge/maker-deb',
@@ -53,6 +59,8 @@ module.exports = {
     },
     new FusesPlugin({
       version: FuseVersion.V1,
+      // Mac balík sa zostavuje na Linuxe (nie je tam nástroj codesign) – ad-hoc podpis urobí v CI rcodesign
+      resetAdHocDarwinSignature: process.platform === 'darwin',
       [FuseV1Options.RunAsNode]: false,
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,

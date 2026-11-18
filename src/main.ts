@@ -135,8 +135,62 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   if (squirrelEvent) return;
   watchProcesses();
-  // žiadne predvolené menu Electronu (okno má vlastný ribbon)
-  Menu.setApplicationMenu(null);
+  // Windows/Linux: žiadne predvolené menu Electronu (okno má vlastný ribbon).
+  // macOS: horné menu je nutné – bez neho nefungujú Cmd+C/V/X/A/Z, Cmd+Q, Cmd+W, Cmd+M.
+  if (process.platform === 'darwin') {
+    app.setAboutPanelOptions({ applicationName: 'Universum eMail', applicationVersion: app.getVersion(), copyright: 'Universum' });
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([
+        {
+          label: 'Universum eMail',
+          submenu: [
+            { role: 'about', label: 'O programe Universum eMail' },
+            { type: 'separator' },
+            { role: 'hide', label: 'Skryť Universum eMail' },
+            { role: 'hideOthers', label: 'Skryť ostatné' },
+            { role: 'unhide', label: 'Zobraziť všetko' },
+            { type: 'separator' },
+            { role: 'quit', label: 'Ukončiť Universum eMail' },
+          ],
+        },
+        {
+          label: 'Upraviť',
+          submenu: [
+            { role: 'undo', label: 'Späť' },
+            { role: 'redo', label: 'Znova' },
+            { type: 'separator' },
+            { role: 'cut', label: 'Vystrihnúť' },
+            { role: 'copy', label: 'Kopírovať' },
+            { role: 'paste', label: 'Prilepiť' },
+            { role: 'pasteAndMatchStyle', label: 'Prilepiť ako čistý text' },
+            { role: 'selectAll', label: 'Vybrať všetko' },
+          ],
+        },
+        {
+          label: 'Zobraziť',
+          submenu: [
+            { role: 'resetZoom', label: 'Pôvodná veľkosť' },
+            { role: 'zoomIn', label: 'Zväčšiť' },
+            { role: 'zoomOut', label: 'Zmenšiť' },
+            { type: 'separator' },
+            { role: 'togglefullscreen', label: 'Celá obrazovka' },
+          ],
+        },
+        {
+          label: 'Okno',
+          submenu: [
+            { role: 'minimize', label: 'Minimalizovať' },
+            { role: 'zoom', label: 'Zväčšiť okno' },
+            { role: 'close', label: 'Zavrieť okno' },
+            { type: 'separator' },
+            { role: 'front', label: 'Všetko dopredu' },
+          ],
+        },
+      ]),
+    );
+  } else {
+    Menu.setApplicationMenu(null);
+  }
   // kontrola pravopisu: slovenčina + angličtina (Windows a macOS používajú jazyky systému)
   if (process.platform === 'linux') {
     try {
@@ -162,8 +216,14 @@ app.whenReady().then(() => {
   });
   if (!squirrelEvent) startUpdater();
   powerMonitor.on('resume', () => reconnectWatchers());
+  // macOS: klik na ikonu v Docku znova ukáže hlavné okno (aj keď beží skryté na pozadí)
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    const w = getMainWindow();
+    if (w && !w.isDestroyed()) {
+      if (w.isMinimized()) w.restore();
+      w.show();
+      w.focus();
+    } else if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
