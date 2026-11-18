@@ -691,7 +691,7 @@ export function ReadingPane(props: {
         </details>
       )}
       {m.attachments.some((a) => !a.inline || showInline) && (
-        <div className="attachments">
+        <div className={`attachments ${m.attachments.filter((a) => !a.inline || showInline).length > 4 ? 'many' : ''}`}>
           {m.attachments.map((a, pos) => ({ a, pos, i: a.index ?? pos })).filter((x) => !x.a.inline || showInline).map(({ a, pos, i }) => (
             <span
               key={pos}

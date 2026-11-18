@@ -701,3 +701,17 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .attachments { background: var(--colorNeutralBackground3); border: 1px solid var(--colorNeutralStroke3); }
 .attachment, .att-card { background: linear-gradient(180deg, var(--colorNeutralBackground1) 0%, var(--colorNeutralBackground4) 100%); }
 .composer-files { background: var(--colorNeutralBackground3); }
+
+/* veľa príloh: menšie karty a pás s posuvníkom (nezaberie celú správu) */
+.attachments { max-height: 132px; overflow-y: auto; }
+.attachments.many { gap: 6px; max-height: 104px; }
+.attachments.many .attachment { padding: 0 2px 0 6px; font-size: 12px; }
+.attachments.many .attachment .fui-Button { min-width: 0; padding: 0 6px; font-size: 12px; height: 22px; }
+.attachments.many .attachment-open svg { width: 14px; height: 14px; }
+.composer-files { max-height: 116px; }
+.composer-files.many { gap: 6px; max-height: 90px; }
+.composer-files.many .att-card { padding: 3px 2px 3px 4px; gap: 6px; max-width: 220px; }
+.composer-files.many .att-ext { width: 20px; height: 22px; font-size: 8.5px; }
+.composer-files.many .att-ext.word, .composer-files.many .att-ext.excel, .composer-files.many .att-ext.ppt { font-size: 11px; }
+.composer-files.many .att-name { font-size: 12px; }
+.composer-files.many .att-size { font-size: 10px; }
