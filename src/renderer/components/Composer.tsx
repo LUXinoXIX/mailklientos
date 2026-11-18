@@ -13,7 +13,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { ImapAccountPublic } from '../../core/account';
 import type { DraftRef, MessageFull, OutboxItem, PickedFile, SendInput } from '../../core/api';
 import { signatureToHtml, type AppSettings } from '../../core/settings';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, DeleteIcon, NewWindowIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
 import { BriefcasePicker } from './BriefcasePicker';
@@ -70,6 +70,8 @@ export interface ComposerState {
   receipt: boolean;
   savedAt: string | null;
   sending: boolean;
+  /** predmet (názov karty rozpísanej správy) */
+  subject?: string;
 }
 
 const FONTS = ['Aptos', 'Calibri', 'Arial', 'Segoe UI', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'];
@@ -368,8 +370,8 @@ export const Composer = forwardRef<
   }, [api, accountId, buildInput, sending]);
 
   useEffect(() => {
-    props.onState({ importance, receipt, savedAt, sending, security, followUp });
-  }, [importance, receipt, savedAt, sending, security, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
+    props.onState({ importance, receipt, savedAt, sending, security, followUp, subject });
+  }, [importance, receipt, savedAt, sending, security, followUp, subject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zmena odosielateľa: vymeniť podpis za podpis nového konta. */
   function changeAccount(id: string) {
@@ -570,18 +572,17 @@ export const Composer = forwardRef<
           <Button appearance="primary" disabled={sending} onClick={() => void send()} style={{ background: accountColor(account?.color) }}>
             {sending ? 'Odosielam…' : 'Odoslať'}
           </Button>
-          <Button onClick={() => void discard()}>Zahodiť</Button>
-          {!props.standalone && (
-            <Button appearance="subtle" onClick={() => void popOut()} title="Otvoriť v samostatnom okne">
-              Samostatné okno
-            </Button>
-          )}
+
           <span className="composer-title">{title}</span>
           <span className="grow" />
           {importance && <span className="pill warn">Vysoká dôležitosť</span>}
           {receipt && <span className="pill">Potvrdenie o prečítaní</span>}
           {security.encrypt && <span className="pill sec">🔒 Šifrovať ({security.encrypt === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
           {security.sign && <span className="pill sec">✓ Podpísať ({security.sign === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
+          <Button appearance="subtle" icon={<DeleteIcon />} onClick={() => void discard()} title="Zahodiť (zmaže aj koncept)" aria-label="Zahodiť" />
+          {!props.standalone && (
+            <Button appearance="subtle" icon={<NewWindowIcon />} onClick={() => void popOut()} title="Otvoriť v samostatnom okne" aria-label="Otvoriť v samostatnom okne" />
+          )}
           <button className="composer-x" onClick={() => void closeKeep()} title="Zavrieť (rozpísaná správa ostane v Konceptoch) – Esc" aria-label="Zavrieť správu">
             ×
           </button>

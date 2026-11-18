@@ -569,3 +569,15 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .composer-top .grow { flex: 1; }
 .composer-x { border: 0; background: transparent; font-size: 22px; line-height: 1; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; color: var(--colorNeutralForeground2); }
 .composer-x:hover { background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground1); }
+.reading-slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.reading-slot > .reading, .reading-slot > .draft-pane { flex: 1; min-height: 0; }
+.draft-pane { display: flex; flex-direction: column; min-height: 0; }
+.draft-pane > .composer { flex: 1; min-height: 0; }
+.draft-tabs { display: flex; gap: 6px; padding: 6px 10px; background: var(--colorNeutralBackground3); border-top: 1px solid var(--colorNeutralStroke2); overflow-x: auto; flex: none; justify-content: flex-end; }
+.draft-tab { display: flex; align-items: center; gap: 8px; min-width: 150px; max-width: 240px; padding: 6px 6px 6px 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground2); font-size: 13px; cursor: pointer; color: var(--colorNeutralForeground2); }
+.draft-tab:hover { background: var(--colorNeutralBackground1); }
+.draft-tab.on { background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); border-color: var(--colorBrandStroke1); box-shadow: inset 0 -2px 0 var(--colorBrandBackground); }
+.draft-tab .pen { font-size: 13px; }
+.draft-tab .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-tab .x { border: 0; background: transparent; font-size: 18px; line-height: 1; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; color: inherit; }
+.draft-tab .x:hover { background: var(--colorNeutralBackground3Hover); }
