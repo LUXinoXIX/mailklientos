@@ -547,8 +547,8 @@ export interface ModuleDef<K extends string> {
   label: string;
   icon: ReactNode;
   sep?: boolean;
-  /** len pre firemné (pracovné/školské) kontá M365 */
-  work?: boolean;
+  /** nadpis sekcie nad ikonou (napr. Firemné aplikácie) */
+  section?: string;
 }
 
 export const IMAP_MODULES: ModuleDef<ImapModule>[] = [
@@ -558,22 +558,39 @@ export const IMAP_MODULES: ModuleDef<ImapModule>[] = [
   { key: 'contacts', label: 'Kontakty', icon: <ContactsIcon /> },
 ];
 
-export const M365_MODULES: ModuleDef<M365Module>[] = [
-  { key: 'mail', label: 'Pošta', icon: <MailIcon /> },
+/** Firemný Outlook (Microsoft 365 pre prácu): pošta + firemné aplikácie. */
+export const M365_WORK_MODULES: ModuleDef<M365Module>[] = [
+  { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
   { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
   { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
-  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true },
-  { key: 'planner', label: 'Planner', icon: <PlannerIcon />, work: true },
-  { key: 'teams', label: 'Teams', icon: <TeamsIcon /> },
-  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon />, sep: true },
-  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon />, work: true },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true, section: 'Firemné' },
+  { key: 'teams', label: 'Teams (firemné)', icon: <TeamsIcon /> },
+  { key: 'planner', label: 'Planner', icon: <PlannerIcon /> },
+  { key: 'onedrive', label: 'OneDrive pre prácu', icon: <CloudIcon /> },
+  { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon /> },
   { key: 'word', label: 'Word', icon: <WordIcon /> },
   { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
   { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
   { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
   { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
   { key: 'loop', label: 'Loop', icon: <LoopIcon /> },
+];
+
+/** Osobný Outlook (Outlook.com, Hotmail, Live): pošta + osobné aplikácie. */
+export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
+  { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
+  { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
+  { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
+  { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true, section: 'Osobné' },
+  { key: 'teams', label: 'Teams (osobné)', icon: <TeamsIcon /> },
+  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon /> },
+  { key: 'word', label: 'Word', icon: <WordIcon /> },
+  { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
+  { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
+  { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
+  { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
 ];
 
 export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void }) {
@@ -584,6 +601,7 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
         return (
           <div key={m.key}>
             {m.sep && <div className="rail-sep" />}
+            {m.section && <div className="rail-section">{m.section}</div>}
             <Tooltip content={m.label} relationship="label" positioning="after">
               <button
                 className={`rail-btn ${on ? 'active' : ''}`}

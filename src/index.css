@@ -521,3 +521,4 @@ kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid
 .mail-wrap > .mail { flex: 1; min-height: 0; }
 .mail-wrap > .msgview { flex: 1; }
 .msgtab-pane { flex: 1; min-height: 0; display: flex; }
+.rail-section { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--colorNeutralForeground3); text-align: center; margin: 2px 0 2px; width: 60px; }
