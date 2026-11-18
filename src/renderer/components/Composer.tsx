@@ -13,7 +13,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { ImapAccountPublic } from '../../core/account';
 import type { DraftRef, MessageFull, OutboxItem, PickedFile, SendInput } from '../../core/api';
 import { signatureToHtml, type AppSettings } from '../../core/settings';
-import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, CloseSmallIcon, DeleteIcon, NewWindowIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
+import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, AttachIcon, BulletsIcon, ImportantIcon, LowPriorityIcon, CloseSmallIcon, DeleteIcon, NewWindowIcon, IndentIcon, NumberingIcon, OutdentIcon } from '../icons';
 import { accountColor } from '../theme';
 import { RecipientField, formatAddress, splitAddresses, type Contact } from './RecipientField';
 import { BriefcasePicker } from './BriefcasePicker';
@@ -61,12 +61,14 @@ export interface ComposerHandle {
   saveAsTemplate(): void;
   setSecurity(s: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }): void;
   setFollowUp(days: number): void;
+  setPriority(p: 'high' | 'normal' | 'low'): void;
 }
 
 export interface ComposerState {
   followUp?: number;
   security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
   importance: boolean;
+  priority?: 'high' | 'normal' | 'low';
   receipt: boolean;
   savedAt: string | null;
   sending: boolean;
@@ -282,7 +284,8 @@ export const Composer = forwardRef<
   const [showBcc, setShowBcc] = useState(!!init.bcc);
   const [subject, setSubject] = useState(init.subject ?? '');
   const [files, setFiles] = useState<PickedFile[]>(init.files ?? []);
-  const [importance, setImportance] = useState(!!init.importance);
+  const [priority, setPriority] = useState<'high' | 'normal' | 'low'>(init.importance ? 'high' : 'normal');
+  const importance = priority === 'high';
   const [receipt, setReceipt] = useState(!!init.receipt);
   const [attachWarn, setAttachWarn] = useState(false);
   const [followUp, setFollowUp] = useState(0);
@@ -358,7 +361,7 @@ export const Composer = forwardRef<
       html: emailHtml(ed.getHTML()),
       replyMessageId: init.original && init.kind !== 'forward' ? init.original.messageId : undefined,
       attachments: files.map((f) => ({ path: f.path, filename: f.filename })),
-      priority: importance ? 'high' : 'normal',
+      priority,
       readReceipt: receipt,
       draft: draft.current ?? undefined,
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
@@ -366,7 +369,7 @@ export const Composer = forwardRef<
       security: security.sign || security.encrypt ? security : undefined,
       followUpDays: followUp || undefined,
     };
-  }, [to, cc, bcc, subject, files, importance, receipt, init, fromEmail, accountId, security, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [to, cc, bcc, subject, files, priority, receipt, init, fromEmail, accountId, security, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priebežné ukladanie konceptu (každých 5 s, ak sa niečo zmenilo)
   useEffect(() => {
@@ -391,8 +394,8 @@ export const Composer = forwardRef<
   }, [api, accountId, buildInput, sending]);
 
   useEffect(() => {
-    props.onState({ importance, receipt, savedAt, sending, security, followUp, subject });
-  }, [importance, receipt, savedAt, sending, security, followUp, subject]); // eslint-disable-line react-hooks/exhaustive-deps
+    props.onState({ importance, priority, receipt, savedAt, sending, security, followUp, subject });
+  }, [priority, receipt, savedAt, sending, security, followUp, subject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zmena odosielateľa: vymeniť podpis za podpis nového konta. */
   function changeAccount(id: string) {
@@ -558,7 +561,8 @@ export const Composer = forwardRef<
       const ed = editorRef.current;
       if (ed) props.onSaveTemplate?.({ name: subject.trim() || 'Nová šablóna', subject, html: ed.getHTML() });
     },
-    toggleImportance: () => setImportance((v) => !v),
+    toggleImportance: () => setPriority((v) => (v === 'high' ? 'normal' : 'high')),
+    setPriority,
     toggleReceipt: () => setReceipt((v) => !v),
   }));
 
@@ -596,7 +600,26 @@ export const Composer = forwardRef<
 
           <span className="composer-title">{title}</span>
           <span className="grow" />
-          {importance && <span className="pill warn">Vysoká dôležitosť</span>}
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <Button
+                appearance="subtle"
+                size="small"
+                className={`prio-btn prio-${priority}`}
+                icon={priority === 'low' ? <LowPriorityIcon /> : <ImportantIcon />}
+                title="Dôležitosť správy"
+              >
+                {priority === 'high' ? 'Vysoká dôležitosť' : priority === 'low' ? 'Nízka dôležitosť' : 'Dôležitosť'}
+              </Button>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem icon={<ImportantIcon style={{ color: '#c50f1f' }} />} onClick={() => setPriority('high')}>{priority === 'high' ? '✓ ' : ''}Vysoká dôležitosť</MenuItem>
+                <MenuItem onClick={() => setPriority('normal')}>{priority === 'normal' ? '✓ ' : ''}Normálna</MenuItem>
+                <MenuItem icon={<LowPriorityIcon />} onClick={() => setPriority('low')}>{priority === 'low' ? '✓ ' : ''}Nízka dôležitosť</MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
           {receipt && <span className="pill">Potvrdenie o prečítaní</span>}
           {security.encrypt && <span className="pill sec">🔒 Šifrovať ({security.encrypt === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
           {security.sign && <span className="pill sec">✓ Podpísať ({security.sign === 'pgp' ? 'PGP' : 'S/MIME'})</span>}

@@ -51,12 +51,20 @@ export function AccountRail(props: {
   const [drag, setDrag] = useState<string | null>(null);
   const totalUnread = Object.values(props.unread).reduce((a, b) => a + b, 0);
 
-  const drop = (targetId: string) => {
-    if (!drag || drag === targetId) return;
+  // ťahanie kont: pustenie na hornú polovicu = pred konto, na dolnú = za konto
+  const [over, setOver] = useState<{ id: string; after: boolean } | null>(null);
+  const drop = (targetId: string, after: boolean) => {
+    setOver(null);
+    if (!drag || drag === targetId) return setDrag(null);
     const ids = props.accounts.map((a) => a.id).filter((id) => id !== drag);
-    ids.splice(ids.indexOf(targetId), 0, drag);
-    props.onReorder(ids);
+    const at = ids.indexOf(targetId);
+    ids.splice(after ? at + 1 : at, 0, drag);
+    if (ids.join() !== props.accounts.map((a) => a.id).join()) props.onReorder(ids);
     setDrag(null);
+  };
+  const half = (e: React.DragEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return e.clientY > r.top + r.height / 2;
   };
 
   const settingsMenu = (
@@ -109,10 +117,27 @@ export function AccountRail(props: {
   const fmt = (n: number) => (n > 9999 ? '9999+' : n.toLocaleString('sk-SK'));
   const dragProps = (a: AccountPublic) => ({
     draggable: true,
-    onDragStart: () => setDrag(a.id),
-    onDragEnd: () => setDrag(null),
-    onDragOver: (e: React.DragEvent) => e.preventDefault(),
-    onDrop: () => drop(a.id),
+    'data-drop': over?.id === a.id ? (over.after ? 'after' : 'before') : undefined,
+    onDragStart: (e: React.DragEvent) => {
+      setDrag(a.id);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', a.id);
+    },
+    onDragEnd: () => {
+      setDrag(null);
+      setOver(null);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!drag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const after = half(e);
+      if (over?.id !== a.id || over.after !== after) setOver({ id: a.id, after });
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      drop(a.id, half(e));
+    },
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
       props.onEdit(a);

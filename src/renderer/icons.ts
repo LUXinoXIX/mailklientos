@@ -1,6 +1,13 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  Important16Regular as ImportantIcon,
+  ArrowDown16Regular as LowPriorityIcon,
+  Warning16Regular as WarningSmallIcon,
+  Attach12Regular as AttachTinyIcon,
+  Eye16Regular as PreviewSmallIcon,
+  ArrowDownload16Regular as SaveSmallIcon,
+  Open16Regular as OpenSmallIcon,
   ChevronDown16Regular as ChevronDownIcon,
   Calendar16Regular as CalendarSmallIcon,
   CheckmarkCircle16Regular as TasksSmallIcon,

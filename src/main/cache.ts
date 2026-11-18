@@ -44,6 +44,11 @@ function open(): DatabaseSync | null {
     } catch {
       /* stĺpec už existuje */
     }
+    try {
+      db.exec('ALTER TABLE messages ADD COLUMN has_att INTEGER');
+    } catch {
+      /* stĺpec už existuje */
+    }
     return db;
   } catch (e) {
     broken = true;
@@ -81,6 +86,7 @@ const toSummary = (r: Row): MessageSummary => ({
   inReplyTo: r.in_reply_to ?? undefined,
   keywords: r.keywords ? String(r.keywords).split(' ').filter(Boolean) : [],
   preview: r.preview ?? (r.body_text ? String(r.body_text).replace(/\s+/g, ' ').slice(0, 160) : undefined),
+  hasAttachments: r.has_att == null ? undefined : !!r.has_att,
 });
 
 /** Pri zmene UIDVALIDITY sú staré UID neplatné: priečinok v cache vymazať. */
@@ -112,14 +118,15 @@ export function storeList(account: string, folder: string, list: MessageSummary[
     d.exec('BEGIN');
     try {
       const up = d.prepare(`
-        INSERT INTO messages (account, folder, uid, subject, from_name, from_addr, recipients, date, seen, flagged, answered, message_id, in_reply_to, keywords, preview)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (account, folder, uid, subject, from_name, from_addr, recipients, date, seen, flagged, answered, message_id, in_reply_to, keywords, preview, has_att)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (account, folder, uid) DO UPDATE SET
           subject = excluded.subject, from_name = excluded.from_name, from_addr = excluded.from_addr,
           recipients = COALESCE(excluded.recipients, recipients), date = excluded.date,
           seen = excluded.seen, flagged = excluded.flagged, answered = excluded.answered,
           message_id = excluded.message_id, in_reply_to = excluded.in_reply_to, keywords = excluded.keywords,
-          preview = COALESCE(excluded.preview, preview)
+          preview = COALESCE(excluded.preview, preview),
+          has_att = COALESCE(excluded.has_att, has_att)
         RETURNING id, body_text`);
       for (const m of list) {
         const rc = recipients?.get(m.uid) ?? null;
@@ -128,6 +135,7 @@ export function storeList(account: string, folder: string, list: MessageSummary[
           m.seen ? 1 : 0, m.flagged ? 1 : 0, m.answered ? 1 : 0, m.messageId ?? null, m.inReplyTo ?? null,
           (m.keywords ?? []).join(' '),
           m.preview ?? null,
+          m.hasAttachments == null ? null : m.hasAttachments ? 1 : 0,
         ) as Row;
         ftsWrite(d, r.id, { subject: m.subject, sender: `${m.fromName} ${m.fromAddress}`, recipients: rc ?? '', body: r.body_text ?? '' });
       }

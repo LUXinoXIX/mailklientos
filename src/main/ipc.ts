@@ -1,3 +1,4 @@
+import { attachmentRisk } from '../core/attrisk';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +53,12 @@ function on<A extends unknown[]>(channel: string, fn: (...args: A) => unknown) {
 }
 
 const winOf = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
-const safeName = (n: string) => n.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180) || 'priloha';
+/** Spustiteľné a maskované prílohy sa z programu neotvárajú (len uložiť) – poistka aj mimo rozhrania. */
+function blockDangerous(filename: string) {
+  const r = attachmentRisk(filename);
+  if (r.level === 'blocked') throw new mail.UserError(`Prílohu „${filename}“ program neotvorí: ${r.reasons.join(' ')} Ak ju naozaj potrebuješ, ulož ju a nechaj skontrolovať antivírusom.`);
+}
+const safeName = (n: string) => n.replace(/[\u202a-\u202e\u2066-\u2069\u200b-\u200f]/g, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180) || 'priloha';
 
 let openComposeWindow: ((q: Record<string, string>) => void) | undefined;
 /** main.ts odovzdá funkciu na otvorenie okna písania (samostatné okno konceptu). */
@@ -261,6 +267,7 @@ export function registerIpc() {
   handle('mail:archive', (id: string, folder: string, uids: number[]) => mail.archiveMessages(store.getImap(id), folder, uids));
   handle('mail:attachment-open', async (id: string, folder: string, uid: number, index: number) => {
     const a = await mail.getAttachment(store.getImap(id), folder, uid, index);
+    blockDangerous(a.filename);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mailklient-'));
     const file = path.join(dir, safeName(a.filename));
     fs.writeFileSync(file, a.content);
