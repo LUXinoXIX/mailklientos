@@ -22,7 +22,9 @@ jobs:
         include:
           - os: windows-latest
             label: windows
-          # macOS sa pridá neskôr (poradie vydania: Windows, macOS, Linux).
+          # macOS: Apple Silicon (M1–M4), bez podpisu Apple (ad-hoc podpis, prvé spustenie cez „Aj tak otvoriť“)
+          - os: macos-latest
+            label: macos
           - os: ubuntu-latest
             label: linux
     runs-on: ${{ matrix.os }}
@@ -75,6 +77,33 @@ jobs:
         run: |
           npm run make 2>&1 | tee ci/make.log
           exit ${PIPESTATUS[0]}
+
+      # macOS bez Apple Developer účtu: ad-hoc podpis celej aplikácie (na Macoch s čipom M musí byť každý
+      # kód podpísaný, inak macOS hlási „aplikácia je poškodená“) a nový ZIP s menom pre používateľa.
+      - name: macOS – ad-hoc podpis a ZIP
+        if: matrix.label == 'macos'
+        run: |
+          app=$(ls -d out/*-darwin-*/*.app | head -1)
+          echo "aplikácia: $app" | tee ci/macsign.log
+          codesign --force --deep --sign - "$app" 2>&1 | tee -a ci/macsign.log
+          codesign --verify --deep --strict --verbose=2 "$app" 2>&1 | tee -a ci/macsign.log
+          ver=$(node -p "require('./package.json').version")
+          rm -rf out/make/zip/darwin
+          mkdir -p out/make/zip/darwin
+          ditto -c -k --sequesterRsrc --keepParent "$app" "out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip"
+          ls -la out/make/zip/darwin | tee -a ci/macsign.log
+
+      - name: macOS – dymový test spustenia
+        if: matrix.label == 'macos'
+        continue-on-error: true
+        run: |
+          app=$(ls -d out/*-darwin-*/*.app | head -1)
+          bin=$(ls "$app/Contents/MacOS/" | head -1)
+          "$app/Contents/MacOS/$bin" --enable-logging=stderr > ci/smoke.log 2>&1 &
+          pid=$!
+          sleep 25
+          screencapture -x ci/screenshot.png || true
+          if kill -0 $pid 2>/dev/null; then echo "beží" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA" | tee -a ci/smoke.log; exit 1; fi
 
       # Dymový test: aplikácia musí naštartovať a 25 s bežať bez pádu (Linux, virtuálny displej).
       - name: Dymový test spustenia
@@ -162,5 +191,5 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Najnovšie zostavenie" \
-            --notes "Automaticky zostavené z commitu ${GITHUB_SHA::7}. Windows: stiahni MailKlient-Setup.exe a spusti ho."
+            --notes "Automaticky zostavené z commitu ${GITHUB_SHA::7}. Windows: stiahni MailKlient-Setup.exe a spusti ho. macOS (čip M): stiahni UniversumEmail-macOS-….zip, rozbaľ, presuň Universum eMail do Aplikácií; pri prvom spustení Nastavenia systému → Súkromie a bezpečnosť → Aj tak otvoriť."
 
