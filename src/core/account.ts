@@ -47,6 +47,11 @@ export interface AccountConfig {
   zimbraUrl?: string;
   /** krátky štítok v zbalenom páse kont (prázdne = typ konta: ZIMBRA, IMAP) */
   short?: string;
+  /** ikonka v páse kont */
+  iconKind?: 'auto' | 'text' | 'preset' | 'image';
+  iconText?: string;
+  iconPreset?: string;
+  iconImage?: string;
 }
 
 export interface Identity {
@@ -68,6 +73,11 @@ export interface M365Account {
   host?: 'office' | 'live';
   /** krátky štítok v zbalenom páse kont (prázdne = MS365 / MSO) */
   short?: string;
+  /** ikonka v páse kont */
+  iconKind?: 'auto' | 'text' | 'preset' | 'image';
+  iconText?: string;
+  iconPreset?: string;
+  iconImage?: string;
 }
 
 export type AnyAccount = AccountConfig | M365Account;

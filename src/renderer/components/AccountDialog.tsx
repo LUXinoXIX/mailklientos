@@ -1,5 +1,7 @@
 // Pridanie / úprava IMAP konta: šifrovanie, certifikáty (výnimka s odtlačkom),
 // režim pre staré servery (Zimbra) a test pripojenia.
+import { AccountIconPicker, type IconCfg } from './AccountIcon';
+import { initials } from './AccountRail';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   MessageBar, MessageBarBody, MessageBarTitle, Select, Spinner, Switch, Textarea,
@@ -297,6 +299,14 @@ export function AccountDialog(props: {
               <Field label="Zobrazované meno">
                 <Input value={acc.name} onChange={(_, d) => set({ name: d.value })} />
               </Field>
+              <Field label="Ikonka v páse kont">
+                <AccountIconPicker
+                  value={acc}
+                  color={acc.color}
+                  fallback={initials(acc.name || acc.email || '?')}
+                  onChange={(v) => set(v)}
+                />
+              </Field>
               <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ZIMBRA alebo IMAP.">
                 <Input value={acc.short ?? ''} maxLength={8} placeholder="ZIMBRA" onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
               </Field>
@@ -312,6 +322,9 @@ export function AccountDialog(props: {
               {ACCOUNT_COLORS.map((c) => (
                 <button key={c} className={`swatch ${acc.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => set({ color: c })} aria-label={c} />
               ))}
+              <label className={`swatch custom ${ACCOUNT_COLORS.includes(acc.color) ? '' : 'on'}`} title="Vlastná farba" style={{ background: ACCOUNT_COLORS.includes(acc.color) ? undefined : acc.color }}>
+                <input type="color" value={acc.color} onChange={(e) => set({ color: e.target.value })} aria-label="Vlastná farba konta" />
+              </label>
             </div>
             <Field label="Ďalšie adresy (aliasy) pre pole Od" hint="Jedna na riadok, napr. Podpora <podpora@firma.sk>. Server musí odosielanie z nich povoliť.">
               <Textarea

@@ -109,7 +109,7 @@ export function OrganizeDialog(props: {
             {tab === 'rules' && (
               <div className="org-list">
                 <div className="muted small">
-                  Pravidlá sa spúšťajú automaticky na novú poštu v Doručenej pošte, keď je MailKlient spustený. Poradie rozhoduje: pravidlo s presunom ďalšie pravidlá zastaví.
+                  Pravidlá sa spúšťajú automaticky na novú poštu v Doručenej pošte, keď je Universum eMail spustený. Poradie rozhoduje: pravidlo s presunom ďalšie pravidlá zastaví.
                 </div>
                 {rules.map((r, i) => {
                   const set = (p: Partial<Rule>) => setRules(rules.map((x) => (x.id === r.id ? { ...x, ...p } : x)));
@@ -233,7 +233,7 @@ export function OrganizeDialog(props: {
             {tab === 'vacation' && (
               <div className="org-list">
                 <div className="muted small">
-                  Automatická odpoveď sa posiela, keď je MailKlient spustený: každému odosielateľovi najviac raz za 4 dni, nie na hromadnú poštu ani automatické správy.
+                  Automatická odpoveď sa posiela, keď je Universum eMail spustený: každému odosielateľovi najviac raz za 4 dni, nie na hromadnú poštu ani automatické správy.
                   Ak máte poštu na Zimbre, použite radšej neprítomnosť priamo na serveri (ozubené koliesko → Zimbra) – funguje aj s vypnutým počítačom.
                 </div>
                 <Checkbox label="Posielať automatickú odpoveď" checked={vac.enabled} onChange={(_, d) => setVac({ ...vac, enabled: !!d.checked })} />

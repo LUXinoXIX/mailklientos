@@ -1,12 +1,13 @@
 // Pravý panel: vložené weby (karty) a spúšťače programov.
 import {
+  Menu, MenuDivider, MenuGroupHeader, MenuItem, MenuItemRadio, MenuList, MenuPopover, MenuTrigger,
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar,
   MessageBarBody, Tooltip,
 } from '@fluentui/react-components';
 import { useEffect, useRef, useState } from 'react';
 import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type Task, type WebItem } from '../../core/settings';
 import type { CalEvent } from '../../core/ical';
-import { AddIcon, AppsIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
+import { AddIcon, AppsIcon, ChevronDownIcon, PanelIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
 import { WebSlot, type WebSlotHandle } from './WebSlot';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -81,6 +82,94 @@ function Agenda({ data }: { data: AgendaData }) {
   );
 }
 
+export interface PanelChoice {
+  /** meno aktuálneho konta (alebo „Všetky kontá“) */
+  accountName: string;
+  current: string;
+  panels: Array<{ id: string; name: string; users: string[] }>;
+  sharedUsers: string[];
+  onChoose: (id: string) => void;
+  onNew: (copy: boolean) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function PanelChooser({ c, onOverlay }: { c: PanelChoice; onOverlay: (open: boolean) => void }) {
+  const [rename, setRename] = useState<{ id: string; name: string } | null>(null);
+  const cur = c.panels.find((p) => p.id === c.current);
+  const label = cur ? cur.name : 'Spoločný';
+  const who = (u: string[]) => (u.length ? u.join(', ') : 'žiadne konto');
+  const openRename = (r: { id: string; name: string } | null) => {
+    setRename(r);
+    onOverlay(!!r);
+  };
+  return (
+    <div className="panel-chooser">
+      <PanelIcon className="panel-chooser-ico" />
+      <Menu
+        checkedValues={{ panel: [c.current] }}
+        onCheckedValueChange={(_, d) => d.checkedItems[0] && c.onChoose(d.checkedItems[0])}
+        onOpenChange={(_, d) => onOverlay(d.open)}
+      >
+        <MenuTrigger disableButtonEnhancement>
+          <button className="panel-chooser-btn" title={`Pravý panel pre: ${c.accountName}`}>
+            <span className="muted small">Panel:</span> <b>{label}</b> <ChevronDownIcon />
+          </button>
+        </MenuTrigger>
+        <MenuPopover>
+          <MenuList>
+            <MenuGroupHeader>Panel pre {c.accountName}</MenuGroupHeader>
+            <MenuItemRadio name="panel" value="shared" secondaryContent={who(c.sharedUsers)}>
+              Spoločný
+            </MenuItemRadio>
+            {c.panels.map((p) => (
+              <MenuItemRadio key={p.id} name="panel" value={p.id} secondaryContent={who(p.users)}>
+                {p.name}
+              </MenuItemRadio>
+            ))}
+            <MenuDivider />
+            <MenuItem icon={<AddIcon />} onClick={() => c.onNew(false)}>Nový vlastný panel (prázdny)</MenuItem>
+            <MenuItem onClick={() => c.onNew(true)}>Nový vlastný panel ako kópia tohto</MenuItem>
+            {cur && (
+              <>
+                <MenuDivider />
+                <MenuItem onClick={() => openRename({ id: cur.id, name: cur.name })}>Premenovať „{cur.name}“…</MenuItem>
+                <MenuItem onClick={() => c.onDelete(cur.id)}>Odstrániť „{cur.name}“ (kontá prejdú na spoločný)</MenuItem>
+              </>
+            )}
+          </MenuList>
+        </MenuPopover>
+      </Menu>
+      {rename && (
+        <Dialog open onOpenChange={(_, d) => !d.open && openRename(null)}>
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Premenovať panel</DialogTitle>
+              <DialogContent className="dialog-content">
+                <Field label="Názov">
+                  <Input autoFocus value={rename.name} onChange={(_, d) => setRename({ ...rename, name: d.value })} />
+                </Field>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  appearance="primary"
+                  onClick={() => {
+                    if (rename.name.trim()) c.onRename(rename.id, rename.name.trim());
+                    openRename(null);
+                  }}
+                >
+                  Uložiť
+                </Button>
+                <Button onClick={() => openRename(null)}>Zrušiť</Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
 export function RightPanel(props: {
   settings: AppSettings;
   onSettings: (s: AppSettings) => void;
@@ -91,6 +180,10 @@ export function RightPanel(props: {
   onStatus: (s: string) => void;
   /** dnešné udalosti a úlohy (karta Agenda) */
   agenda?: AgendaData;
+  /** weby všetkých panelov – ostávajú načítané aj pri prepnutí konta */
+  allWebs?: WebItem[];
+  /** výber panela pre aktuálne konto (spoločný alebo vlastný) */
+  choice?: PanelChoice;
 }) {
   const api = window.mailApi;
   const { settings } = props;
@@ -133,6 +226,7 @@ export function RightPanel(props: {
 
   return (
     <aside className="right" aria-label="Pravý panel">
+      {props.choice && <PanelChooser c={props.choice} onOverlay={props.onOverlay} />}
       <div className="right-tabs">
         {props.agenda && (
           <div className={`right-tab ${agendaOn ? 'on' : ''}`}>
@@ -166,34 +260,31 @@ export function RightPanel(props: {
       {agendaOn && props.agenda ? (
         <Agenda data={props.agenda} />
       ) : null}
-      {/* weby ostávajú načítané aj pri zobrazenej Agende */}
-      {web || agendaOn ? (
-        <>
-          {web && <div className="right-url">
-            <GlobeIcon />
-            <span className="grow ellipsis" title={web.url}>{web.url.replace(/^https?:\/\//, '')}</span>
-            <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
-            <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? web.url)} aria-label="Otvoriť v prehliadači" />
-          </div>}
-          <div className="right-webs" style={agendaOn ? { display: 'none' } : undefined}>
-            {settings.webs.map((w) => (
-              <WebSlot
-                key={w.id}
-                ref={(h) => {
-                  if (h) slots.current.set(w.id, h);
-                  else slots.current.delete(w.id);
-                }}
-                url={w.url}
-                partition={webPartition(w.id)}
-                visible={!agendaOn && w.id === web?.id}
-                className="right-web"
-              />
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="empty grow">Pridaj web tlačidlom +</div>
+      {/* weby ostávajú načítané aj pri zobrazenej Agende a pri prepnutí na iný panel */}
+      {web && !agendaOn && (
+        <div className="right-url">
+          <GlobeIcon />
+          <span className="grow ellipsis" title={web.url}>{web.url.replace(/^https?:\/\//, '')}</span>
+          <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
+          <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? web.url)} aria-label="Otvoriť v prehliadači" />
+        </div>
       )}
+      {!web && !agendaOn && <div className="empty grow">Pridaj web tlačidlom +</div>}
+      <div className="right-webs" style={agendaOn || !web ? { display: 'none' } : undefined}>
+        {(props.allWebs ?? settings.webs).map((w) => (
+          <WebSlot
+            key={w.id}
+            ref={(h) => {
+              if (h) slots.current.set(w.id, h);
+              else slots.current.delete(w.id);
+            }}
+            url={w.url}
+            partition={webPartition(w.id)}
+            visible={!agendaOn && w.id === web?.id}
+            className="right-web"
+          />
+        ))}
+      </div>
       <div className="launchers">
         <div className="launchers-title">Programy</div>
         <div className="launchers-grid">
