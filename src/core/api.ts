@@ -173,6 +173,8 @@ export interface MailApi {
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
   /** Odoslať a prijať: znovu pripojiť sledovanie pošty, odoslať správy čakajúce po chybe */
   sendReceive(): Promise<Result<{ retried: number }>>;
+  /** priečinky: nový podpriečinok, premenovať, odstrániť, označiť všetko ako prečítané, vyprázdniť */
+  folderOp(accountId: string, op: 'create' | 'rename' | 'delete' | 'markRead' | 'empty', path: string, name?: string): Promise<Result<string>>;
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;

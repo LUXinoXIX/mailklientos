@@ -122,6 +122,9 @@ export function registerIpc() {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('app:event', { type: 'mail-changed', accountId: id, folder, newCount: 0 });
     return true as const;
   });
+  handle('mail:folderOp', (id: string, op: 'create' | 'rename' | 'delete' | 'markRead' | 'empty', path: string, name?: string) =>
+    mail.folderOp(store.getImap(id), op, path, name),
+  );
   handle('mail:sendReceive', async () => {
     reconnectWatchers();
     return { retried: await outbox.flushRetries() };

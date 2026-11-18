@@ -53,6 +53,10 @@ export interface ComposerHandle {
   toggleReceipt(): void;
   sendLater(at: Date): void;
   popOut(): void;
+  /** odložiť rozpísanú správu do samostatného okna (prázdnu len zavrieť); true = editor sa zavrel */
+  park(): Promise<boolean>;
+  /** zavrieť a nechať koncept v Konceptoch */
+  close(): void;
   insertTemplate(id: string): void;
   saveAsTemplate(): void;
   setSecurity(s: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' }): void;
@@ -442,16 +446,20 @@ export const Composer = forwardRef<
     );
   }
 
-  async function popOut() {
-    if (!api || !accountId || accountId === 'demo') return;
+  async function popOut(): Promise<boolean> {
+    if (!api || !accountId || accountId === 'demo') return false;
     const input = buildInput();
-    if (!input) return;
+    if (!input) return false;
     await saving.current;
     const r = await api.saveDraft(accountId, { ...input, draft: undefined }, draft.current ?? undefined);
-    if (!r.ok || !r.data) return setError(r.ok ? 'Koncept sa nepodarilo uložiť (chýba priečinok Koncepty).' : r.error);
+    if (!r.ok || !r.data) {
+      setError(r.ok ? 'Koncept sa nepodarilo uložiť (chýba priečinok Koncepty).' : r.error);
+      return false;
+    }
     draft.current = r.data;
     await api.composeWindow(accountId, r.data.folder, r.data.uid);
-    props.onClose('Správa otvorená v samostatnom okne.');
+    props.onClose('Rozpísaná správa sa presunula do samostatného okna.');
+    return true;
   }
 
   function insertTemplate(id: string) {
@@ -460,6 +468,32 @@ export const Composer = forwardRef<
     if (!t || !ed) return;
     ed.chain().focus().insertContent(t.html).run();
     if (t.subject && !subject.trim()) setSubject(t.subject);
+  }
+
+  const isEmpty = () => {
+    const ed = editorRef.current;
+    const body = (ed?.getText() ?? '').replace(sig.current.replace(/<[^>]+>/g, ''), '').trim();
+    return !to.length && !cc.length && !bcc.length && !subject.trim() && !files.length && (init.kind === 'new' ? !body : true) && !draft.current;
+  };
+
+  /** X: zavrieť, rozpísaný text ostane ako koncept v priečinku Koncepty. */
+  async function closeKeep() {
+    if (!api || !accountId || accountId === 'demo' || isEmpty()) return props.onClose();
+    const input = buildInput();
+    await saving.current;
+    if (input) {
+      const r = await api.saveDraft(accountId, { ...input, draft: undefined }, draft.current ?? undefined);
+      if (!r.ok) return setError(`Koncept sa nepodarilo uložiť: ${r.error}`);
+    }
+    props.onClose('Rozpísaná správa je uložená v priečinku Koncepty.');
+  }
+
+  async function park(): Promise<boolean> {
+    if (isEmpty() || !accountId || accountId === 'demo') {
+      props.onClose();
+      return true;
+    }
+    return popOut();
   }
 
   async function discard() {
@@ -494,6 +528,8 @@ export const Composer = forwardRef<
     setSecurity: (x) => setSecurity(x),
     setFollowUp: (d) => setFollowUp(d),
     popOut: () => void popOut(),
+    park: () => park(),
+    close: () => void closeKeep(),
     insertTemplate: (id) => insertTemplate(id),
     saveAsTemplate: () => {
       const ed = editorRef.current;
@@ -508,6 +544,12 @@ export const Composer = forwardRef<
   return (
     <section
       className={`composer ${dragOver ? 'drag' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.fui-MenuPopover, .fui-DialogSurface')) {
+          e.preventDefault();
+          void closeKeep();
+        }
+      }}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
@@ -535,10 +577,14 @@ export const Composer = forwardRef<
             </Button>
           )}
           <span className="composer-title">{title}</span>
+          <span className="grow" />
           {importance && <span className="pill warn">Vysoká dôležitosť</span>}
           {receipt && <span className="pill">Potvrdenie o prečítaní</span>}
           {security.encrypt && <span className="pill sec">🔒 Šifrovať ({security.encrypt === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
           {security.sign && <span className="pill sec">✓ Podpísať ({security.sign === 'pgp' ? 'PGP' : 'S/MIME'})</span>}
+          <button className="composer-x" onClick={() => void closeKeep()} title="Zavrieť (rozpísaná správa ostane v Konceptoch) – Esc" aria-label="Zavrieť správu">
+            ×
+          </button>
           <span className="grow" />
           <span className="muted small">{savedAt ? `Koncept uložený ${savedAt}` : ''}</span>
         </div>

@@ -15,6 +15,7 @@ import { attachWindow } from './main/webviews';
 import { applyRenderingSwitches, log, watchProcesses } from './main/diagnostics';
 import { handleSquirrelEvent } from './main/squirrel';
 import { getMainWindow, setMainWindow } from './main/mainwin';
+import { attachContextMenu } from './main/contextmenu';
 
 // Dymový test v CI (MAILKLIENT_SMOKE=m365): dočasné dáta s ukážkovým kontom M365 a otvoreným pravým panelom.
 const SMOKE_MODE = process.env.MAILKLIENT_SMOKE ?? '';
@@ -97,6 +98,7 @@ const createWindow = (query?: Record<string, string>) => {
     });
   }
   attachWindow(win);
+  attachContextMenu(win.webContents);
   if (mainWin) setMainWindow(win);
 
   // Odkazy z e-mailov a webov otvárať v systémovom prehliadači, nie v aplikácii.
