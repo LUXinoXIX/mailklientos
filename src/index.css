@@ -750,3 +750,16 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 [data-drop='before'] { box-shadow: 0 -3px 0 0 var(--colorBrandStroke1) !important; }
 [data-drop='after'] { box-shadow: 0 3px 0 0 var(--colorBrandStroke1) !important; }
 .acc-btn.dragging, .acc-list .dragging { opacity: .45; }
+
+/* hlavička otvorenej správy: pás akcií v samostatnom riadku nad predmetom, adresy pod ním
+   (pri úzkom okne sa už neprekrývajú ani nedeformujú) */
+.reading > .read-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 2px 4px; padding: 0 0 8px; margin-bottom: 10px; border-bottom: 1px solid var(--colorNeutralStroke3); }
+.read-head { min-width: 0; }
+.read-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.read-meta > div { min-width: 0; }
+.read-date { white-space: nowrap; }
+/* prílohy pri úzkom čítacom paneli: karta nepresiahne šírku, názov sa skráti, veľkosť ostane v riadku */
+.attachments .attachment { max-width: 100%; min-width: 0; }
+.attachment-name { flex: 1 1 auto; min-width: 0; }
+.attachment-name .muted { white-space: nowrap; flex: none; }
+.attachment > .fui-Button { flex: none; }
