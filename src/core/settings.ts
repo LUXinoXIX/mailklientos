@@ -74,6 +74,8 @@ export interface AppSettings {
   searchHistory?: string[];
   /** zoznam kont s menami natrvalo rozbalený (inak úzky pás a vysúvanie po kliknutí) */
   accountListPinned?: boolean;
+  /** zoradenie zoznamu správ */
+  listSort?: { by: 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category'; dir: 'desc' | 'asc' };
   /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
   paneWidths?: { folders?: number; list?: number; right?: number };
 }

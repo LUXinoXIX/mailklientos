@@ -130,6 +130,9 @@ export function M365Dialog(props: {
                 {ACCOUNT_COLORS.map((c) => (
                   <button key={c} className={`swatch ${c === color ? 'on' : ''}`} style={{ background: c }} onClick={() => setColor(c)} aria-label={`Farba ${c}`} />
                 ))}
+                <label className={`swatch custom ${ACCOUNT_COLORS.includes(color) ? '' : 'on'}`} title="Vlastná farba" style={{ background: ACCOUNT_COLORS.includes(color) ? undefined : color }}>
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Vlastná farba konta" />
+                </label>
               </div>
             </Field>
             {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
