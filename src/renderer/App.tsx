@@ -27,7 +27,7 @@ import { CalendarView } from './components/CalendarView';
 import { ContactsView } from './components/ContactsView';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
 import { accountColor, getTheme, themeById, themeVars, type ThemeKey } from './theme';
@@ -62,7 +62,7 @@ type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
-  | { kind: 'm365'; edit?: M365Account }
+  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
@@ -1251,7 +1251,7 @@ export function App() {
           )}
           <main className={`body ${rightOpen ? 'with-right' : ''}`}>
             {activeM365 ? (
-              <ModuleRail modules={activeM365.host === 'live' ? M365_MODULES.filter((m) => !m.work) : M365_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
                 modules={IMAP_MODULES}
@@ -1582,7 +1582,7 @@ export function App() {
         <AddAccountChooser
           onClose={closeDialog}
           onImap={() => openDialog({ kind: 'imap' })}
-          onM365={() => openDialog({ kind: 'm365' })}
+          onM365={(host) => openDialog({ kind: 'm365', host })}
         />
       )}
       {dialog.kind === 'imap' && (
@@ -1610,6 +1610,7 @@ export function App() {
         <M365Dialog
           key={dialogKey}
           edit={dialog.edit}
+          host={dialog.host}
           usedColors={accounts.map((a) => accountColor(a.color))}
           onClose={closeDialog}
           onSaved={(a) => {
