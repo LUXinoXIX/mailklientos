@@ -59,6 +59,8 @@ module.exports = {
     },
     new FusesPlugin({
       version: FuseVersion.V1,
+      // Mac balík sa zostavuje na Linuxe (nie je tam nástroj codesign) – ad-hoc podpis urobí v CI rcodesign
+      resetAdHocDarwinSignature: process.platform === 'darwin',
       [FuseV1Options.RunAsNode]: false,
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
