@@ -676,3 +676,10 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .composer-files { flex: none; }
 .composer-foot > button { white-space: nowrap; flex: none; }
 .composer-editor { min-height: 140px; }
+
+/* výber pravého panela pre konto (spoločný / vlastný) */
+.panel-chooser { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--colorNeutralStroke3); background: var(--colorNeutralBackground2); flex: none; }
+.panel-chooser-ico { width: 16px; height: 16px; color: var(--colorNeutralForeground3); flex: none; }
+.panel-chooser-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; border-radius: 4px; padding: 3px 6px; cursor: pointer; font: inherit; font-size: 13px; color: inherit; min-width: 0; }
+.panel-chooser-btn:hover { background: var(--colorNeutralBackground1Hover); }
+.panel-chooser-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

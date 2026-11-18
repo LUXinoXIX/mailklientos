@@ -40,9 +40,22 @@ export interface SignatureDefaults {
   reply?: string;
 }
 
-export interface AppSettings {
+/** vlastný pravý panel (weby + programy), ktorý môže používať jedno alebo viac kont */
+export interface RightPanelDef {
+  id: string;
+  name: string;
   webs: WebItem[];
   launchers: LauncherItem[];
+}
+
+export interface AppSettings {
+  /** spoločný pravý panel (pre kontá bez vlastného) */
+  webs: WebItem[];
+  launchers: LauncherItem[];
+  /** vlastné pravé panely */
+  rightPanels?: RightPanelDef[];
+  /** ktorý panel používa konto (id konta alebo „Všetky“ → id panela; chýba = spoločný) */
+  rightPanelOf?: Record<string, string>;
   signatures: Signature[];
   signatureDefaults: Record<string, SignatureDefaults>;
   /** upozornenia Windows na novú poštu (predvolene zapnuté) */

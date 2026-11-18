@@ -24,7 +24,7 @@ import { ContextMenu, type CtxItem, type CtxState } from './components/ContextMe
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
-import { RightPanel, type AgendaData } from './components/RightPanel';
+import { RightPanel, type AgendaData, type PanelChoice } from './components/RightPanel';
 import { MyDayPane, type MyDayEvent } from './components/MyDayPane';
 import { CalendarView } from './components/CalendarView';
 import { ContactsView } from './components/ContactsView';
@@ -956,6 +956,53 @@ export function App() {
     onToggleTask: (t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) }),
   };
 
+  // pravý panel: spoločný alebo vlastný pre konto (vlastný môže zdieľať viac kont)
+  const rPanels = settings.rightPanels ?? [];
+  const rPanelId = settings.rightPanelOf?.[activeKey] ?? 'shared';
+  const rPanel = rPanels.find((p) => p.id === rPanelId);
+  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers } : settings;
+  const savePanelView = (v: AppSettings) =>
+    saveSettings(
+      rPanel
+        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers } : p)) }
+        : { ...settings, webs: v.webs, launchers: v.launchers },
+    );
+  const allPanelWebs = [...settings.webs, ...rPanels.flatMap((p) => p.webs)];
+  const panelKeyName = (k: string) => (k === ALL ? 'Všetky kontá' : railAccounts.find((a) => a.id === k)?.name ?? '');
+  const panelUsers = (id: string) =>
+    [ALL, ...railAccounts.map((a) => a.id)]
+      .filter((k) => (k !== ALL || imapAccounts.length > 1) && (settings.rightPanelOf?.[k] ?? 'shared') === id)
+      .map(panelKeyName)
+      .filter(Boolean);
+  const panelChoice: PanelChoice = {
+    accountName: panelKeyName(activeKey) || 'toto konto',
+    current: rPanel ? rPanel.id : 'shared',
+    panels: rPanels.map((p) => ({ id: p.id, name: p.name, users: panelUsers(p.id) })),
+    sharedUsers: panelUsers('shared'),
+    onChoose: (id) => {
+      const of = { ...(settings.rightPanelOf ?? {}) };
+      if (id === 'shared') delete of[activeKey];
+      else of[activeKey] = id;
+      saveSettings({ ...settings, rightPanelOf: of });
+    },
+    onNew: (copy) => {
+      const nid = () => Math.random().toString(36).slice(2, 10);
+      const id = `p-${nid()}`;
+      const base = panelKeyName(activeKey) || 'Vlastný panel';
+      const name = rPanels.some((p) => p.name === base) ? `${base} ${rPanels.length + 1}` : base;
+      // kópia dostane nové id webov = vlastné prihlásenie, oddelené od pôvodného panela
+      const webs = copy ? panelView.webs.map((w) => ({ ...w, id: nid() })) : [];
+      const launchers = copy ? panelView.launchers.map((l) => ({ ...l, id: nid() })) : [];
+      saveSettings({ ...settings, rightPanels: [...rPanels, { id, name, webs, launchers }], rightPanelOf: { ...(settings.rightPanelOf ?? {}), [activeKey]: id } });
+      if (webs[0]) setRightActive(webs[0].id);
+    },
+    onRename: (id, name) => saveSettings({ ...settings, rightPanels: rPanels.map((p) => (p.id === id ? { ...p, name } : p)) }),
+    onDelete: (id) => {
+      const of = Object.fromEntries(Object.entries(settings.rightPanelOf ?? {}).filter(([, v]) => v !== id));
+      saveSettings({ ...settings, rightPanels: rPanels.filter((p) => p.id !== id), rightPanelOf: of });
+    },
+  };
+
   // náhľad kalendára a úloh vedľa čítacieho panela (len pošta IMAP/Zimbra)
   const myDay = settings.myDay ?? { calendar: false, tasks: false };
   const myDayOn = myDay.calendar || myDay.tasks;
@@ -1871,8 +1918,10 @@ export function App() {
             </div>
             {rightOpen && (
               <RightPanel
-                settings={settings}
-                onSettings={saveSettings}
+                settings={panelView}
+                onSettings={savePanelView}
+                allWebs={allPanelWebs}
+                choice={panelChoice}
                 active={rightActive}
                 onActive={setRightActive}
                 overlay={overlay}
