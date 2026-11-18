@@ -47,6 +47,10 @@ body { overflow: hidden; }
 .topbar-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-sub { font-size: 12px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-search { max-width: 520px; width: 100%; justify-self: center; }
+.topbar-searchwrap { display: flex; align-items: center; gap: 2px; justify-self: center; max-width: 560px; width: 100%; }
+.topbar-searchwrap .topbar-search { flex: 1; max-width: none; }
+.topbar-search-opt { border: none; background: rgba(255,255,255,0.18); color: inherit; height: 32px; width: 28px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.topbar-search-opt:hover { background: rgba(255,255,255,0.3); }
 
 /* ribbon */
 .ribbon { background: var(--colorNeutralBackground1); border-bottom: 1px solid var(--colorNeutralStroke2); padding: 0 8px; flex: none; }

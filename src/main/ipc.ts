@@ -93,8 +93,8 @@ export function registerIpc() {
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));
   handle('mail:list', (id: string, folder: string, limit?: number, preview?: boolean) => mail.listMessages(store.getImap(id), folder, limit, preview));
   handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
-  handle('mail:search', (q: string, accountId?: string, folder?: string) => cache.search(q, { account: accountId, folder }));
-  handle('mail:searchServer', (id: string, folder: string, q: string) => mail.searchServer(store.getImap(id), folder, q));
+  handle('mail:search', (q: string, accountId?: string, folder?: string, field?: string) => cache.search(q, { account: accountId, folder, field }));
+  handle('mail:searchServer', (id: string, folder: string, q: string, field?: string) => mail.searchServer(store.getImap(id), folder, q, 200, field));
   handle('mail:keywords', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
     mail.setKeywords(store.getImap(id), folder, uids, add, remove));
   handle('mail:thread', (id: string, messageId: string) => cache.threadOf(id, messageId));

@@ -1,6 +1,6 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
 import {
-  Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
+  Button, Menu, MenuDivider, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
 } from '@fluentui/react-components';
 import { useState, type ReactNode } from 'react';
@@ -11,7 +11,7 @@ import {
   SendReceiveIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
-import type { Category, QuickStep, Signature, Template } from '../../core/settings';
+import { SEARCH_FIELDS, type Category, type QuickStep, type SearchField, type Signature, type Template } from '../../core/settings';
 import type { OrganizeTab } from './OrganizeDialog';
 import type { ComposerHandle, ComposerState } from './Composer';
 
@@ -25,7 +25,18 @@ export function TopBar(props: {
   onToggleRight: () => void;
   /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
   kind?: string;
+  searchOptions?: {
+    field: SearchField;
+    onField: (f: SearchField) => void;
+    serverAuto: boolean;
+    onServerAuto: (v: boolean) => void;
+    history: string[];
+    onHistory: (q: string) => void;
+    onClearHistory: () => void;
+    onSaveFolder?: () => void;
+  };
 }) {
+  const so = props.searchOptions;
   return (
     <header className="topbar" style={{ background: props.color, color: onColor(props.color) }}>
       <div className="topbar-title">
@@ -36,13 +47,55 @@ export function TopBar(props: {
         <div className="topbar-sub">{props.subtitle}</div>
       </div>
       {props.onSearch ? (
-        <SearchBox
-          className="topbar-search"
-          placeholder="Hľadať v pošte (predmet, odosielateľ, text)"
-          value={props.search ?? ''}
-          onChange={(_, d) => props.onSearch!(d.value)}
-          appearance="filled-lighter"
-        />
+        <div className="topbar-searchwrap">
+          <SearchBox
+            className="topbar-search"
+            placeholder={so && so.field !== 'all' ? `Hľadať: ${SEARCH_FIELDS.find((x) => x.id === so.field)?.label.toLowerCase()}` : 'Hľadať v pošte (predmet, odosielateľ, text)'}
+            value={props.search ?? ''}
+            onChange={(_, d) => props.onSearch!(d.value)}
+            appearance="filled-lighter"
+          />
+          {so && (
+            <Menu
+              positioning="below-end"
+              checkedValues={{ field: [so.field], server: so.serverAuto ? ['on'] : [] }}
+              onCheckedValueChange={(_, d) => {
+                if (d.name === 'field' && d.checkedItems[0]) so.onField(d.checkedItems[0] as SearchField);
+                if (d.name === 'server') so.onServerAuto(d.checkedItems.includes('on'));
+              }}
+            >
+              <MenuTrigger disableButtonEnhancement>
+                <button className="topbar-search-opt" aria-label="Možnosti hľadania" title="Možnosti hľadania">▾</button>
+              </MenuTrigger>
+              <MenuPopover style={{ minWidth: 380, maxWidth: 'none' }}>
+                <MenuList>
+                  <Menu>
+                    <MenuTrigger disableButtonEnhancement>
+                      <MenuItem disabled={!so.history.length}>Nedávne hľadania</MenuItem>
+                    </MenuTrigger>
+                    <MenuPopover>
+                      <MenuList>
+                        {so.history.map((q) => (
+                          <MenuItem key={q} onClick={() => so.onHistory(q)}>{q}</MenuItem>
+                        ))}
+                        <MenuDivider />
+                        <MenuItem onClick={so.onClearHistory}>Vymazať históriu</MenuItem>
+                      </MenuList>
+                    </MenuPopover>
+                  </Menu>
+                  <MenuDivider />
+                  {SEARCH_FIELDS.map((f) => (
+                    <MenuItemRadio key={f.id} name="field" value={f.id}>{f.label}</MenuItemRadio>
+                  ))}
+                  <MenuDivider />
+                  <MenuItemCheckbox name="server" value="on">Hľadať aj na serveri (celý priečinok)</MenuItemCheckbox>
+                  <MenuDivider />
+                  <MenuItem disabled={!so.onSaveFolder} onClick={() => so.onSaveFolder?.()}>Vytvoriť priečinok hľadania…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          )}
+        </div>
       ) : (
         <div />
       )}

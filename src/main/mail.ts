@@ -348,11 +348,19 @@ export async function openDraft(acc: AccountConfig, folder: string, uid: number)
 }
 
 /** Hľadanie na serveri (IMAP SEARCH): predmet, odosielateľ, príjemca, text. Pre správy, ktoré ešte nie sú v cache. */
-export async function searchServer(acc: AccountConfig, folder: string, q: string, limit = 100): Promise<MessageSummary[]> {
+export async function searchServer(acc: AccountConfig, folder: string, q: string, limit = 200, field = 'all'): Promise<MessageSummary[]> {
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
     try {
-      const uids: number[] = (await c.search({ or: [{ subject: q }, { from: q }, { to: q }, { body: q }] }, { uid: true })) || [];
+      const crit: Record<string, object> = {
+        all: { or: [{ subject: q }, { from: q }, { to: q }, { cc: q }, { body: q }] },
+        people: { or: [{ subject: q }, { from: q }, { to: q }, { cc: q }] },
+        subject: { subject: q },
+        body: { body: q },
+        from: { from: q },
+        to: { or: [{ to: q }, { cc: q }] },
+      };
+      const uids: number[] = (await c.search(crit[field] ?? crit.all!, { uid: true })) || [];
       const pick = uids.sort((a, b) => b - a).slice(0, limit);
       if (!pick.length) return [];
       const out: MessageSummary[] = [];
