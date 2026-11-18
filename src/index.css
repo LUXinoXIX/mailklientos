@@ -685,3 +685,19 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .panel-chooser-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inline-toggle { display: block; text-align: left; padding: 0; margin: 0 16px 8px; font-size: 12px; color: var(--colorNeutralForeground3) !important; }
 .attachment.inline-img { border-style: dashed; opacity: .85; }
+
+/* prílohy odlíšené od bieleho textu správy: jemne sivé s prechodom */
+.attachment, .att-card {
+  background: linear-gradient(180deg, var(--colorNeutralBackground1) 0%, var(--colorNeutralBackground3) 100%);
+  border-color: var(--colorNeutralStroke1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+.attachment:hover, .att-card:hover {
+  background: linear-gradient(180deg, var(--colorNeutralBackground1Hover) 0%, var(--colorNeutralBackground3Hover) 100%);
+  border-color: var(--colorNeutralStroke1Hover);
+}
+.attachments { padding: 10px 12px; margin: 4px 0 8px; background: var(--colorNeutralBackground2); border-radius: 6px; }
+.attachment.inline-img { background: var(--colorNeutralBackground2); box-shadow: none; }
+.attachments { background: var(--colorNeutralBackground3); border: 1px solid var(--colorNeutralStroke3); }
+.attachment, .att-card { background: linear-gradient(180deg, var(--colorNeutralBackground1) 0%, var(--colorNeutralBackground4) 100%); }
+.composer-files { background: var(--colorNeutralBackground3); }
