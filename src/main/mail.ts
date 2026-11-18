@@ -853,3 +853,46 @@ export async function imapQuota(acc: AccountConfig): Promise<{ used: number; lim
     return { used: Number(q.storage.used ?? q.storage.usage ?? 0), limit: Number(q.storage.limit ?? 0) };
   });
 }
+
+/** Priečinky: nový, premenovať, odstrániť, všetko prečítané, vyprázdniť. */
+export async function folderOp(
+  acc: AccountConfig,
+  op: 'create' | 'rename' | 'delete' | 'markRead' | 'empty',
+  path: string,
+  name?: string,
+): Promise<string> {
+  return withImap(acc, async (c) => {
+    const list: Array<{ path: string; delimiter?: string }> = await c.list();
+    const delim = list.find((m) => m.path === path)?.delimiter ?? list.find((m) => m.delimiter)?.delimiter ?? '/';
+    if (op === 'create') {
+      const target = path ? `${path}${delim}${name}` : name!;
+      await c.mailboxCreate(target);
+      return target;
+    }
+    if (op === 'rename') {
+      const parts = path.split(delim);
+      parts[parts.length - 1] = name!;
+      const target = parts.join(delim);
+      await c.mailboxRename(path, target);
+      cache.removeFolder(acc.id, path);
+      return target;
+    }
+    if (op === 'delete') {
+      await c.mailboxDelete(path);
+      cache.removeFolder(acc.id, path);
+      return path;
+    }
+    const lock = await c.getMailboxLock(path);
+    try {
+      if (!c.mailbox || !c.mailbox.exists) return path;
+      if (op === 'markRead') await c.messageFlagsAdd('1:*', ['\\Seen']);
+      else {
+        await c.messageDelete('1:*');
+        cache.removeFolder(acc.id, path);
+      }
+      return path;
+    } finally {
+      lock.release();
+    }
+  });
+}

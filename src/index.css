@@ -522,3 +522,62 @@ kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid
 .mail-wrap > .msgview { flex: 1; }
 .msgtab-pane { flex: 1; min-height: 0; display: flex; }
 .rail-section { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--colorNeutralForeground3); text-align: center; margin: 2px 0 2px; width: 60px; }
+
+/* pás kont v2: úzky tichý pás + zoznam s menami (vysúvaný alebo pripnutý) */
+.acc-wrap { position: relative; flex: none; display: flex; }
+.acc-rail { width: 64px; gap: 6px; padding: 6px 0 8px; }
+.acc-btn { width: 64px; gap: 2px; }
+.acc-sq { position: relative; width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--railFg, #374151); background: var(--colorNeutralBackground1); border: 1px solid #cfd4da; border-left-width: 3px; transition: background .12s; }
+.acc-sq.all { border-left-width: 1px; color: var(--colorNeutralForeground2); }
+.acc-btn.on .acc-sq.all { background: var(--colorBrandBackground); color: #fff; border-color: var(--colorBrandBackground); }
+.acc-btn:hover .acc-sq { background: #fff; }
+.acc-btn.on:hover .acc-sq { filter: brightness(1.08); }
+.acc-new { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--colorBrandBackground); border: 2px solid var(--accRailBg); }
+.acc-label { font-size: 10px; color: var(--colorNeutralForeground3); max-width: 60px; }
+.acc-btn.on .acc-label { color: var(--colorNeutralForeground1); font-weight: 600; }
+.acc-add { width: 36px; height: 36px; border-radius: 8px; }
+.acc-tool.sm { width: 36px; height: 28px; font-size: 16px; line-height: 1; color: var(--colorNeutralForeground2); }
+.acc-list { width: 232px; flex: none; background: var(--accRailBg); border-right: 1px solid #cfd4da; display: flex; flex-direction: column; padding: 6px 0 8px; overflow-y: auto; }
+.acc-list.flyout { position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; box-shadow: 4px 0 18px rgba(0,0,0,.14); }
+.acc-backdrop { position: fixed; inset: 0; z-index: 59; }
+.acc-list-head { display: flex; align-items: center; gap: 4px; padding: 0 6px 6px 14px; }
+.acc-list-head .acc-tool.sm:first-child { margin-left: -8px; }
+.acc-list-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--colorNeutralForeground3); text-transform: uppercase; letter-spacing: .04em; }
+.acc-tool.pin svg { width: 16px; height: 16px; }
+.acc-tool.pin.on { color: var(--colorBrandForeground1); background: var(--colorNeutralBackground1); }
+.acc-row { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 8px 14px; font: inherit; font-size: 13px; color: var(--colorNeutralForeground1); cursor: pointer; text-align: left; }
+.acc-row:hover { background: rgba(255,255,255,.55); }
+.acc-row.on { background: var(--colorNeutralBackground1); font-weight: 600; }
+.acc-row.dragging { opacity: .4; }
+.acc-row .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-row .c { font-size: 12px; color: var(--colorNeutralForeground2); font-weight: 400; }
+.acc-row .k { font-size: 11px; color: var(--colorNeutralForeground3); font-weight: 400; }
+.acc-row.add { color: var(--colorNeutralForeground2); }
+.acc-row-ico { width: 16px; height: 16px; flex: none; }
+.acc-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; margin: 0 3px; }
+.acc-list-sep { height: 1px; background: #cfd4da; margin: 4px 14px; }
+.acc-list-tools { display: flex; gap: 4px; padding: 0 10px; }
+.app.dark .acc-sq { background: var(--colorNeutralBackground3); border-color: var(--colorNeutralStroke1); color: var(--colorNeutralForeground1); }
+.app.dark .acc-row:hover { background: rgba(255,255,255,.06); }
+.mail { position: relative; }
+.body { position: relative; }
+.splitter { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 20; cursor: col-resize; touch-action: none; }
+.splitter::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; background: transparent; transition: background .12s; }
+.splitter:hover::after, .splitter:focus-visible::after { background: var(--colorBrandBackground); width: 2px; left: 2px; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing webview, body.resizing iframe { pointer-events: none; }
+.composer-top .grow { flex: 1; }
+.composer-x { border: 0; background: transparent; font-size: 22px; line-height: 1; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; color: var(--colorNeutralForeground2); }
+.composer-x:hover { background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground1); }
+.reading-slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.reading-slot > .reading, .reading-slot > .draft-pane { flex: 1; min-height: 0; }
+.draft-pane { display: flex; flex-direction: column; min-height: 0; }
+.draft-pane > .composer { flex: 1; min-height: 0; }
+.draft-tabs { display: flex; gap: 6px; padding: 6px 10px; background: var(--colorNeutralBackground3); border-top: 1px solid var(--colorNeutralStroke2); overflow-x: auto; flex: none; justify-content: flex-end; }
+.draft-tab { display: flex; align-items: center; gap: 8px; min-width: 150px; max-width: 240px; padding: 6px 6px 6px 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground2); font-size: 13px; cursor: pointer; color: var(--colorNeutralForeground2); }
+.draft-tab:hover { background: var(--colorNeutralBackground1); }
+.draft-tab.on { background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); border-color: var(--colorBrandStroke1); box-shadow: inset 0 -2px 0 var(--colorBrandBackground); }
+.draft-tab .pen { font-size: 13px; }
+.draft-tab .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-tab .x { border: 0; background: transparent; font-size: 18px; line-height: 1; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; color: inherit; }
+.draft-tab .x:hover { background: var(--colorNeutralBackground3Hover); }

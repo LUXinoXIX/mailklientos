@@ -1,5 +1,5 @@
 // Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
-import { FluentProvider } from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, FluentProvider, Input } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
@@ -19,6 +19,8 @@ import { CryptoDialog } from './components/CryptoDialog';
 import { AboutDialog, ShortcutsDialog } from './components/AboutDialog';
 import { MailIcon } from './icons';
 import { MessageView, type MessageRef } from './components/MessageView';
+import { Splitter } from './components/Splitter';
+import { ContextMenu, type CtxItem, type CtxState } from './components/ContextMenu';
 import { ZimbraDialog, type ZimbraTab } from './components/ZimbraDialog';
 import { OrganizeDialog, type OrganizeTab } from './components/OrganizeDialog';
 import { FolderPane, MessageList, ReadingPane, type Selection } from './components/MailPanes';
@@ -149,6 +151,11 @@ export function App() {
   // odoslanie čakajúce 10 s na späťvzatie; naplánované správy
   const [undo, setUndo] = useState<OutboxItem | null>(null);
   const [updateReady, setUpdateReady] = useState<string | null>(null);
+  // šírky stĺpcov (ťahadlá medzi stĺpcami), uložené v nastaveniach
+  const PW = { folders: 230, list: 340, right: 360 };
+  const [widths, setWidths] = useState(PW);
+  useEffect(() => setWidths({ ...PW, ...(settings.paneWidths ?? {}) }), [settings.paneWidths]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveWidth = (k: keyof typeof PW, v: number) => saveSettings({ ...settings, paneWidths: { ...(settings.paneWidths ?? {}), [k]: v } });
   const [msgTabs, setMsgTabs] = useState<Array<{ key: string; ref: MessageRef; title: string }>>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [limits, setLimits] = useState<Record<string, number>>({});
@@ -163,9 +170,23 @@ export function App() {
   const [panelOverlay, setPanelOverlay] = useState(false);
   const [menuOverlay, setMenuOverlay] = useState(false);
   const msgCache = useRef(new Map<string, MessageFull>());
-  const [composeView, setCompose] = useState<{ init: ComposeInit; key: number } | null>(null);
-  const composerRef = useRef<ComposerHandle>(null);
-  const [composerState, setComposerState] = useState<ComposerState>({ importance: false, receipt: false, savedAt: null, sending: false });
+  // rozpísané správy ako karty dole (ako Outlook): viac naraz, prepínanie medzi nimi a správami
+  const [drafts, setDrafts] = useState<Array<{ init: ComposeInit; key: number }>>([]);
+  const [activeDraft, setActiveDraft] = useState<number | null>(null);
+  const composeView = drafts.find((d) => d.key === activeDraft) ?? null;
+  const setCompose = (v: { init: ComposeInit; key: number } | null) => {
+    if (!v) return setActiveDraft(null);
+    setDrafts((d) => [...d, v]);
+    setActiveDraft(v.key);
+  };
+  const removeDraft = (key: number) => {
+    setDrafts((d) => d.filter((x) => x.key !== key));
+    setActiveDraft((a) => (a === key ? null : a));
+  };
+  const composerRefs = useRef<Record<number, ComposerHandle | null>>({});
+  const composerRef = { current: activeDraft != null ? composerRefs.current[activeDraft] ?? null : null };
+  const [composerStates, setComposerStates] = useState<Record<number, ComposerState>>({});
+  const composerState: ComposerState = (activeDraft != null && composerStates[activeDraft]) || { importance: false, receipt: false, savedAt: null, sending: false };
   const openKey = useRef('');
   const [gpuOff, setGpuOff] = useState(false);
   const [gpuForced, setGpuForced] = useState(false);
@@ -486,6 +507,201 @@ export function App() {
     setCurrent(undefined);
     setFull({ loading: false });
   };
+  // ---- menu na pravý klik a hromadné akcie ----
+  const [ctx, setCtx] = useState<CtxState | null>(null);
+  const [ask, setAsk] = useState<{ title: string; value: string; ok: (v: string) => void } | null>(null);
+  const showCtx = (x: number, y: number, items: CtxItem[]) => {
+    setMenuOverlay(true);
+    setCtx({ x, y, items });
+  };
+  const closeCtx = () => {
+    setCtx(null);
+    setMenuOverlay(false);
+  };
+  type BulkOp = 'seen' | 'unseen' | 'flag' | 'unflag' | 'pin' | 'unpin' | 'delete' | 'archive' | { move: string } | { cat: string; on: boolean };
+  async function bulk(msgs: MessageSummary[], op: BulkOp) {
+    if (!api || !msgs.length) return;
+    if (msgs.some((m) => m.accountId === DEMO_ID)) return guardDemo(msgs[0]!);
+    const groups = new Map<string, MessageSummary[]>();
+    for (const m of msgs) groups.set(`${m.accountId}\n${m.folder}`, [...(groups.get(`${m.accountId}\n${m.folder}`) ?? []), m]);
+    let err = '';
+    for (const list of groups.values()) {
+      const { accountId: a, folder: f } = list[0]!;
+      const uids = list.map((m) => m.uid);
+      let r: { ok: boolean; error?: string } = { ok: true };
+      if (op === 'seen' || op === 'unseen') r = await api.setFlags(a, f, uids, { seen: op === 'seen' });
+      else if (op === 'flag' || op === 'unflag') r = await api.setFlags(a, f, uids, { flagged: op === 'flag' });
+      else if (op === 'pin' || op === 'unpin') r = await api.setKeywords(a, f, uids, op === 'pin' ? [PIN_KEYWORD] : [], op === 'pin' ? [] : [PIN_KEYWORD]);
+      else if (op === 'delete') r = await api.deleteMessages(a, f, uids);
+      else if (op === 'archive') r = await api.archiveMessages(a, f, uids);
+      else if ('move' in op) r = await api.moveMessages(a, f, uids, op.move);
+      else r = await api.setKeywords(a, f, uids, op.on ? [op.cat] : [], op.on ? [] : [op.cat]);
+      if (!r.ok) {
+        err = r.error ?? 'Chyba';
+        continue;
+      }
+      for (const m of list) {
+        if (op === 'seen' || op === 'unseen') patchMsg(m, { seen: op === 'seen' });
+        else if (op === 'flag' || op === 'unflag') patchMsg(m, { flagged: op === 'flag' });
+        else if (op === 'pin' || op === 'unpin' || (typeof op === 'object' && 'cat' in op)) {
+          const id = typeof op === 'object' && 'cat' in op ? op.cat : PIN_KEYWORD;
+          const on = typeof op === 'object' && 'cat' in op ? op.on : op === 'pin';
+          const kw = new Set(m.keywords ?? []);
+          if (on) kw.add(id);
+          else kw.delete(id);
+          patchMsg(m, { keywords: [...kw] });
+        } else removeFromList(m);
+      }
+      if (op === 'seen' || op === 'unseen') setMailTick((t) => t + 1);
+    }
+    const n = msgs.length;
+    const word = n === 1 ? 'správa' : n < 5 ? 'správy' : 'správ';
+    setStatus(err || (op === 'delete' ? `Odstránené: ${n} ${word}.` : op === 'archive' ? `Archivované: ${n} ${word}.` : typeof op === 'object' && 'move' in op ? `Presunuté: ${n} ${word}.` : ''));
+  }
+
+  function messageMenu(msgs: MessageSummary[], x: number, y: number) {
+    const one = msgs.length === 1 ? msgs[0]! : null;
+    const accs = new Set(msgs.map((m) => m.accountId));
+    const fs = accs.size === 1 ? folders[[...accs][0]!] : undefined;
+    const fl = Array.isArray(fs) ? fs : [];
+    const anyUnread = msgs.some((m) => !m.seen);
+    const anyFlag = msgs.some((m) => m.flagged);
+    const allPinned = msgs.every((m) => m.keywords?.includes(PIN_KEYWORD));
+    const later = (h: number, d = 0) => {
+      const t = new Date();
+      t.setDate(t.getDate() + d);
+      t.setHours(h, 0, 0, 0);
+      return t;
+    };
+    const snoozeOne = async (until: Date) => {
+      if (!one || !api || guardDemo(one)) return;
+      const r = await api.snooze(one.accountId, one.folder, one.uid, one.messageId ?? '', one.subject, until.toISOString());
+      if (!r.ok) return setStatus(r.error);
+      removeFromList(one);
+      setStatus(`Správa odložená do ${until.toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}.`);
+    };
+    const items: CtxItem[] = [];
+    if (one) {
+      items.push(
+        { label: 'Otvoriť v novom okne', onClick: () => openFull(one, (settings.openMode ?? 'window') !== 'window') },
+        { label: 'Otvoriť na karte', onClick: () => openFull(one, (settings.openMode ?? 'window') === 'window') },
+        { divider: true },
+        { label: 'Odpovedať', hint: 'Ctrl+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'reply') },
+        { label: 'Odpovedať všetkým', hint: 'Ctrl+Shift+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'replyAll') },
+        { label: 'Preposlať', hint: 'Ctrl+F', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forward') },
+        { divider: true },
+      );
+    } else items.push({ label: `Označených správ: ${msgs.length}`, disabled: true }, { divider: true });
+    items.push(
+      { label: anyUnread ? 'Označiť ako prečítané' : 'Označiť ako neprečítané', hint: anyUnread ? 'Ctrl+Q' : 'Ctrl+U', onClick: () => void bulk(msgs, anyUnread ? 'seen' : 'unseen') },
+      { label: anyFlag ? 'Zrušiť vlajku' : 'Vlajka', hint: 'Insert', onClick: () => void bulk(msgs, anyFlag ? 'unflag' : 'flag') },
+      { label: allPinned ? 'Odopnúť' : 'Pripnúť navrch', onClick: () => void bulk(msgs, allPinned ? 'unpin' : 'pin') },
+      {
+        label: 'Kategória',
+        sub: categoriesOf(settings).map((c) => {
+          const on = msgs.every((m) => m.keywords?.includes(c.id));
+          return { label: `${on ? '✓ ' : ''}${c.name}`, onClick: () => void bulk(msgs, { cat: c.id, on: !on }) };
+        }),
+      },
+    );
+    if (one) {
+      items.push({
+        label: 'Odložiť',
+        sub: [
+          { label: 'Dnes o 17:00', onClick: () => void snoozeOne(later(17)), disabled: new Date().getHours() >= 17 },
+          { label: 'Zajtra o 8:00', onClick: () => void snoozeOne(later(8, 1)) },
+          { label: 'O týždeň', onClick: () => void snoozeOne(later(8, 7)) },
+        ],
+      });
+    }
+    items.push(
+      { divider: true },
+      {
+        label: 'Presunúť do',
+        disabled: accs.size !== 1,
+        sub: fl.filter((f) => !msgs.every((m) => m.folder === f.path)).map((f) => ({ label: `${'\u2003'.repeat(f.depth)}${f.name}`, onClick: () => void bulk(msgs, { move: f.path }) })),
+      },
+      { label: 'Archivovať', onClick: () => void bulk(msgs, 'archive') },
+      { label: 'Odstrániť', hint: 'Delete', onClick: () => void bulk(msgs, 'delete') },
+    );
+    if (one) {
+      items.push(
+        { divider: true },
+        { label: 'Tlačiť…', hint: 'Ctrl+P', onClick: () => void api?.printMessage(one.accountId, one.folder, one.uid, false) },
+        { label: 'Uložiť ako PDF…', onClick: () => void api?.printMessage(one.accountId, one.folder, one.uid, true) },
+        { label: 'Uložiť ako .eml…', onClick: () => void api?.exportEml(one.accountId, one.folder, one.uid, one.subject).then((r) => setStatus(r.ok ? (r.data ? `Uložené: ${r.data}` : '') : r.error)) },
+      );
+      if (zimbraOk[one.accountId]) {
+        items.push({
+          label: `Blokovať ${one.fromAddress}`,
+          onClick: () => {
+            if (!window.confirm(`Blokovať odosielateľa ${one.fromAddress}? Ďalšie správy od neho Zimbra presunie do nevyžiadanej pošty.`)) return;
+            void api?.zimbraBlock(one.accountId, one.fromAddress).then((r) => setStatus(r.ok ? `Odosielateľ ${one.fromAddress} blokovaný.` : r.error));
+          },
+        });
+      }
+    }
+    showCtx(x, y, items);
+  }
+
+  function folderMenu(accountId: string, f: FolderInfo, x: number, y: number) {
+    if (accountId === DEMO_ID || !api) return;
+    const special = !!f.specialUse;
+    const trashLike = f.specialUse === '\\Trash' || f.specialUse === '\\Junk' || /trash|junk|spam|kôš|kos|nevy/i.test(f.path);
+    const done = (msg: string) => {
+      setStatus(msg);
+      setRefreshKey((k) => k + 1);
+    };
+    showCtx(x, y, [
+      {
+        label: 'Nový podpriečinok…',
+        onClick: () =>
+          setAsk({
+            title: `Nový priečinok v „${f.name}“`,
+            value: '',
+            ok: (v) => void api.folderOp(accountId, 'create', f.path, v).then((r) => done(r.ok ? `Priečinok „${v}“ vytvorený.` : r.error)),
+          }),
+      },
+      {
+        label: 'Premenovať…',
+        disabled: special,
+        onClick: () =>
+          setAsk({
+            title: `Premenovať priečinok „${f.name}“`,
+            value: f.name,
+            ok: (v) =>
+              void api.folderOp(accountId, 'rename', f.path, v).then((r) => {
+                done(r.ok ? `Priečinok premenovaný na „${v}“.` : r.error);
+                if (r.ok && selection.accountId === accountId && selection.folder === f.path) setSelection({ accountId, folder: r.data });
+              }),
+          }),
+      },
+      { divider: true },
+      { label: 'Označiť všetko ako prečítané', onClick: () => void api.folderOp(accountId, 'markRead', f.path).then((r) => (r.ok ? (setMailTick((t) => t + 1), done('Všetky správy v priečinku sú prečítané.')) : setStatus(r.error))) },
+      {
+        label: 'Vyprázdniť priečinok…',
+        disabled: !trashLike,
+        onClick: () => {
+          if (!window.confirm(`Natrvalo odstrániť všetky správy v priečinku „${f.name}“? Toto sa nedá vrátiť.`)) return;
+          void api.folderOp(accountId, 'empty', f.path).then((r) => (r.ok ? (setMailTick((t) => t + 1), done(`Priečinok „${f.name}“ vyprázdnený.`)) : setStatus(r.error)));
+        },
+      },
+      {
+        label: 'Odstrániť priečinok…',
+        disabled: special || f.path.toUpperCase() === 'INBOX',
+        onClick: () => {
+          if (!window.confirm(`Odstrániť priečinok „${f.name}“ aj so všetkými správami na serveri?`)) return;
+          void api.folderOp(accountId, 'delete', f.path).then((r) => {
+            done(r.ok ? `Priečinok „${f.name}“ odstránený.` : r.error);
+            if (r.ok && selection.folder === f.path) setSelection({ accountId, folder: 'INBOX' });
+          });
+        },
+      },
+      { divider: true },
+      { label: 'Obnoviť', onClick: () => setRefreshKey((k) => k + 1) },
+    ]);
+  }
+
   const guardDemo = (m: MessageSummary) => {
     if (m.accountId === DEMO_ID) {
       setStatus('V ukážkovom režime sa správy nemenia. Pridaj konto (+ v páse kont).');
@@ -857,6 +1073,11 @@ export function App() {
 
   /** Písanie v čítacom paneli (ako Outlook). */
   function compose(kind: ComposeKind) {
+    // už je otvorená rozpísaná správa: presunúť ju do samostatného okna (nič sa nestratí), potom otvoriť novú
+    // predchádzajúca rozpísaná správa ostane ako karta dole
+    composeNow(kind);
+  }
+  function composeNow(kind: ComposeKind) {
     const m = full.msg;
     const accountId = m && m.accountId !== DEMO_ID ? m.accountId : activeImap && activeImap.id !== DEMO_ID ? activeImap.id : imapAccounts.find((a) => a.id !== DEMO_ID)?.id;
     if (activeImap) setImapModule((x) => ({ ...x, [activeImap.id]: 'mail' }));
@@ -1128,6 +1349,8 @@ export function App() {
           gpuForced={gpuForced}
           onToggleGpuForced={() => void api?.setGpuForced(!gpuForced)}
           onOpenLog={() => void api?.openLog()}
+          pinned={!!settings.accountListPinned}
+          onPin={(v) => saveSettings({ ...settings, accountListPinned: v })}
           onMenuOpen={setMenuOverlay}
         />
         <div className="workspace">
@@ -1249,7 +1472,20 @@ export function App() {
           {secretsWarning && (
             <div className="banner warn">Systémové úložisko hesiel nie je dostupné: heslá sa držia len do zatvorenia aplikácie.</div>
           )}
-          <main className={`body ${rightOpen ? 'with-right' : ''}`}>
+          <main className={`body ${rightOpen ? 'with-right' : ''}`} style={rightOpen ? { gridTemplateColumns: `68px minmax(0, 1fr) ${widths.right}px` } : undefined}>
+            {rightOpen && (
+              <Splitter
+                side="right"
+                at={widths.right}
+                value={widths.right}
+                min={260}
+                max={900}
+                label="Šírka pravého panela"
+                def={PW.right}
+                onChange={(v) => setWidths((w) => ({ ...w, right: v }))}
+                onDone={(v) => saveWidth('right', v)}
+              />
+            )}
             {activeM365 ? (
               <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
@@ -1321,7 +1557,27 @@ export function App() {
                     />
                   </div>
                 ))}
-                <div className="mail" style={{ display: activeTab ? 'none' : undefined }}>
+                <div className="mail" style={{ display: activeTab ? 'none' : undefined, gridTemplateColumns: `${widths.folders}px ${widths.list}px minmax(0, 1fr)` }}>
+                  <Splitter
+                    at={widths.folders}
+                    value={widths.folders}
+                    min={150}
+                    max={480}
+                    label="Šírka panela priečinkov"
+                    def={PW.folders}
+                    onChange={(v) => setWidths((w) => ({ ...w, folders: v }))}
+                    onDone={(v) => saveWidth('folders', v)}
+                  />
+                  <Splitter
+                    at={widths.folders + widths.list}
+                    value={widths.list}
+                    min={220}
+                    max={900}
+                    label="Šírka zoznamu správ"
+                    def={PW.list}
+                    onChange={(v) => setWidths((w) => ({ ...w, list: v }))}
+                    onDone={(v) => saveWidth('list', v)}
+                  />
                   <FolderPane
                     account={activeImap}
                     accounts={imapAccounts}
@@ -1345,6 +1601,7 @@ export function App() {
                       setSearchField(x.field ?? 'all');
                       setSearch(x.query);
                     }}
+                    onFolderContext={folderMenu}
                     onRemoveSearch={(x) => saveSettings({ ...settings, savedSearches: (settings.savedSearches ?? []).filter((y) => y.id !== x.id) })}
                   />
                   <MessageList
@@ -1375,29 +1632,36 @@ export function App() {
                     colorOf={colorOf}
                     onOpen={(m) => void (isDrafts(m) ? editDraft(m) : open(m))}
                     onOpenFull={(m, alt) => openFull(m, alt)}
+                    onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
+                    onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
                     onLoadMore={!found && hasMore && !demo ? loadMore : undefined}
                     loadingMore={listState.loading}
                     onDeleteKey={() => void del()}
                   />
-                  {composeView ? (
+                  <div className="reading-slot">
+                  {drafts.map((d) => (
+                    <div key={d.key} className="draft-pane" style={{ display: d.key === activeDraft ? undefined : 'none' }}>
                     <Composer
-                      key={composeView.key}
-                      ref={composerRef}
-                      init={composeView.init}
+                      ref={(h) => {
+                        composerRefs.current[d.key] = h;
+                      }}
+                      init={d.init}
                       accounts={imapAccounts.filter((a) => a.id !== DEMO_ID).length ? imapAccounts.filter((a) => a.id !== DEMO_ID) : imapAccounts}
                       settings={settings}
                       contacts={contacts}
                       zimbra={zimbraOk}
-                      onState={setComposerState}
+                      onState={(st) => setComposerStates((m) => ({ ...m, [d.key]: st }))}
                       onQueued={(it) => it.kind === 'undo' && setUndo(it)}
                       onSaveTemplate={saveTemplate}
                       onClose={(st) => {
-                        setCompose(null);
-                        setRibbonTab('home');
+                        removeDraft(d.key);
+                        if (d.key === activeDraft) setRibbonTab('home');
                         if (st) setStatus(st);
                       }}
                     />
-                  ) : (
+                    </div>
+                  ))}
+                  {!composeView && (
                   <ReadingPane
                     message={full.msg}
                     loading={full.loading}
@@ -1420,6 +1684,24 @@ export function App() {
                         : undefined
                     }
                     onPrint={(pdf) => void runIo(pdf ? 'pdf' : 'print')}
+                    onAttachmentContext={(i, x, y) => {
+                      const m = full.msg;
+                      if (!m || !api) return;
+                      const a = m.attachments[i];
+                      showCtx(x, y, [
+                        { label: 'Otvoriť', onClick: () => void api.openAttachment(m.accountId, m.folder, m.uid, i) },
+                        { label: 'Uložiť ako…', onClick: () => void api.saveAttachment(m.accountId, m.folder, m.uid, i) },
+                        { label: 'Uložiť všetky prílohy…', disabled: m.attachments.length < 2, onClick: async () => {
+                          for (let k = 0; k < m.attachments.length; k++) {
+                            const r = await api.saveAttachment(m.accountId, m.folder, m.uid, k);
+                            if (r.ok && r.data === null) break;
+                          }
+                        } },
+                        { divider: true },
+                        { label: 'Preposlať správu s prílohami', onClick: () => compose('forward') },
+                        { label: `Kopírovať názov „${a?.filename ?? ''}“`, onClick: () => void navigator.clipboard.writeText(a?.filename ?? '') },
+                      ]);
+                    }}
                     onPopOut={full.msg && full.msg.accountId !== DEMO_ID ? () => void api?.messageWindow(full.msg!.accountId, full.msg!.folder, full.msg!.uid) : undefined}
                     onUnsubscribe={
                       full.msg?.unsubscribe && full.msg.accountId !== DEMO_ID
@@ -1439,7 +1721,47 @@ export function App() {
                     }}
                   />
                   )}
+                  </div>
                 </div>
+                {drafts.length > 0 && (
+                  <div className="draft-tabs" role="tablist" aria-label="Rozpísané správy">
+                    {drafts.map((d) => {
+                      const st = composerStates[d.key];
+                      const t = st?.subject?.trim() || (d.init.subject ?? '').trim() || '(Bez predmetu)';
+                      const on = d.key === activeDraft;
+                      return (
+                        <div
+                          key={d.key}
+                          role="tab"
+                          tabIndex={0}
+                          aria-selected={on}
+                          className={`draft-tab ${on ? 'on' : ''}`}
+                          title={t}
+                          onClick={() => {
+                            setActiveTab(null);
+                            setActiveDraft(d.key);
+                            setRibbonTab('message');
+                          }}
+                          onAuxClick={(e) => e.button === 1 && composerRefs.current[d.key]?.close()}
+                        >
+                          <span className="pen" aria-hidden="true">✎</span>
+                          <span className="t">{t}</span>
+                          <button
+                            className="x"
+                            aria-label={`Zavrieť ${t} (uloží sa do Konceptov)`}
+                            title="Zavrieť – rozpísaná správa sa uloží do Konceptov"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              composerRefs.current[d.key]?.close();
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 </div>
               ) : (
                 curImapModule === 'tasks' ? (
@@ -1527,6 +1849,34 @@ export function App() {
         />
       )}
       {dialog.kind === 'about' && <AboutDialog onClose={closeDialog} />}
+      <ContextMenu state={ctx} onClose={closeCtx} />
+      {ask && (
+        <Dialog open onOpenChange={(_, d) => !d.open && setAsk(null)}>
+          <DialogSurface style={{ maxWidth: 420 }}>
+            <DialogBody>
+              <DialogTitle>{ask.title}</DialogTitle>
+              <DialogContent>
+                <Input
+                  autoFocus
+                  style={{ width: '100%' }}
+                  value={ask.value}
+                  onChange={(_, d) => setAsk({ ...ask, value: d.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && ask.value.trim()) {
+                      ask.ok(ask.value.trim());
+                      setAsk(null);
+                    }
+                  }}
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="primary" disabled={!ask.value.trim()} onClick={() => (ask.ok(ask.value.trim()), setAsk(null))}>OK</Button>
+                <Button onClick={() => setAsk(null)}>Zrušiť</Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
       {dialog.kind === 'shortcuts' && <ShortcutsDialog onClose={closeDialog} />}
       {dialog.kind === 'crypto' && <CryptoDialog accounts={accounts.filter(isImap)} onClose={closeDialog} />}
       {dialog.kind === 'themes' && (

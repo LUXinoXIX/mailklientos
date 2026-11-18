@@ -82,6 +82,7 @@ const api: MailApi = {
   replyWindow: (id, folder, uid, mode) => inv('window:reply', id, folder, uid, mode),
   notifyChanged: (id, folder) => inv('mail:changed', id, folder),
   sendReceive: () => inv('mail:sendReceive'),
+  folderOp: (id, op, path, name) => inv('mail:folderOp', id, op, path, name),
   setKeywords: (id, folder, uids, add, remove) => inv('mail:keywords', id, folder, uids, add, remove),
   thread: (id, messageId) => inv('mail:thread', id, messageId),
   runActions: (id, folder, uids, actions) => inv('mail:actions', id, folder, uids, actions),

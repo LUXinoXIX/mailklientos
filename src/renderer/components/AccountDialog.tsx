@@ -297,6 +297,9 @@ export function AccountDialog(props: {
               <Field label="Zobrazované meno">
                 <Input value={acc.name} onChange={(_, d) => set({ name: d.value })} />
               </Field>
+              <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ZIMBRA alebo IMAP.">
+                <Input value={acc.short ?? ''} maxLength={8} placeholder="ZIMBRA" onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
+              </Field>
               <Field label="Používateľské meno">
                 <Input value={acc.username} onChange={(_, d) => set({ username: d.value.trim() })} />
               </Field>
