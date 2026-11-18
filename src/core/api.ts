@@ -94,6 +94,8 @@ export interface SendInput {
 
 /** Správa čakajúca na odoslanie (odložené odoslanie alebo 10 s na späťvzatie). */
 export interface OutboxItem {
+  /** vrátená do fronty po chybe odoslania */
+  retry?: boolean;
   id: string;
   accountId: string;
   sendAt: string;
@@ -163,6 +165,14 @@ export interface MailApi {
   // pošta (IMAP)
   listFolders(accountId: string): Promise<Result<FolderInfo[]>>;
   listMessages(accountId: string, folder: string, limit?: number, preview?: boolean): Promise<Result<MessageSummary[]>>;
+  /** správa v samostatnom okne */
+  messageWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
+  /** odpoveď / preposlanie v samostatnom okne písania */
+  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
+  /** oznámiť ostatným oknám zmenu v priečinku */
+  notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** Odoslať a prijať: znovu pripojiť sledovanie pošty, odoslať správy čakajúce po chybe */
+  sendReceive(): Promise<Result<{ retried: number }>>;
   getMessage(accountId: string, folder: string, uid: number): Promise<Result<MessageFull>>;
   /** posledné správy z lokálnej cache (okamžite, offline) */
   listCached(accountId: string, folder: string, limit?: number): Promise<Result<MessageSummary[]>>;
@@ -236,9 +246,9 @@ export interface MailApi {
   /** spustí pravidlá na uložené správy priečinka; vráti počet zasiahnutých */
   runRules(accountId: string, folder: string): Promise<Result<number>>;
   /** fulltext v lokálnej cache */
-  searchLocal(q: string, accountId?: string, folder?: string): Promise<Result<MessageSummary[]>>;
+  searchLocal(q: string, accountId?: string, folder?: string, field?: string): Promise<Result<MessageSummary[]>>;
   /** hľadanie na serveri (IMAP SEARCH) */
-  searchServer(accountId: string, folder: string, q: string): Promise<Result<MessageSummary[]>>;
+  searchServer(accountId: string, folder: string, q: string, field?: string): Promise<Result<MessageSummary[]>>;
   send(accountId: string, msg: SendInput): Promise<Result<{ messageId: string; savedToSent: boolean }>>;
   setFlags(accountId: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }): Promise<Result<true>>;
   deleteMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string | null }>>;

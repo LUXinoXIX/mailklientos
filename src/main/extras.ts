@@ -1,5 +1,6 @@
 // Doplnky: tlač a PDF, náhľad príloh, odhlásenie z newslettera, pripomenutie bez odpovede, záloha nastavení,
 // ikona v oznamovacej oblasti s počtom neprečítaných.
+import { getMainWindow } from './mainwin';
 import fs from 'node:fs';
 import https from 'node:https';
 import os from 'node:os';
@@ -247,7 +248,7 @@ export function setupTray(showMain: () => void) {
 /** Počet neprečítaných: popis ikony pri hodinách a odznak na paneli úloh (obrázok z rozhrania). */
 export function setUnread(total: number, badgeDataUrl?: string) {
   tray?.setToolTip(total ? `Universum eMail – ${total} neprečítaných` : 'Universum eMail');
-  const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed());
+  const w = getMainWindow();
   if (w && process.platform === 'win32') {
     w.setOverlayIcon(total && badgeDataUrl ? nativeImage.createFromDataURL(badgeDataUrl) : null, total ? `${total} neprečítaných` : '');
   }

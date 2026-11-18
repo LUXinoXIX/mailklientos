@@ -8,7 +8,7 @@ import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
 import { MailIcon, TeamsIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: () => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: (host: 'office' | 'live') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -22,11 +22,18 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
                 <span className="muted">Zimbra, Gmail, Seznam, firemný server… Plnohodnotný poštový klient v aplikácii.</span>
               </span>
             </button>
-            <button className="chooser-card" onClick={props.onM365}>
+            <button className="chooser-card" onClick={() => props.onM365('office')}>
               <TeamsIcon />
               <span>
-                <b>Microsoft 365 / Outlook.com</b>
-                <span className="muted">Vložený Outlook na webe ako celé okno, so všetkými funkciami Outlooku a Office na webe v kartách.</span>
+                <b>Outlook – firemný (Microsoft 365)</b>
+                <span className="muted">Pracovné alebo školské konto. Vložený Outlook na webe a firemné aplikácie: Teams, Planner, SharePoint, OneDrive pre prácu, Word, Excel, Copilot…</span>
+              </span>
+            </button>
+            <button className="chooser-card" onClick={() => props.onM365('live')}>
+              <MailIcon />
+              <span>
+                <b>Outlook – osobný (Outlook.com, Hotmail, Live)</b>
+                <span className="muted">Osobné konto Microsoft. Vložený Outlook.com a osobné aplikácie: OneDrive, Word, Excel, OneNote, Copilot…</span>
               </span>
             </button>
           </DialogContent>
@@ -41,15 +48,17 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
 
 export function M365Dialog(props: {
   edit?: M365Account;
+  /** typ nového konta zvolený pri pridávaní */
+  host?: 'office' | 'live';
   usedColors: string[];
   onClose: () => void;
   onSaved: (a: M365Account) => void;
   onDeleted: () => void;
 }) {
   const e = props.edit;
-  const [name, setName] = useState(e?.name ?? 'Microsoft 365');
+  const [name, setName] = useState(e?.name ?? (props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
   const [email, setEmail] = useState(e?.email ?? '');
-  const [host, setHost] = useState<'office' | 'live'>(e?.host ?? 'office');
+  const [host, setHost] = useState<'office' | 'live'>(e?.host ?? props.host ?? 'office');
   const [color, setColor] = useState(accountColor(e?.color ?? ACCOUNT_COLORS.find((c) => !props.usedColors.includes(c)) ?? ACCOUNT_COLORS[1]!));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);

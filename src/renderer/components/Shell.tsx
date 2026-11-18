@@ -1,6 +1,6 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
 import {
-  Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
+  Button, Menu, MenuDivider, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
 } from '@fluentui/react-components';
 import { useState, type ReactNode } from 'react';
@@ -8,10 +8,10 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  SendReceiveIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
-import type { Category, QuickStep, Signature, Template } from '../../core/settings';
+import { SEARCH_FIELDS, type Category, type QuickStep, type SearchField, type Signature, type Template } from '../../core/settings';
 import type { OrganizeTab } from './OrganizeDialog';
 import type { ComposerHandle, ComposerState } from './Composer';
 
@@ -25,7 +25,18 @@ export function TopBar(props: {
   onToggleRight: () => void;
   /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
   kind?: string;
+  searchOptions?: {
+    field: SearchField;
+    onField: (f: SearchField) => void;
+    serverAuto: boolean;
+    onServerAuto: (v: boolean) => void;
+    history: string[];
+    onHistory: (q: string) => void;
+    onClearHistory: () => void;
+    onSaveFolder?: () => void;
+  };
 }) {
+  const so = props.searchOptions;
   return (
     <header className="topbar" style={{ background: props.color, color: onColor(props.color) }}>
       <div className="topbar-title">
@@ -36,13 +47,55 @@ export function TopBar(props: {
         <div className="topbar-sub">{props.subtitle}</div>
       </div>
       {props.onSearch ? (
-        <SearchBox
-          className="topbar-search"
-          placeholder="Hľadať v pošte (predmet, odosielateľ, text)"
-          value={props.search ?? ''}
-          onChange={(_, d) => props.onSearch!(d.value)}
-          appearance="filled-lighter"
-        />
+        <div className="topbar-searchwrap">
+          <SearchBox
+            className="topbar-search"
+            placeholder={so && so.field !== 'all' ? `Hľadať: ${SEARCH_FIELDS.find((x) => x.id === so.field)?.label.toLowerCase()}` : 'Hľadať v pošte (predmet, odosielateľ, text)'}
+            value={props.search ?? ''}
+            onChange={(_, d) => props.onSearch!(d.value)}
+            appearance="filled-lighter"
+          />
+          {so && (
+            <Menu
+              positioning="below-end"
+              checkedValues={{ field: [so.field], server: so.serverAuto ? ['on'] : [] }}
+              onCheckedValueChange={(_, d) => {
+                if (d.name === 'field' && d.checkedItems[0]) so.onField(d.checkedItems[0] as SearchField);
+                if (d.name === 'server') so.onServerAuto(d.checkedItems.includes('on'));
+              }}
+            >
+              <MenuTrigger disableButtonEnhancement>
+                <button className="topbar-search-opt" aria-label="Možnosti hľadania" title="Možnosti hľadania">▾</button>
+              </MenuTrigger>
+              <MenuPopover style={{ minWidth: 380, maxWidth: 'none' }}>
+                <MenuList>
+                  <Menu>
+                    <MenuTrigger disableButtonEnhancement>
+                      <MenuItem disabled={!so.history.length}>Nedávne hľadania</MenuItem>
+                    </MenuTrigger>
+                    <MenuPopover>
+                      <MenuList>
+                        {so.history.map((q) => (
+                          <MenuItem key={q} onClick={() => so.onHistory(q)}>{q}</MenuItem>
+                        ))}
+                        <MenuDivider />
+                        <MenuItem onClick={so.onClearHistory}>Vymazať históriu</MenuItem>
+                      </MenuList>
+                    </MenuPopover>
+                  </Menu>
+                  <MenuDivider />
+                  {SEARCH_FIELDS.map((f) => (
+                    <MenuItemRadio key={f.id} name="field" value={f.id}>{f.label}</MenuItemRadio>
+                  ))}
+                  <MenuDivider />
+                  <MenuItemCheckbox name="server" value="on">Hľadať aj na serveri (celý priečinok)</MenuItemCheckbox>
+                  <MenuDivider />
+                  <MenuItem disabled={!so.onSaveFolder} onClick={() => so.onSaveFolder?.()}>Vytvoriť priečinok hľadania…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          )}
+        </div>
       ) : (
         <div />
       )}
@@ -204,6 +257,9 @@ export function Ribbon(props: {
   onPreviewLine: (v: boolean) => void;
   runInBackground: boolean;
   onRunInBackground: (v: boolean) => void;
+  openMode: 'window' | 'tab';
+  onOpenMode: (v: 'window' | 'tab') => void;
+  onSendReceive: () => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -413,6 +469,7 @@ export function Ribbon(props: {
               </Menu>
             )}
             <ToolbarDivider />
+            <ToolbarButton icon={<SendReceiveIcon />} onClick={p.onSendReceive} title="Skontrolovať poštu na všetkých kontách a odoslať čakajúce správy (F9)">Odoslať a prijať</ToolbarButton>
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
             <Menu>
@@ -463,6 +520,9 @@ export function Ribbon(props: {
             <ToolbarButton onClick={() => p.onPreviewLine(!p.previewLine)} aria-pressed={p.previewLine}>
               {p.previewLine ? '✓ ' : ''}Náhľad textu v zozname
             </ToolbarButton>
+            <ToolbarButton onClick={() => p.onOpenMode(p.openMode === 'window' ? 'tab' : 'window')} title="Dvojklik alebo Enter na správu; so Shiftom opačne">
+              Dvojklik otvorí: {p.openMode === 'window' ? 'nové okno' : 'kartu'}
+            </ToolbarButton>
             <ToolbarButton onClick={() => p.onRunInBackground(!p.runInBackground)} aria-pressed={p.runInBackground}>
               {p.runInBackground ? '✓ ' : ''}Po zatvorení bežať pri hodinách
             </ToolbarButton>
@@ -487,6 +547,8 @@ export interface ModuleDef<K extends string> {
   label: string;
   icon: ReactNode;
   sep?: boolean;
+  /** nadpis sekcie nad ikonou (napr. Firemné aplikácie) */
+  section?: string;
 }
 
 export const IMAP_MODULES: ModuleDef<ImapModule>[] = [
@@ -496,15 +558,16 @@ export const IMAP_MODULES: ModuleDef<ImapModule>[] = [
   { key: 'contacts', label: 'Kontakty', icon: <ContactsIcon /> },
 ];
 
-export const M365_MODULES: ModuleDef<M365Module>[] = [
-  { key: 'mail', label: 'Pošta', icon: <MailIcon /> },
+/** Firemný Outlook (Microsoft 365 pre prácu): pošta + firemné aplikácie. */
+export const M365_WORK_MODULES: ModuleDef<M365Module>[] = [
+  { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
   { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
   { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
-  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true, section: 'Firemné' },
+  { key: 'teams', label: 'Teams (firemné)', icon: <TeamsIcon /> },
   { key: 'planner', label: 'Planner', icon: <PlannerIcon /> },
-  { key: 'teams', label: 'Teams', icon: <TeamsIcon /> },
-  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon />, sep: true },
+  { key: 'onedrive', label: 'OneDrive pre prácu', icon: <CloudIcon /> },
   { key: 'sharepoint', label: 'SharePoint', icon: <SharePointIcon /> },
   { key: 'word', label: 'Word', icon: <WordIcon /> },
   { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
@@ -512,6 +575,22 @@ export const M365_MODULES: ModuleDef<M365Module>[] = [
   { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
   { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
   { key: 'loop', label: 'Loop', icon: <LoopIcon /> },
+];
+
+/** Osobný Outlook (Outlook.com, Hotmail, Live): pošta + osobné aplikácie. */
+export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
+  { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
+  { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
+  { key: 'todo', label: 'To Do', icon: <TasksIcon /> },
+  { key: 'people', label: 'Ľudia', icon: <ContactsIcon /> },
+  { key: 'copilot', label: 'Copilot', icon: <CopilotIcon />, sep: true, section: 'Osobné' },
+  { key: 'teams', label: 'Teams (osobné)', icon: <TeamsIcon /> },
+  { key: 'onedrive', label: 'OneDrive', icon: <CloudIcon /> },
+  { key: 'word', label: 'Word', icon: <WordIcon /> },
+  { key: 'excel', label: 'Excel', icon: <ExcelIcon /> },
+  { key: 'powerpoint', label: 'PowerPoint', icon: <PowerPointIcon /> },
+  { key: 'onenote', label: 'OneNote', icon: <OneNoteIcon /> },
+  { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
 ];
 
 export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void }) {
@@ -522,6 +601,7 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
         return (
           <div key={m.key}>
             {m.sep && <div className="rail-sep" />}
+            {m.section && <div className="rail-section">{m.section}</div>}
             <Tooltip content={m.label} relationship="label" positioning="after">
               <button
                 className={`rail-btn ${on ? 'active' : ''}`}
