@@ -763,3 +763,6 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .attachment-name { flex: 1 1 auto; min-width: 0; }
 .attachment-name .muted { white-space: nowrap; flex: none; }
 .attachment > .fui-Button { flex: none; }
+/* náhľad prílohy v rozpísanej správe */
+.att-card .att-prev { color: var(--colorNeutralForeground2); }
+.att-card .att-prev:hover { color: var(--colorBrandForeground1); }
