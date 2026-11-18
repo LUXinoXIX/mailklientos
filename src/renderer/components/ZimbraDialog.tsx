@@ -142,7 +142,7 @@ export function ZimbraDialog(props: {
 
             {tab === 'filters' && (rules ? (
               <div className="org-list">
-                <div className="muted small">Filtre vykonáva server pri doručení – fungujú aj na telefóne a vo webovej Zimbre. Filtre s podmienkami, ktoré MailKlient nevie upraviť, ostávajú nezmenené.</div>
+                <div className="muted small">Filtre vykonáva server pri doručení – fungujú aj na telefóne a vo webovej Zimbre. Filtre s podmienkami, ktoré Universum eMail nevie upraviť, ostávajú nezmenené.</div>
                 {rules.map((r, i) => {
                   const set = (p: Partial<ServerRule>) => setRules(rules.map((x, j) => (j === i ? { ...x, ...p } : x)));
                   return (
@@ -254,7 +254,7 @@ export function ZimbraDialog(props: {
             {tab === 'sync' && (
               <div className="org-list">
                 <div className="muted small">
-                  Prevezme podpisy, identity (ďalšie adresy v poli Od) a značky (ako kategórie s farbami) zo Zimbry. Vaše podpisy z MailKlienta, ktoré na serveri chýbajú, sa nahrajú do Zimbry.
+                  Prevezme podpisy, identity (ďalšie adresy v poli Od) a značky (ako kategórie s farbami) zo Zimbry. Vaše podpisy z programu Universum eMail, ktoré na serveri chýbajú, sa nahrajú do Zimbry.
                 </div>
                 <div><Button appearance="primary" disabled={busy} onClick={() => void syncFromServer()}>{busy ? 'Synchronizujem…' : 'Synchronizovať so Zimbrou'}</Button></div>
               </div>
@@ -270,7 +270,7 @@ export function ZimbraDialog(props: {
                     if (pw.n1 !== pw.n2) return result(false, 'Nové heslá sa nezhodujú.');
                     setBusy(true);
                     const r = await api.zimbraChangePassword(id, pw.old, pw.n1);
-                    result(r.ok, r.ok ? 'Heslo zmenené na serveri aj v MailKlientovi.' : `${r.error}${r.hint ? ` ${r.hint}` : ''}`);
+                    result(r.ok, r.ok ? 'Heslo zmenené na serveri aj v programe Universum eMail.' : `${r.error}${r.hint ? ` ${r.hint}` : ''}`);
                     if (r.ok) setPw({ old: '', n1: '', n2: '' });
                   }}>Zmeniť heslo</Button>
                 </div>

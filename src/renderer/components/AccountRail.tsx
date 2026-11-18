@@ -3,7 +3,7 @@
 import { Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import { useState } from 'react';
 import type { AccountPublic } from '../../core/account';
-import { AddIcon, AllInboxIcon, InfoIcon, PinIcon, SettingsIcon } from '../icons';
+import { AddIcon, AllInboxIcon, AppMailIcon, InfoIcon, PinIcon, SettingsIcon } from '../icons';
 import { accountColor } from '../theme';
 import { AccountIconContent } from './AccountIcon';
 
@@ -126,6 +126,7 @@ export function AccountRail(props: {
         <button className="acc-tool sm" onClick={() => (props.pinned ? props.onPin(false) : setFly(false))} aria-label="Zbaliť zoznam kont" title="Zbaliť">
           «
         </button>
+        <AppMailIcon className="acc-list-logo" aria-hidden="true" />
         <span className="acc-list-title">Kontá</span>
         <button
           className={`acc-tool sm pin ${props.pinned ? 'on' : ''}`}
@@ -189,6 +190,9 @@ export function AccountRail(props: {
   return (
     <div className="acc-wrap">
     <nav className="acc-rail" aria-label="Kontá">
+      <div className="acc-logo" title="Universum eMail" aria-hidden="true">
+        <AppMailIcon />
+      </div>
       <Tooltip content="Rozbaliť zoznam kont" relationship="label" positioning="after">
         <button className="acc-tool sm" aria-label="Rozbaliť zoznam kont" aria-expanded={open} onClick={() => setFly(!open)}>
           »

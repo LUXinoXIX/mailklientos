@@ -94,6 +94,27 @@ function signatureHtml(s: AppSettings, accountId: string | undefined, kind: Comp
   return signatureToHtml(s.signatures.find((x) => x.id === id));
 }
 
+/** prípona a farba štítka prílohy (ako v Outlooku: W, X, P, PDF…) */
+const extOf = (n: string) => (/\.([a-z0-9]{1,5})$/i.exec(n)?.[1] ?? '').toLowerCase();
+function extLabel(n: string) {
+  const e = extOf(n);
+  if (['doc', 'docx', 'odt', 'rtf'].includes(e)) return 'W';
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(e)) return 'X';
+  if (['ppt', 'pptx', 'odp'].includes(e)) return 'P';
+  return (e || '?').slice(0, 3).toUpperCase();
+}
+function extClass(n: string) {
+  const e = extOf(n);
+  if (['doc', 'docx', 'odt', 'rtf'].includes(e)) return 'word';
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(e)) return 'excel';
+  if (['ppt', 'pptx', 'odp'].includes(e)) return 'ppt';
+  if (e === 'pdf') return 'pdf';
+  if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg', 'heic'].includes(e)) return 'img';
+  if (['zip', '7z', 'rar', 'gz'].includes(e)) return 'zip';
+  return '';
+}
+const fmtSize = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.ceil(b / 1024))} kB`);
+
 /** Hlavička pôvodnej správy ako v Outlooku (Od / Odoslané / Komu / Kópia / Predmet) + jej obsah. */
 function quoteHtml(m: MessageFull) {
   const date = m.date ? new Date(m.date).toLocaleString('sk-SK', { dateStyle: 'full', timeStyle: 'short' }) : '';
@@ -636,28 +657,30 @@ export const Composer = forwardRef<
             <input className="subject-input" aria-label="Predmet" placeholder="Pridajte predmet" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
         </div>
-        {editor && <FormatBar editor={editor} onImage={() => imageInput.current?.click()} />}
-        <div className="composer-editor">
-          <EditorContent editor={editor} />
-        </div>
         {(files.length > 0 || (init.kind === 'forward' && (init.original?.attachments.length ?? 0) > 0)) && (
-          <div className="composer-files">
+          <div className="composer-files" aria-label="Prílohy">
             {init.kind === 'forward' &&
               init.original?.attachments.map((a, i) => (
-                <span key={`fw-${i}`} className="attachment" title="Príloha preposlanej správy">
-                  <AttachIcon /> {a.filename} <span className="muted">({Math.ceil(a.size / 1024)} kB)</span>
+                <span key={`fw-${i}`} className="att-card" title={`${a.filename} – príloha preposlanej správy`}>
+                  <span className={`att-ext ${extClass(a.filename)}`}>{extLabel(a.filename)}</span>
+                  <span className="att-meta"><span className="att-name">{a.filename}</span><span className="att-size">{fmtSize(a.size)}</span></span>
                 </span>
               ))}
             {files.map((f, i) => (
-              <span key={`${f.path}-${i}`} className="attachment">
-                <AttachIcon /> {f.filename} <span className="muted">({Math.ceil(f.size / 1024)} kB)</span>
-                <button className="icon-x" aria-label={`Odobrať ${f.filename}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>
+              <span key={`${f.path}-${i}`} className="att-card" title={f.filename}>
+                <span className={`att-ext ${extClass(f.filename)}`}>{extLabel(f.filename)}</span>
+                <span className="att-meta"><span className="att-name">{f.filename}</span><span className="att-size">{fmtSize(f.size)}</span></span>
+                <button className="icon-x" aria-label={`Odobrať ${f.filename}`} title="Odobrať prílohu" onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>
                   <CloseSmallIcon />
                 </button>
               </span>
             ))}
           </div>
         )}
+        {editor && <FormatBar editor={editor} onImage={() => imageInput.current?.click()} />}
+        <div className="composer-editor">
+          <EditorContent editor={editor} />
+        </div>
         <div className="composer-foot">
           <Button size="small" icon={<AttachIcon />} onClick={() => void attach()}>Priložiť súbor</Button>
           {zimbraOn && <Button size="small" onClick={() => setBriefcase(true)}>Z Aktovky</Button>}
