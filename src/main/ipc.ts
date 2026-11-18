@@ -230,6 +230,7 @@ export function registerIpc() {
   handle('tasks:delete', (t: Task) => tasksync.deleteRemote(t));
   handle('app:info', () => ({ version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node, platform: `${process.platform} ${process.arch}` }));
   handle('mail:print', (id: string, folder: string, uid: number, pdf: boolean) => extras.printMessage(store.getImap(id), folder, uid, pdf));
+  handle('mail:previewFile', (file: string, filename?: string) => extras.previewLocalFile(file, filename));
   handle('mail:preview', (id: string, folder: string, uid: number, index: number) => extras.previewAttachment(store.getImap(id), folder, uid, index));
   handle('mail:unsubscribe', (id: string, u: { url?: string; mailto?: string; oneClick?: boolean }) => extras.unsubscribe(store.getImap(id), u));
   handle('backup:export', () => extras.backupExport());
