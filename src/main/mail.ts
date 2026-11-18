@@ -279,6 +279,30 @@ export function previewFrom(head: string, chunk: Buffer): string {
   return clean(decode(enc, raw, charset), type === 'text/html');
 }
 
+/**
+ * Má správa skutočné prílohy? Podľa štruktúry MIME (bez sťahovania tela), ako spinka v Outlooku:
+ * rátajú sa časti s Content-Disposition: attachment a súbory s názvom mimo textu správy;
+ * obrázky vložené v texte (Content-ID v multipart/related, inline) a pozvánky text/calendar sa nerátajú.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function hasRealAttachments(node: any, inRelated = false): boolean {
+  if (!node) return false;
+  const type = String(node.type ?? '').toLowerCase();
+  if (Array.isArray(node.childNodes) && node.childNodes.length) {
+    const rel = type === 'multipart/related';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return node.childNodes.some((ch: any) => hasRealAttachments(ch, inRelated || rel));
+  }
+  if (type.startsWith('multipart/')) return false;
+  const disp = String(node.disposition ?? '').toLowerCase();
+  const name = node.dispositionParameters?.filename ?? node.parameters?.name;
+  if (type === 'text/calendar' || type === 'application/ics') return false;
+  if (type.startsWith('image/') && node.id && (inRelated || disp === 'inline')) return false;
+  if (disp === 'attachment') return true;
+  if (type === 'text/plain' || type === 'text/html') return !!name && disp !== 'inline';
+  return !!name || type === 'message/rfc822' || type.startsWith('application/');
+}
+
 export async function listMessages(acc: AccountConfig, folder: string, limit = 50, preview = false): Promise<MessageSummary[]> {
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(folder);
@@ -293,8 +317,8 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
       const out: MessageSummary[] = [];
       const recipients = new Map<number, string>();
       const q = preview
-        ? { uid: true, envelope: true, flags: true, internalDate: true, headers: ['content-type', 'content-transfer-encoding'], bodyParts: [{ key: 'TEXT', maxLength: 3000 }] }
-        : { uid: true, envelope: true, flags: true, internalDate: true };
+        ? { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, headers: ['content-type', 'content-transfer-encoding'], bodyParts: [{ key: 'TEXT', maxLength: 3000 }] }
+        : { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true };
       for await (const m of c.fetch(`${from}:*`, q)) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
@@ -313,6 +337,7 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           messageId: m.envelope?.messageId || undefined,
           inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
+          hasAttachments: m.bodyStructure ? hasRealAttachments(m.bodyStructure) : undefined,
           preview: preview ? previewFrom(m.headers ? m.headers.toString('latin1') : '', (m.bodyParts?.get('text') ?? m.bodyParts?.get('TEXT') ?? Buffer.alloc(0)) as Buffer) || undefined : undefined,
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -364,7 +389,7 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
       const pick = uids.sort((a, b) => b - a).slice(0, limit);
       if (!pick.length) return [];
       const out: MessageSummary[] = [];
-      for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true }, { uid: true })) {
+      for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true }, { uid: true })) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
         const flags: Set<string> = m.flags ?? new Set();
@@ -374,6 +399,7 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
           seen: flags.has('\\Seen'), flagged: flags.has('\\Flagged'), answered: flags.has('\\Answered'),
           messageId: m.envelope?.messageId || undefined, inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
+          hasAttachments: m.bodyStructure ? hasRealAttachments(m.bodyStructure) : undefined,
         });
       }
       return out.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));

@@ -330,8 +330,11 @@ export function Ribbon(props: {
               </MenuPopover>
             </Menu>
             <ToolbarDivider />
-            <ToolbarButton onClick={() => c.run((h) => h.toggleImportance())} aria-pressed={c.state.importance}>
-              {c.state.importance ? '✓ ' : ''}Vysoká dôležitosť
+            <ToolbarButton onClick={() => c.run((h) => h.setPriority(c.state.priority === 'high' ? 'normal' : 'high'))} aria-pressed={c.state.priority === 'high'}>
+              {c.state.priority === 'high' ? '✓ ' : ''}Vysoká dôležitosť
+            </ToolbarButton>
+            <ToolbarButton onClick={() => c.run((h) => h.setPriority(c.state.priority === 'low' ? 'normal' : 'low'))} aria-pressed={c.state.priority === 'low'}>
+              {c.state.priority === 'low' ? '✓ ' : ''}Nízka dôležitosť
             </ToolbarButton>
             <ToolbarButton onClick={() => c.run((h) => h.toggleReceipt())} aria-pressed={c.state.receipt}>
               {c.state.receipt ? '✓ ' : ''}Potvrdenie o prečítaní
