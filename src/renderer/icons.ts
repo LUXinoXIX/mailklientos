@@ -1,6 +1,7 @@
 // Všetky ikony na jednom mieste: ak by niektorý názov v nainštalovanej verzii
 // @fluentui/react-icons chýbal, opravuje sa len tu.
 export {
+  ChevronDown16Regular as ChevronDownIcon,
   Calendar16Regular as CalendarSmallIcon,
   CheckmarkCircle16Regular as TasksSmallIcon,
   Mail24Filled as AppMailIcon,
