@@ -922,6 +922,12 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .ics-sec .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .ics-ev { display: flex; flex-direction: column; padding: 4px 8px; margin: 3px 0; border-left: 3px solid; border-radius: 0 6px 6px 0; background: var(--colorNeutralBackground2); }
 .ics-ev.live { background: var(--colorBrandBackground2); }
+.ics-ev { cursor: pointer; }
+.ics-ev:hover { background: var(--colorNeutralBackground2Hover); }
+.ics-ev.open .ics-sum { white-space: normal; font-weight: 600; }
+.ics-ev.open .ics-loc { white-space: normal; }
+.ics-detail { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--colorNeutralStroke2); font-size: 12px; cursor: auto; }
+.ics-desc { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; color: var(--colorNeutralForeground2); }
 .ics-when { font-size: 11px; color: var(--colorNeutralForeground3); }
 .ics-sum { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ics-loc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
