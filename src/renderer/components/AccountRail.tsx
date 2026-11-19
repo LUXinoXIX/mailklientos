@@ -3,7 +3,8 @@
 import { Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import { useState } from 'react';
 import type { AccountPublic } from '../../core/account';
-import { AddIcon, AllInboxIcon, AppMailIcon, InfoIcon, PinIcon, SettingsIcon } from '../icons';
+import { AddIcon, AllInboxIcon, AppMailIcon, HomeIcon, InfoIcon, PinIcon, SettingsIcon } from '../icons';
+import { SUMMARY } from './SummaryPage';
 import { accountColor } from '../theme';
 import { AccountIconContent } from './AccountIcon';
 
@@ -167,6 +168,10 @@ export function AccountRail(props: {
           <PinIcon />
         </button>
       </div>
+      <button className={`acc-row ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => pick(SUMMARY)} aria-pressed={props.active === SUMMARY}>
+        <HomeIcon className="acc-row-ico" />
+        <span className="n">Súhrn</span>
+      </button>
       {props.showAll && (
         <button className={`acc-row ${props.active === ALL ? 'on' : ''}`} onClick={() => pick(ALL)} aria-pressed={props.active === ALL}>
           <AllInboxIcon className="acc-row-ico" />
@@ -221,6 +226,12 @@ export function AccountRail(props: {
       <Tooltip content="Rozbaliť zoznam kont" relationship="label" positioning="after">
         <button className="acc-tool sm" aria-label="Rozbaliť zoznam kont" aria-expanded={open} onClick={() => setFly(!open)}>
           »
+        </button>
+      </Tooltip>
+      <Tooltip content="Súhrn – prehľad kont, dnešných stretnutí a úloh" relationship="label" positioning="after">
+        <button className={`acc-btn ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => props.onSelect(SUMMARY)} aria-pressed={props.active === SUMMARY}>
+          <span className="acc-sq all"><HomeIcon /></span>
+          <span className="acc-label">Súhrn</span>
         </button>
       </Tooltip>
       {props.showAll && (

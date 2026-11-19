@@ -814,3 +814,49 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .meet-adv summary { cursor: pointer; }
 .meet-def { display: flex; align-items: center; gap: 4px; }
 .rail-footer { margin-top: auto; padding: 8px 0 6px; border-top: 1px solid var(--colorNeutralStroke3); display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+/* Súhrn – úvodná stránka cez celú pracovnú plochu */
+.workspace.with-summary { position: relative; }
+.summary { position: absolute; inset: 0; z-index: 6; overflow: hidden; color: #1f2328; }
+.summary.dark { color: #f3f4f6; }
+.sum-wall { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sum-img { background-size: cover; background-position: center; }
+.sum-content { position: relative; height: 100%; overflow: auto; padding: 22px 26px 28px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
+.sum-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.sum-hello { font-size: 26px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.sum-date { color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+.sum-head .grow { flex: 1; }
+.sum-edit-btn { border: 1px solid rgba(255, 255, 255, .5) !important; color: inherit !important; }
+.sum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.sum-card { border-radius: 14px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .55); box-shadow: 0 6px 24px rgba(0, 0, 0, .12); min-width: 0; }
+.summary.dark .sum-card { border-color: rgba(255, 255, 255, .16); }
+.sum-h { font-weight: 600; margin-bottom: 6px; }
+.sum-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 2px; border: 0; border-top: 1px solid rgba(127, 127, 127, .22); background: none; font: inherit; color: inherit; text-align: left; min-width: 0; }
+.sum-h + .sum-row { border-top: 0; }
+.sum-click { cursor: pointer; border-radius: 6px; }
+.sum-click:hover { background: rgba(127, 127, 127, .14); }
+.sum-row .grow { flex: 1; }
+.sum-ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sum-link { border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; padding: 0; }
+.sum-link:hover { text-decoration: underline; }
+.sum-sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sum-time { width: 58px; flex: none; font-variant-numeric: tabular-nums; }
+.sum-pill { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: rgba(127, 127, 127, .2); white-space: nowrap; border: 0; color: inherit; font-family: inherit; }
+.sum-late { background: rgba(224, 49, 49, .2); color: #c92a2a; }
+.summary.dark .sum-late { color: #ffa8a8; }
+.sum-dim { opacity: .65; }
+.sum-past { opacity: .5; }
+.sum-foot { font-size: 12px; opacity: .75; padding-top: 6px; }
+.sum-settings { max-width: 1100px; }
+.sum-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.sum-tile-set { display: flex; align-items: center; gap: 2px; }
+.sum-tile-set .grow { flex: 1; }
+.sum-walls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.sum-wall-pick { display: flex; flex-direction: column; align-items: center; gap: 3px; border: 2px solid transparent; border-radius: 8px; background: none; padding: 3px; font: inherit; font-size: 11px; color: inherit; cursor: pointer; }
+.sum-wall-pick span { width: 100%; height: 34px; border-radius: 5px; display: flex; align-items: center; justify-content: center; background: rgba(127, 127, 127, .2); font-size: 18px; }
+.sum-wall-pick.on { border-color: var(--colorBrandStroke1, #2F6F5E); }
+.sum-time { width: 64px; white-space: nowrap; }
+/* tmavé bloky: Fluent popisky (prepínače, zaškrtávacie polia) svetlým písmom */
+.summary.dark .fui-Radio__label, .summary.dark .fui-Checkbox__label, .summary.dark .fui-Label { color: #f3f4f6; }
+.summary.dark .sum-settings .fui-Button:not(.fui-Button--primary) { color: #f3f4f6; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .25); }
+.summary.dark .sum-settings label, .summary.dark .sum-settings .fui-Radio label { color: #f3f4f6 !important; }

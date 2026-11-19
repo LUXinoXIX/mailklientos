@@ -102,6 +102,7 @@ const api: MailApi = {
   snooze: (id, folder, uid, messageId, subject, until) => inv('mail:snooze', id, folder, uid, messageId, subject, until),
   runRules: (id, folder) => inv('rules:run', id, folder),
   searchLocal: (q, accountId, folder, field) => inv('mail:search', q, accountId, folder, field),
+  flaggedAll: (limit) => inv('mail:flaggedAll', limit),
   searchServer: (id, folder, q, field) => inv('mail:searchServer', id, folder, q, field),
   send: (id, msg) => inv('mail:send', id, msg),
   setFlags: (id, folder, uids, flags) => inv('mail:flags', id, folder, uids, flags),
