@@ -21,7 +21,7 @@ const TILE_LABEL: Record<SummaryTile, string> = {
   feeds: 'Kalendár z odkazu',
   news: 'Správy',
 };
-const DEFAULT_TILES: { id: SummaryTile; on: boolean }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds', 'news'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' && id !== 'news' }));
+const DEFAULT_TILES: { id: SummaryTile; on: boolean; title?: string }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds', 'news'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' && id !== 'news' }));
 
 // Vstavané tapety – vlastné jednoduché kresby (vlny), žiadne cudzie obrázky.
 const WALLS: Record<string, { name: string; dark: boolean; bg: [string, string, string]; waves: [string, string, string] }> = {
@@ -109,6 +109,7 @@ export function SummaryPage(props: {
   const api = window.mailApi;
   const s = props.settings;
   const [edit, setEdit] = useState(false);
+  const [dragOver, setDragOver] = useState<SummaryTile | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [events, setEvents] = useState<(CalEvent & { accountId: string })[] | null>(null);
   const [flagged, setFlagged] = useState<MessageSummary[] | null>(null);
@@ -346,6 +347,19 @@ export function SummaryPage(props: {
     }
   };
 
+  const tileName = (id: SummaryTile) => tiles.find((t) => t.id === id)?.title?.trim() || TILE_LABEL[id];
+  const renameTile = (id: SummaryTile, title: string, keepEmpty = false) => props.onSettings({ ...s, tiles: tiles.map((x) => (x.id === id ? { ...x, title: title === '' && !keepEmpty ? undefined : title } : x)) });
+  /** presun dlaždice ťahaním: from → pred/za dlaždicu to */
+  const dropTile = (from: SummaryTile, to: SummaryTile) => {
+    if (from === to) return;
+    const t = tiles.filter((x) => x.id !== from);
+    const src = tiles.find((x) => x.id === from)!;
+    const fi = tiles.findIndex((x) => x.id === from);
+    const ti = tiles.findIndex((x) => x.id === to);
+    const at = t.findIndex((x) => x.id === to) + (fi < ti ? 1 : 0);
+    t.splice(at, 0, src);
+    props.onSettings({ ...s, tiles: t });
+  };
   const moveTile = (i: number, d: number) => {
     const t = [...tiles];
     const j = i + d;
@@ -386,8 +400,8 @@ export function SummaryPage(props: {
                 <div className="sum-h">Dlaždice</div>
                 {tiles.map((t, i) => (
                   <div key={t.id} className="sum-tile-set">
-                    <Checkbox label={TILE_LABEL[t.id]} checked={t.on} onChange={(_, d) => props.onSettings({ ...s, tiles: tiles.map((x) => (x.id === t.id ? { ...x, on: !!d.checked } : x)) })} />
-                    <span className="grow" />
+                    <Checkbox checked={t.on} onChange={(_, d) => props.onSettings({ ...s, tiles: tiles.map((x) => (x.id === t.id ? { ...x, on: !!d.checked } : x)) })} aria-label={`Zobraziť ${tileName(t.id)}`} />
+                    <input className="sum-input grow" value={t.title ?? ''} placeholder={TILE_LABEL[t.id]} onChange={(ev) => renameTile(t.id, ev.target.value)} aria-label={`Názov dlaždice ${TILE_LABEL[t.id]}`} title="Vlastný názov – prázdne = pôvodný" />
                     <Button size="small" appearance="subtle" disabled={!i} onClick={() => moveTile(i, -1)} aria-label="Vyššie">↑</Button>
                     <Button size="small" appearance="subtle" disabled={i === tiles.length - 1} onClick={() => moveTile(i, 1)} aria-label="Nižšie">↓</Button>
                   </div>
@@ -523,9 +537,36 @@ export function SummaryPage(props: {
 
         <div className="sum-grid">
           {tiles.filter((t) => t.on && !(t.id === 'feeds' && wideFeeds)).map((t) => (
-            <div key={t.id} className={`sum-card sum-${t.id}`} style={cardStyle}>
+            <div
+              key={t.id}
+              className={`sum-card sum-${t.id} ${edit ? 'sum-drag' : ''} ${dragOver === t.id ? 'sum-drop' : ''}`}
+              style={cardStyle}
+              draggable={edit}
+              onDragStart={(ev) => {
+                ev.dataTransfer.setData('text/x-sum-tile', t.id);
+                ev.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(ev) => {
+                if (!edit || !ev.dataTransfer.types.includes('text/x-sum-tile')) return;
+                ev.preventDefault();
+                setDragOver(t.id);
+              }}
+              onDragLeave={() => setDragOver((x) => (x === t.id ? null : x))}
+              onDrop={(ev) => {
+                ev.preventDefault();
+                setDragOver(null);
+                const from = ev.dataTransfer.getData('text/x-sum-tile') as SummaryTile;
+                if (from) dropTile(from, t.id);
+              }}
+              onDragEnd={() => setDragOver(null)}
+            >
               <div className="sum-h">
-                {TILE_LABEL[t.id]}
+                {edit && <span className="sum-grip" title="Potiahni a presuň">⠿</span>}
+                {edit ? (
+                  <input className="sum-title-edit" value={t.title ?? TILE_LABEL[t.id]} onChange={(ev) => renameTile(t.id, ev.target.value, true)} onBlur={(ev) => !ev.target.value.trim() && renameTile(t.id, '')} draggable={false} onDragStart={(ev) => ev.preventDefault()} aria-label="Názov dlaždice" />
+                ) : (
+                  tileName(t.id)
+                )}
                 {t.id === 'feeds' && feeds.length > 1 && (
                   <button className="sum-wide-btn" title="Na celú šírku – každý kalendár vo vlastnom stĺpci, pod ostatnými dlaždicami" onClick={() => props.onSettings({ ...s, feedsWide: true })}>⇔</button>
                 )}
@@ -537,7 +578,7 @@ export function SummaryPage(props: {
         {wideFeeds && (
           <div className="sum-card sum-feeds-wide" style={cardStyle}>
             <div className="sum-h">
-              {TILE_LABEL.feeds}
+              {tileName('feeds')}
               <button className="sum-wide-btn" title="Späť medzi ostatné dlaždice" onClick={() => props.onSettings({ ...s, feedsWide: false })}>⇤⇥</button>
             </div>
             <div className="sum-feed-cols" style={{ gridTemplateColumns: `repeat(${Math.max(1, feeds.length)}, minmax(0, 1fr))` }}>{tile('feeds')}</div>
