@@ -287,7 +287,7 @@ export function normalizeUrl(input: string): string | null {
   }
 }
 
-export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds';
+export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds' | 'news';
 export interface SummarySettings {
   /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
   enabled?: boolean;
@@ -302,6 +302,8 @@ export interface SummarySettings {
   customDark?: boolean;
   /** kalendáre z odkazu (iCal/webcal) – najbližšie udalosti */
   feeds?: { id: string; name: string; url: string; count: number }[];
+  /** správy z RSS/Atom kanálov (dlaždica Správy) */
+  news?: { id: string; name: string; url: string; count: number }[];
   /** kalendáre z odkazu na celú šírku (stĺpec pre každý), pod ostatnými dlaždicami */
   feedsWide?: boolean;
   /** nepriehľadnosť blokov 0.3–1 */

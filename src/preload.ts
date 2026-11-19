@@ -78,6 +78,7 @@ const api: MailApi = {
   calRemove: (calId) => inv('cal:removeCal', calId),
   calSubInfo: (calId) => inv('cal:subInfo', calId),
   icsUpcoming: (url, count) => inv('ics:upcoming', url, count),
+  rssFetch: (url) => inv('rss:fetch', url),
   calImport: (id, calendarId) => inv('cal:import', id, calendarId),
   meetTeams: (accountId) => inv('meet:teams', accountId),
   meetTeamsClose: () => inv('meet:teamsClose'),
