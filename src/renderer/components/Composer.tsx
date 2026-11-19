@@ -442,14 +442,8 @@ export const Composer = forwardRef<
   const [briefcase, setBriefcase] = useState(false);
 
   function rememberContacts() {
-    try {
-      // príjemcov si zapamätať na dopĺňanie
-      const known = JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[];
-      const all = [...[...to, ...cc, ...bcc], ...known].filter((c, i, arr) => arr.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
-      localStorage.setItem('contacts', JSON.stringify(all.slice(0, 500)));
-    } catch {
-      /* nevadí */
-    }
+    // všetkých príjemcov (aj ručne napísané adresy) si zapamätať na dopĺňanie – „Naposledy použité“
+    void api?.recentAdd([...to, ...cc, ...bcc].map((c) => ({ name: c.name, email: c.email })));
   }
 
   /** Text sľubuje prílohu, ale žiadna nie je (ako Outlook/Thunderbird). */

@@ -253,7 +253,7 @@ export function AddressBook(props: {
           </button>
         ))}
         <div className="ab-h">Ďalšie</div>
-        <button className={`ab-src ${view === 'recent' ? 'on' : ''}`} onClick={() => setView('recent')} title="Adresy, na ktoré si písal – program si ich pamätá na dopĺňanie">
+        <button className={`ab-src ${view === 'recent' ? 'on' : ''}`} onClick={() => setView('recent')} title="Každá adresa, na ktorú pošleš správu (aj ručne napísaná), sa sem uloží automaticky a ponúka sa pri písaní">
           <span className="ab-ico"><SnoozeIcon /></span><span className="grow">Naposledy použité</span><span className="muted small">{props.recent.length}</span>
         </button>
         <div className="ab-note muted small">Dopĺňanie adries pri písaní používa všetky zdroje naraz, z ktoréhokoľvek konta píšeš.</div>
@@ -280,6 +280,7 @@ export function AddressBook(props: {
           </Menu>
           <span className="muted small grow ab-count">{shown.length} {shown.length === 1 ? 'kontakt' : shown.length > 1 && shown.length < 5 ? 'kontakty' : 'kontaktov'}</span>
         </div>
+        {view === 'recent' && <div className="ab-hint muted small">Každá adresa, na ktorú pošleš správu – aj ručne napísaná – sa sem uloží automaticky a ponúka sa pri písaní zo všetkých kont. Natrvalo do adresára ju dáš cez „Uložiť do kontaktov“.</div>}
         {error && <div className="pane-error pad" onClick={() => setError(null)}>⚠ {error}</div>}
         {((galId && gal === null) || (!galId && loading && !entries.length)) && <Spinner size="tiny" className="pad" />}
         {shown.map((e) => (
@@ -373,6 +374,11 @@ export function AddressBook(props: {
                 </Menu>
               )}
               {editable.length === 1 && <Button appearance="subtle" onClick={() => void remove(editable[0]!)}>Odstrániť</Button>}
+              {view === 'recent' && (
+                <Button appearance="subtle" title="Adresa sa už nebude ponúkať pri písaní (kým na ňu znova nenapíšeš)" onClick={() => void api?.recentRemove(sel.c.emails).then(() => { setSelKey(null); props.onChanged(); })}>
+                  Zabudnúť adresu
+                </Button>
+              )}
               {editable.length > 1 && (
                 <Menu>
                   <MenuTrigger disableButtonEnhancement><Button appearance="subtle">Odstrániť ▾</Button></MenuTrigger>

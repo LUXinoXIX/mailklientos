@@ -231,6 +231,13 @@ export function App() {
         setStatus(ev.text);
       } else if (ev.type === 'outbox-changed') {
         setOutboxTick((t) => t + 1);
+      } else if (ev.type === 'outbox-queued') {
+        // odoslané zo samostatného okna (to sa hneď zavrie) → „Odosiela sa… Späť“ v hlavnom okne
+        if (POP_COMPOSE || POP_VIEW) return;
+        if (ev.item.kind === 'undo') setUndo((u) => (u?.id === ev.item.id ? u : ev.item));
+        else setStatus(`Správa „${ev.item.subject || '(bez predmetu)'}“ sa odošle ${new Date(ev.item.sendAt).toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}.`);
+      } else if (ev.type === 'contacts-changed') {
+        setRecentTick((t) => t + 1);
       } else if (ev.type === 'open-message') {
         pendingOpen.current = { accountId: ev.accountId, uid: ev.uid };
         setActiveId(ev.accountId);
@@ -520,10 +527,14 @@ export function App() {
   }
 
   // operácie so správou
+  // viac vybraných správ v zozname (Ctrl/Shift + klik alebo Shift+šípky)
+  const [multiSel, setMultiSel] = useState<MessageSummary[]>([]);
   const removeFromList = (m: MessageSummary) => {
-    setMessages((list) => list.filter((x) => !(x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder)));
-    setCurrent(undefined);
-    setFull({ loading: false });
+    const same = (x?: MessageSummary) => !!x && x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder;
+    setMessages((list) => list.filter((x) => !same(x)));
+    // výber zrušiť len vtedy, keď ukazuje odstránenú správu (po Delete v zozname sa medzitým vybrala ďalšia)
+    setCurrent((c) => (same(c) ? undefined : c));
+    setFull((f) => (f.msg && same(f.msg) ? { loading: false } : f));
   };
   // ---- menu na pravý klik a hromadné akcie ----
   const [ctx, setCtx] = useState<CtxState | null>(null);
@@ -1107,6 +1118,7 @@ export function App() {
     if (ctrl && k === 'u') return e.preventDefault(), current && current.seen && void toggleSeen();
     if (ctrl && k === 'p') return e.preventDefault(), current && void api?.printMessage(current.accountId, current.folder, current.uid, false);
     if (e.key === 'Insert') return e.preventDefault(), current && void toggleFlag();
+    if (e.key === 'Delete' && multiSel.length > 1) return e.preventDefault(), void bulk(multiSel, 'delete');
     if (e.key === 'Delete' && current) return e.preventDefault(), void del();
     if (ctrl && e.shiftKey && k === 'v') return e.preventDefault(), setStatus('Presun: použite Domov → Presunúť alebo pretiahnite správu na priečinok.');
     if (e.key === 'F9') return e.preventDefault(), void sendReceive();
@@ -1236,24 +1248,31 @@ export function App() {
     if (bookTick && !demo) for (const a of accounts.filter(isImap)) void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
   }, [api, bookTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const bookAccounts = useMemo(() => imapAccounts.filter((a) => a.id !== DEMO_ID), [imapAccounts]);
-  const recentContacts = useMemo<Contact[]>(() => {
-    try {
-      return (JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]).filter((c) => c.email);
-    } catch {
-      return [];
-    }
-  }, [composeView, bookTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // naposledy použité adresy príjemcov – v hlavnom procese (spoločné pre všetky okná); starý zoznam z localStorage sa raz prevezme
+  const [recentContacts, setRecentContacts] = useState<Contact[]>([]);
+  const [recentTick, setRecentTick] = useState(0);
+  useEffect(() => {
+    if (!api) return;
+    void (async () => {
+      try {
+        const old = localStorage.getItem('contacts');
+        if (old) {
+          const r = await api.recentAdd(JSON.parse(old) as Contact[], true);
+          if (r.ok) localStorage.removeItem('contacts');
+        }
+      } catch {
+        /* poškodený starý zoznam – ignorovať */
+      }
+      const r = await api.recentList();
+      if (r.ok) setRecentContacts(r.data.map((x) => ({ name: x.name, email: x.email })));
+    })();
+  }, [api, recentTick]);
 
   const contacts = useMemo<Contact[]>(() => {
-    let known: Contact[] = [...localBook, ...Object.values(davContacts).flat()];
-    try {
-      known = [...(JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]), ...known];
-    } catch {
-      /* nič */
-    }
+    const known: Contact[] = [...recentContacts, ...localBook, ...Object.values(davContacts).flat()];
     const all = [...known, ...messages.map((m) => ({ name: m.fromName, email: m.fromAddress }))].filter((c) => c.email);
     return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
-  }, [messages, composeView, davContacts, localBook]);
+  }, [messages, davContacts, localBook, recentContacts]);
 
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
@@ -1365,7 +1384,7 @@ export function App() {
   const [popDone, setPopDone] = useState(false);
   const popStarted = useRef(false);
   useEffect(() => {
-    if (POP_COMPOSE && popDone && !undo && !composeView) window.setTimeout(() => window.close(), 300);
+    if (POP_COMPOSE && popDone && !undo && !composeView) window.close();
   }, [popDone, undo, composeView]);
   useEffect(() => {
     if (!POP_COMPOSE || !api || popStarted.current) return;
@@ -1399,7 +1418,7 @@ export function App() {
               zimbra={zimbraOk}
               standalone
               onState={() => undefined}
-              onQueued={(it) => it.kind === 'undo' && setUndo(it)}
+              onQueued={() => undefined /* stav odosielania a „Späť“ ukáže hlavné okno */}
               onSaveTemplate={saveTemplate}
               onClose={(st) => {
                 if (st) setStatus(st);
@@ -1771,6 +1790,7 @@ export function App() {
                     onOpenFull={(m, alt) => openFull(m, alt)}
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
+                    onMulti={setMultiSel}
                     onQuick={(m, a) =>
                       void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }
