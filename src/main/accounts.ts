@@ -74,7 +74,17 @@ function setPassword(id: string, password: string) {
 }
 
 export const toPublic = (a: AnyAccount): AccountPublic =>
-  a.kind === 'imap' ? { ...a, hasPassword: !!getPassword(a.id) } : { ...a, hasPassword: false };
+  a.kind === 'imap' ? { ...a, hasPassword: !!getPassword(a.id) } : ({ ...a, hasPassword: false, webHasPassword: a.host === 'web' && !!getPassword(a.id) } as AccountPublic);
+
+/** Zabudnúť uložené heslo (webmail: voľba „neukladať heslo“). */
+export function clearPassword(id: string) {
+  memorySecrets.delete(id);
+  const s = readJson<Record<string, string>>(secretsFile(), {});
+  if (s[id]) {
+    delete s[id];
+    writeJson(secretsFile(), s);
+  }
+}
 
 export function publicAccounts(): AccountPublic[] {
   return loadAccounts().map(toPublic);
@@ -86,7 +96,8 @@ export function saveAccount(acc: AnyAccount, password?: string): AccountPublic {
   if (i >= 0) list[i] = acc;
   else list.push(acc);
   writeJson(accountsFile(), list);
-  if (password && acc.kind === 'imap') setPassword(acc.id, password);
+  if (password && (acc.kind === 'imap' || acc.host === 'web')) setPassword(acc.id, password);
+  if (acc.kind === 'm365' && acc.host === 'web' && !acc.webUser) clearPassword(acc.id);
   return toPublic(acc);
 }
 
