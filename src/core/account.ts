@@ -76,6 +76,10 @@ export interface M365Account {
   webUrl?: string;
   /** webmail s neplatným certifikátom (interný server) – dôverovať mu */
   webIgnoreCert?: boolean;
+  /** webmail: prihlasovacie meno na vyplnenie (heslo je v trezore systému ako pri IMAP) */
+  webUser?: string;
+  /** webmail: po vyplnení aj odoslať prihlásenie */
+  webAutoLogin?: boolean;
   /** krátky štítok v zbalenom páse kont (prázdne = MS365 / MSO) */
   short?: string;
   /** ikonka v páse kont */
@@ -90,7 +94,7 @@ export type AnyAccount = AccountConfig | M365Account;
 /** IMAP konto tak, ako ide do rendereru (bez hesla). */
 export type ImapAccountPublic = AccountConfig & { hasPassword: boolean };
 /** Ľubovoľné konto pre renderer. */
-export type AccountPublic = ImapAccountPublic | (M365Account & { hasPassword: false });
+export type AccountPublic = ImapAccountPublic | (M365Account & { hasPassword: false; webHasPassword?: boolean });
 
 export const isImap = (a: { kind: string }): a is ImapAccountPublic => a.kind === 'imap';
 export const isM365 = (a: { kind: string }): a is M365Account & { hasPassword: false } => a.kind === 'm365';

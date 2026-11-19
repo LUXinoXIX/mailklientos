@@ -2,30 +2,47 @@
 import crypto from 'node:crypto';
 import type { AccountConfig } from '../core/account';
 import type { DavCollection } from '../core/api';
-import { buildInvite, buildReply, type CalEvent, type Contact } from '../core/ical';
+import { buildInvite, buildReply, parseEvents, type CalEvent, type Contact } from '../core/ical';
 import * as dav from './dav';
 import * as mail from './mail';
+import * as local from './localcal';
 
 const colCache = new Map<string, { at: number; list: DavCollection[] }>();
 
+/** Kalendáre a adresáre zo servera (CalDAV/CardDAV) + lokálne kalendáre a odbery v programe.
+    Konto bez kalendára na serveri (bežný IMAP) dostane lokálny „Môj kalendár“. */
 export async function collections(acc: AccountConfig, fresh = false): Promise<DavCollection[]> {
   const c = colCache.get(acc.id);
-  if (c && !fresh && Date.now() - c.at < 10 * 60_000) return c.list;
-  const list = await dav.collections(acc);
-  colCache.set(acc.id, { at: Date.now(), list });
-  return list;
+  let server: DavCollection[];
+  if (c && !fresh && Date.now() - c.at < 10 * 60_000) server = c.list;
+  else {
+    try {
+      server = await dav.collections(acc);
+    } catch (e) {
+      // server bez CalDAV/CardDAV: ostanú lokálne kalendáre; chybu hlásiť len ak nie je ani lokálny
+      server = [];
+      if (!local.collections(acc.id).length) local.ensureDefault(acc.id);
+      if (!local.collections(acc.id).length) throw e;
+    }
+    colCache.set(acc.id, { at: Date.now(), list: server });
+  }
+  if (!server.some((x) => x.kind === 'calendar')) local.ensureDefault(acc.id);
+  return [...server, ...local.collections(acc.id)];
 }
+const serverOnly = async (acc: AccountConfig) => (await collections(acc)).filter((x) => !local.isLocalId(x.id));
 
 async function calendar(acc: AccountConfig, id?: string): Promise<DavCollection> {
-  const list = (await collections(acc)).filter((x) => x.kind === 'calendar' && x.events !== false);
+  const list = (await serverOnly(acc)).filter((x) => x.kind === 'calendar' && x.events !== false);
   const cal = (id && list.find((x) => x.id === id)) || list.find((x) => !x.readOnly) || list[0];
   if (!cal) throw new mail.UserError('Na serveri sa nenašiel žiadny kalendár.');
   return cal;
 }
 
 export async function events(acc: AccountConfig, ids: string[], from: string, to: string): Promise<CalEvent[]> {
-  const cals = (await collections(acc)).filter((x) => x.kind === 'calendar' && x.events !== false && (!ids.length || ids.includes(x.id)));
-  const res = await Promise.allSettled(cals.map((c) => dav.events(acc, c, from, to)));
+  const all = await collections(acc);
+  const cals = all.filter((x) => x.kind === 'calendar' && x.events !== false && !local.isLocalId(x.id) && (!ids.length || ids.includes(x.id)));
+  const localIds = all.filter((x) => local.isLocalId(x.id) && (!ids.length || ids.includes(x.id))).map((x) => x.id);
+  const res = await Promise.allSettled([...cals.map((c) => dav.events(acc, c, from, to)), ...(localIds.length ? [local.events(acc.id, localIds, from, to)] : [])]);
   const ok = res.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   if (!ok.length && res.some((r) => r.status === 'rejected')) throw (res.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason;
   return ok;
@@ -34,11 +51,10 @@ export async function events(acc: AccountConfig, ids: string[], from: string, to
 const myAddresses = (acc: AccountConfig) => [acc.email, ...(acc.identities ?? []).map((x) => x.email)].map((x) => x.toLowerCase());
 
 export async function save(acc: AccountConfig, calendarId: string, e: CalEvent, invite: boolean): Promise<CalEvent> {
-  const cal = await calendar(acc, calendarId);
   const ev: CalEvent = { ...e, uid: e.uid || `${crypto.randomUUID()}@mailklient`, sequence: e.href ? (e.sequence ?? 0) + 1 : 0 };
   const others = (ev.attendees ?? []).filter((a) => !myAddresses(acc).includes(a.email.toLowerCase()));
   if (others.length && !ev.organizer) ev.organizer = { email: acc.email, name: acc.name };
-  const saved = await dav.saveEvent(acc, cal, ev);
+  const saved = local.isLocalId(calendarId) ? local.save(calendarId, ev) : await dav.saveEvent(acc, await calendar(acc, calendarId), ev);
   if (invite && others.length && ev.organizer && myAddresses(acc).includes(ev.organizer.email.toLowerCase())) {
     await mail.sendMail(acc, {
       to: others.map((a) => (a.name ? `"${a.name}" <${a.email}>` : a.email)).join(', '),
@@ -52,7 +68,8 @@ export async function save(acc: AccountConfig, calendarId: string, e: CalEvent, 
 
 export async function remove(acc: AccountConfig, e: CalEvent, notify: boolean) {
   if (!e.href) return true as const;
-  await dav.deleteEvent(acc, e.href, e.etag);
+  if (local.isLocalId(e.href)) local.removeEvent(e.href);
+  else await dav.deleteEvent(acc, e.href, e.etag);
   const others = (e.attendees ?? []).filter((a) => !myAddresses(acc).includes(a.email.toLowerCase()));
   if (notify && others.length && e.organizer && myAddresses(acc).includes(e.organizer.email.toLowerCase())) {
     await mail.sendMail(acc, {
@@ -115,4 +132,24 @@ export async function contactSave(acc: AccountConfig, bookId: string, c: Contact
 export function forget(accountId: string) {
   colCache.delete(accountId);
   dav.forgetDiscovery(accountId);
+}
+
+/** Import súboru .ics do zvoleného kalendára (lokálny naraz, na server po jednej udalosti). */
+export async function importIcs(acc: AccountConfig, calendarId: string, text: string): Promise<{ ok: number; failed: number }> {
+  const list = parseEvents(text);
+  if (!list.length) throw new mail.UserError('V súbore nie sú žiadne udalosti.');
+  if (local.isLocalId(calendarId)) return { ok: local.importToLocal(calendarId, list), failed: 0 };
+  const cal = await calendar(acc, calendarId);
+  let ok = 0;
+  let failed = 0;
+  // výnimky z opakovania patria k hlavnej udalosti – na server sa posiela len hlavný záznam
+  for (const e of list.filter((x) => !x.recurrenceId)) {
+    try {
+      await dav.saveEvent(acc, cal, { ...e, href: undefined, etag: undefined });
+      ok++;
+    } catch {
+      failed++;
+    }
+  }
+  return { ok, failed };
 }

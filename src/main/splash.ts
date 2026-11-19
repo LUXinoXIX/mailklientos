@@ -34,7 +34,8 @@ export function showSplash(minDuration = 1400): (after: () => void) => void {
     resizable: false,
     movable: true,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    // na Macu nie navrchu – inak by zakryl otázku Kľúčenky na prístup k uloženým heslám a program by vyzeral zaseknutý
+    alwaysOnTop: process.platform !== 'darwin',
     show: false,
     center: true,
     backgroundColor: '#05060b',
@@ -43,7 +44,12 @@ export function showSplash(minDuration = 1400): (after: () => void) => void {
   w.once('ready-to-show', () => w.show());
   void w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(HTML)}`);
   let closed = false;
+  // poistka: ak hlavné okno dlho nie je pripravené (napr. čaká na Kľúčenku), banner po 12 s zmizne sám
+  const guard = setTimeout(() => {
+    if (!closed && !w.isDestroyed()) w.close();
+  }, 12_000);
   return (after) => {
+    clearTimeout(guard);
     if (closed) return after();
     closed = true;
     setTimeout(() => {

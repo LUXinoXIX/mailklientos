@@ -243,6 +243,17 @@ export interface MailApi {
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
   calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
   cardList(accountId: string): Promise<Result<Contact[]>>;
+  /** lokálny kalendár v programe (aj pre IMAP bez CalDAV) */
+  calAddLocal(accountId: string, name: string, color?: string): Promise<Result<DavCollection>>;
+  /** odber kalendára z adresy (ICS/webcal), len na čítanie, obnovuje sa každú hodinu */
+  calSubscribe(accountId: string, url: string, name?: string, color?: string): Promise<Result<DavCollection>>;
+  calRename(calendarId: string, name: string, color?: string): Promise<Result<true>>;
+  calRemove(calendarId: string): Promise<Result<true>>;
+  calSubInfo(calendarId: string): Promise<Result<{ url?: string; refreshedAt?: string; error?: string; kind: 'local' | 'sub' } | null>>;
+  /** najbližšie udalosti z kalendára na adrese (ICS/webcal) – dlaždica v Súhrne */
+  icsUpcoming(url: string, count: number): Promise<Result<CalEvent[]>>;
+  /** import súboru .ics do kalendára; null = zrušené */
+  calImport(accountId: string, calendarId: string): Promise<Result<{ ok: number; failed: number } | null>>;
   /** otvorí Teams na webe s prihlásením Outlook konta – na vytvorenie odkazu na schôdzu */
   meetTeams(accountId: string): Promise<Result<true>>;
   meetTeamsClose(): Promise<Result<true>>;
