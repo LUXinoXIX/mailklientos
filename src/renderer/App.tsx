@@ -32,7 +32,7 @@ import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
 
@@ -1032,6 +1032,15 @@ export function App() {
   };
 
   // náhľad kalendára a úloh vedľa čítacieho panela (len pošta IMAP/Zimbra)
+  // online schôdze v udalostiach: Teams cez Outlook kontá, Jitsi
+  const meetProps = useMemo(
+    () => ({
+      settings: settings.meetings ?? {},
+      outlooks: accounts.filter(isM365).map((a) => ({ id: a.id, name: a.name || a.email, personal: a.host === 'live' })),
+      onSettings: (m: NonNullable<AppSettings['meetings']>) => saveSettings({ ...settings, meetings: m }),
+    }),
+    [settings, accounts], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const myDay = settings.myDay ?? { calendar: false, tasks: false };
   const myDayOn = myDay.calendar || myDay.tasks;
   const [myMonth, setMyMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -1479,7 +1488,6 @@ export function App() {
           onAbout={() => openDialog({ kind: 'about' })}
           kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
-          onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
           gpuForced={gpuForced}
@@ -1535,7 +1543,6 @@ export function App() {
               onTogglePin={() => void togglePin()}
               onTask={(due) => void taskFromMessage(due)}
               onIo={(k) => void runIo(k)}
-              onZimbra={activeImap && zimbraOk[activeImap.id] ? (tab) => openDialog({ kind: 'zimbra', tab }) : undefined}
               onSnooze={(d) => void snoozeCurrent(d)}
               quickSteps={settings.quickSteps ?? []}
               onQuickStep={(q) => void runQuickStep(q)}
@@ -1632,6 +1639,15 @@ export function App() {
                 active={curImapModule}
                 color={topColor}
                 onSelect={(k) => setImapModule((m) => ({ ...m, [activeImap?.id ?? ALL_MODULES]: k }))}
+                footer={
+                  activeImap && activeImap.id !== DEMO_ID ? (
+                    <AccountRailFooter
+                      accountName={activeImap.name || activeImap.email}
+                      onZimbra={zimbraOk[activeImap.id] ? (tab) => openDialog({ kind: 'zimbra', tab }) : undefined}
+                      onAccount={() => editAccount(activeImap)}
+                    />
+                  ) : undefined
+                }
               />
             )}
             <div className="content">
@@ -1960,7 +1976,7 @@ export function App() {
                 curImapModule === 'tasks' ? (
                   <TasksView settings={settings} onSettings={saveSettings} onOpenMessage={openTaskMessage} />
                 ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'calendar' ? (
-                  <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
+                  <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} meet={meetProps} />
                 ) : curImapModule === 'contacts' ? (
                   <AddressBook
                     accounts={bookAccounts}

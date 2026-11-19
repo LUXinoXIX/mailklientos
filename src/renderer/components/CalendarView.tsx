@@ -17,7 +17,7 @@ const mondayOf = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7));
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
 
-export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boolean; onStatus: (s: string) => void; onSettings: () => void }) {
+export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boolean; onStatus: (s: string) => void; onSettings: () => void; meet?: React.ComponentProps<typeof EventDialog>['meet'] }) {
   const api = window.mailApi;
   const [view, setView] = useState<View>(() => (localStorage.getItem('calView') as View) || 'workweek');
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
@@ -271,7 +271,7 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
         )}
       </div>
       {edit && cals && (
-        <EventDialog event={edit} calendars={cals} account={props.account} zimbra={props.zimbra} onClose={() => setEdit(null)} onSave={saveEvent} onDelete={deleteEvent} />
+        <EventDialog event={edit} calendars={cals} account={props.account} zimbra={props.zimbra} meet={props.meet} onClose={() => setEdit(null)} onSave={saveEvent} onDelete={deleteEvent} />
       )}
     </section>
   );

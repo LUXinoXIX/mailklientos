@@ -243,6 +243,13 @@ export interface MailApi {
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
   calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
   cardList(accountId: string): Promise<Result<Contact[]>>;
+  /** otvorí Teams na webe s prihlásením Outlook konta – na vytvorenie odkazu na schôdzu */
+  meetTeams(accountId: string): Promise<Result<true>>;
+  meetTeamsClose(): Promise<Result<true>>;
+  /** Jitsi schôdza v okne programu */
+  meetJitsi(url: string): Promise<Result<true>>;
+  /** text v schránke (zachytenie skopírovaného odkazu na Teams) */
+  clipboardRead(): Promise<Result<string>>;
   /** naposledy použité adresy príjemcov (userData/recent.json, spoločné pre všetky okná) */
   recentList(): Promise<Result<{ name: string; email: string; count: number; last: string }[]>>;
   recentAdd(items: { name?: string; email: string }[], migrate?: boolean): Promise<Result<true>>;

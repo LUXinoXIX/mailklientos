@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import type { DavCollection, FreeBusy, ZResource } from '../../core/api';
 import type { ImapAccountPublic } from '../../core/account';
 import type { CalAttendee, CalEvent } from '../../core/ical';
+import { applyMeeting, findMeeting, stripMeetingBlock, type MeetingSettings } from '../../core/meeting';
+import { MeetingPicker, type MeetOutlook } from './MeetingPicker';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const toLocalInput = (iso: string) => {
@@ -87,9 +89,14 @@ export function EventDialog(props: {
   onSave: (e: CalEvent, calendarId: string, invite: boolean) => Promise<string | null>;
   onDelete?: (e: CalEvent, notify: boolean) => Promise<string | null>;
   onClose: () => void;
+  /** online schôdze (Teams cez Outlook konto, Jitsi) */
+  meet?: { settings: MeetingSettings; outlooks: MeetOutlook[]; onSettings: (s: MeetingSettings) => void };
 }) {
+  const meetSettings = props.meet?.settings ?? {};
+  const [meetUrl, setMeetUrl] = useState<string | null>(() => findMeeting(props.event, meetSettings.jitsiServer)?.url ?? null);
   const writable = props.calendars.filter((c) => !c.readOnly && c.events !== false);
-  const [e, setE] = useState<CalEvent>(props.event);
+  // blok s odkazom sa v popise neukazuje (pri uložení sa doplní nanovo)
+  const [e, setE] = useState<CalEvent>(() => ({ ...props.event, description: props.event.description ? stripMeetingBlock(props.event.description) || undefined : undefined }));
   const [calId, setCalId] = useState(props.event.calendarId ?? writable[0]?.id ?? '');
   const [people, setPeople] = useState((props.event.attendees ?? []).filter((a) => a.cutype !== 'ROOM' && a.cutype !== 'RESOURCE').map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', '));
   const [invite, setInvite] = useState(true);
@@ -124,7 +131,8 @@ export function EventDialog(props: {
     if (!e.summary.trim()) return setError('Zadaj názov udalosti.');
     if (Date.parse(e.end) < Date.parse(e.start)) return setError('Koniec je pred začiatkom.');
     setBusy(true);
-    const err = await props.onSave({ ...e, attendees: attendees() }, calId, invite);
+    const withMeet = applyMeeting({ ...e, onlineUrl: findMeeting(props.event, meetSettings.jitsiServer)?.url }, meetUrl, meetSettings.jitsiServer);
+    const err = await props.onSave({ ...withMeet, attendees: attendees() }, calId, invite);
     setBusy(false);
     if (err) setError(err);
   }
@@ -196,6 +204,15 @@ export function EventDialog(props: {
             <Field label="Miesto">
               <Input value={e.location ?? ''} onChange={(_, d) => setE({ ...e, location: d.value || undefined })} placeholder="zasadačka, adresa alebo odkaz na Teams" />
             </Field>
+            <MeetingPicker
+              url={meetUrl}
+              title={e.summary === '(bez názvu)' ? '' : e.summary}
+              isNew={isNew}
+              settings={meetSettings}
+              outlooks={props.meet?.outlooks ?? []}
+              onUrl={setMeetUrl}
+              onSettings={(s) => props.meet?.onSettings(s)}
+            />
             <Field label="Účastníci" hint="E-maily oddelené čiarkou. Pozvánka príde ako bežná pozvánka (funguje v Outlooku aj Zimbre).">
               <Input value={people} onChange={(_, d) => setPeople(d.value)} placeholder="jana@firma.sk, Peter <peter@firma.sk>" />
             </Field>
