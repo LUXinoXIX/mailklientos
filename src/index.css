@@ -926,3 +926,14 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .ics-sum { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ics-loc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ics-mini { border: 0; background: none; width: 22px; height: 22px; border-radius: 4px; cursor: pointer; color: inherit; padding: 0; flex: none; } .ics-mini:hover:not(:disabled) { background: var(--colorNeutralBackground1Hover); } .ics-mini:disabled { opacity: .3; cursor: default; }
+/* úprava pása aplikácií Outlooku */
+.body.no-rail > .rail { display: none; }
+.rail-edit-btn { opacity: .55; }
+.rail-edit-btn:hover { opacity: 1; }
+.rail-edit { display: flex; flex-direction: column; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; max-height: 340px; overflow: auto; }
+.rail-edit-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--colorNeutralStroke3); background: var(--colorNeutralBackground1); cursor: grab; }
+.rail-edit-row.dragging { opacity: .5; background: var(--colorBrandBackground2); }
+.rail-edit-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-edit-grip { color: var(--colorNeutralForeground3); letter-spacing: -2px; }
+.rail-edit-ico { display: inline-flex; width: 20px; justify-content: center; }
+.rail-edit-ico svg { width: 18px; height: 18px; }

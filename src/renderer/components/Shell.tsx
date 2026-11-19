@@ -1,7 +1,7 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
 import { kb } from '../platform';
 import {
-  Button, Menu, MenuDivider, MenuGroupHeader, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
+  Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Menu, MenuDivider, MenuGroupHeader, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
 } from '@fluentui/react-components';
 import { useState, type ReactNode } from 'react';
@@ -9,7 +9,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  SendReceiveIcon, HomeIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  SendReceiveIcon, HomeIcon, GlobeIcon, EditSmallIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
   CalendarSmallIcon, TasksSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
@@ -630,6 +630,113 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
       })}
       {props.footer && <div className="rail-footer">{props.footer}</div>}
     </nav>
+  );
+}
+
+/** Pás aplikácií konta Outlook podľa nastavenia: poradie, skryté, vlastné odkazy (napr. Bookings, interný web). */
+export function customizeRail(base: ModuleDef<string>[], acc: { railOrder?: string[]; railHidden?: string[]; railCustom?: { key: string; label: string; url: string }[] }): ModuleDef<string>[] {
+  const all: ModuleDef<string>[] = [...base, ...(acc.railCustom ?? []).map((c) => ({ key: c.key, label: c.label, icon: <GlobeIcon /> }))];
+  const order = acc.railOrder;
+  let list = all;
+  if (order?.length) {
+    const pos = (k: string) => {
+      const i = order.indexOf(k);
+      return i < 0 ? order.length + all.findIndex((m) => m.key === k) : i;
+    };
+    // pri vlastnom poradí sa nadpisy sekcií (Outlook / Firemné) nezobrazujú
+    list = [...all].sort((a, b) => pos(a.key) - pos(b.key)).map((m) => ({ ...m, section: undefined, sep: undefined }));
+  }
+  const hidden = new Set(acc.railHidden ?? []);
+  return list.filter((m) => m.key === 'mail' || !hidden.has(m.key));
+}
+
+/** Úprava pása aplikácií: zobraziť/skryť, poradie (ťahaním alebo šípkami), vlastné odkazy, vypnúť celý pás. */
+export function RailEditor(props: {
+  base: ModuleDef<string>[];
+  acc: { railOrder?: string[]; railHidden?: string[]; railCustom?: { key: string; label: string; url: string }[]; railOff?: boolean };
+  onSave: (v: { railOrder?: string[]; railHidden?: string[]; railCustom?: { key: string; label: string; url: string }[]; railOff?: boolean }) => void;
+  onClose: () => void;
+}) {
+  const [custom, setCustom] = useState(props.acc.railCustom ?? []);
+  const [hidden, setHidden] = useState<string[]>(props.acc.railHidden ?? []);
+  const [off, setOff] = useState(!!props.acc.railOff);
+  const [order, setOrder] = useState<string[]>(() => customizeRail(props.base, { railOrder: props.acc.railOrder, railCustom: props.acc.railCustom }).map((m) => m.key));
+  const [drag, setDrag] = useState<string | null>(null);
+  const [form, setForm] = useState({ label: '', url: '' });
+  const all = [...props.base, ...custom.map((c) => ({ key: c.key, label: c.label, icon: <GlobeIcon /> }))];
+  const items = order.map((k) => all.find((m) => m.key === k)).filter(Boolean) as ModuleDef<string>[];
+  const move = (k: string, to: number) => setOrder((o) => {
+    const f = o.filter((x) => x !== k);
+    f.splice(Math.max(0, Math.min(f.length, to)), 0, k);
+    return f;
+  });
+  const addCustom = () => {
+    let url = form.url.trim();
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    if (!/^https:\/\/\S+\.\S+/i.test(url)) return;
+    const key = `custom:${Math.random().toString(36).slice(2, 9)}`;
+    const label = form.label.trim() || new URL(url).hostname.replace(/^www\./, '');
+    setCustom((c) => [...c, { key, label, url }]);
+    setOrder((o) => [...o, key]);
+    setForm({ label: '', url: '' });
+  };
+  const defaultOrder = props.base.map((m) => m.key);
+  return (
+    <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
+      <DialogSurface style={{ maxWidth: 520 }}>
+        <DialogBody>
+          <DialogTitle>Pás aplikácií vľavo</DialogTitle>
+          <DialogContent className="dialog-content">
+            <Checkbox label="Zobraziť pás aplikácií (vypnutý = viac miesta pre Outlook; zapneš ho späť v nastaveniach konta)" checked={!off} onChange={(_, d) => setOff(!d.checked)} />
+            <div className="muted small">Poradie zmeníš ťahaním alebo šípkami. Odškrtnuté aplikácie sa v páse nezobrazia (Pošta ostáva vždy).</div>
+            <div className="rail-edit">
+              {items.map((m, i) => (
+                <div
+                  key={m.key}
+                  className={`rail-edit-row ${drag === m.key ? 'dragging' : ''}`}
+                  draggable
+                  onDragStart={(e) => { setDrag(m.key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', m.key); }}
+                  onDragOver={(e) => { e.preventDefault(); if (drag && drag !== m.key) move(drag, i); }}
+                  onDragEnd={() => setDrag(null)}
+                >
+                  <span className="rail-edit-grip" aria-hidden="true">⋮⋮</span>
+                  <Checkbox checked={m.key === 'mail' || !hidden.includes(m.key)} disabled={m.key === 'mail'} onChange={(_, d) => setHidden((h) => (d.checked ? h.filter((x) => x !== m.key) : [...h, m.key]))} aria-label={`Zobraziť ${m.label}`} />
+                  <span className="rail-edit-ico">{m.icon}</span>
+                  <span className="grow">{m.label}{m.key.startsWith('custom:') && <span className="muted small"> · {custom.find((c) => c.key === m.key)?.url.replace(/^https:\/\//, '')}</span>}</span>
+                  <button className="ics-mini" disabled={!i} onClick={() => move(m.key, i - 1)} aria-label="Vyššie">↑</button>
+                  <button className="ics-mini" disabled={i === items.length - 1} onClick={() => move(m.key, i + 1)} aria-label="Nižšie">↓</button>
+                  {m.key.startsWith('custom:') && (
+                    <button className="ics-mini" onClick={() => { setCustom((c) => c.filter((x) => x.key !== m.key)); setOrder((o) => o.filter((x) => x !== m.key)); }} aria-label={`Odstrániť ${m.label}`}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="ics-add">
+              <b>Pridať vlastný odkaz</b>
+              <div className="ics-edit-row">
+                <Input size="small" className="grow" placeholder="Názov (napr. Bookings)" value={form.label} onChange={(_, d) => setForm({ ...form, label: d.value })} />
+                <Input size="small" className="grow" placeholder="https://…" value={form.url} onChange={(_, d) => setForm({ ...form, url: d.value })} />
+                <Button size="small" onClick={addCustom} disabled={!form.url.trim()}>Pridať</Button>
+              </div>
+              <span className="muted small">Otvorí sa ako karta s prihlásením tohto konta (napr. Bookings, Power BI, intranet na SharePointe).</span>
+            </div>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="subtle" onClick={() => { setOrder(defaultOrder.concat(custom.map((c) => c.key))); setHidden([]); }}>Pôvodné</Button>
+            <Button onClick={props.onClose}>Zrušiť</Button>
+            <Button
+              appearance="primary"
+              onClick={() => {
+                const isDefault = order.slice(0, defaultOrder.length).every((k, i) => k === defaultOrder[i]);
+                props.onSave({ railOrder: isDefault ? undefined : order, railHidden: hidden.length ? hidden : undefined, railCustom: custom.length ? custom : undefined, railOff: off || undefined });
+              }}
+            >
+              Uložiť
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 }
 
