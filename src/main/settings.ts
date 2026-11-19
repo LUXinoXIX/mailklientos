@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, nativeImage, BrowserWindow, dialog, shell } from 'electron';
 import { DEFAULT_SETTINGS, type AppSettings, type LauncherItem } from '../core/settings';
 
 const file = () => path.join(app.getPath('userData'), 'settings.json');
@@ -83,8 +83,40 @@ export async function pickProgram(win: BrowserWindow | null): Promise<{ target: 
 }
 
 /** Ikona programu ako data URL (alebo null pre URL schému / nedostupný súbor). */
+/** Mac: ikona aplikácie priamo zo súboru .icns v balíku (PNG vnútri). app.getFileIcon na Macu (macOS 27)
+    zhadzoval celý program – volá AppKit mimo hlavného vlákna; pri štarte sa ikony načítavajú znova, takže program padal stále. */
+function macAppIcon(appPath: string): string | null {
+  try {
+    const plist = fs.readFileSync(path.join(appPath, 'Contents', 'Info.plist'), 'utf8');
+    let name = /<key>CFBundleIconFile<\/key>\s*<string>([^<]+)<\/string>/.exec(plist)?.[1];
+    if (!name) return null;
+    if (!name.endsWith('.icns')) name += '.icns';
+    const buf = fs.readFileSync(path.join(appPath, 'Contents', 'Resources', name));
+    if (buf.subarray(0, 4).toString('latin1') !== 'icns') return null;
+    let best: Buffer | null = null;
+    for (let off = 8; off + 8 <= buf.length; ) {
+      const len = buf.readUInt32BE(off + 4);
+      if (len < 8 || off + len > buf.length) break;
+      const data = buf.subarray(off + 8, off + len);
+      // PNG (ic07–ic14): vybrať najmenšiu aspoň 64 px, inak najväčšiu
+      if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+        const w = data.readUInt32BE(16);
+        const bw = best ? best.readUInt32BE(16) : 0;
+        if (!best || (w >= 64 && (bw < 64 || w < bw)) || (bw < 64 && w > bw)) best = data;
+      }
+      off += len;
+    }
+    if (!best) return null;
+    const img = nativeImage.createFromBuffer(best);
+    return img.isEmpty() ? null : img.resize({ width: 64, height: 64 }).toDataURL();
+  } catch {
+    return null;
+  }
+}
+
 export async function programIcon(target: string): Promise<string | null> {
   if (isUrlScheme(target) || !fs.existsSync(target)) return null;
+  if (process.platform === 'darwin') return /\.app\/?$/i.test(target) ? macAppIcon(target) : null;
   try {
     const img = await app.getFileIcon(target, { size: 'large' });
     return img.isEmpty() ? null : img.toDataURL();
