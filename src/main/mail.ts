@@ -384,6 +384,8 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
         body: { body: q },
         from: { from: q },
         to: { or: [{ to: q }, { cc: q }] },
+        // všetky správy s vlajkou v priečinku (karta Označené)
+        flagged: { flagged: true },
       };
       const uids: number[] = (await c.search(crit[field] ?? crit.all!, { uid: true })) || [];
       const pick = uids.sort((a, b) => b - a).slice(0, limit);
