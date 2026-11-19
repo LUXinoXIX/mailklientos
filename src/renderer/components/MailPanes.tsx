@@ -3,6 +3,7 @@ import { useAttachmentGuard } from './AttachmentGuard';
 import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
@@ -554,12 +555,20 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
   const head =
     method === 'CANCEL' ? 'Udalosť bola zrušená' : method === 'REPLY' ? 'Odpoveď na pozvánku' : method === 'REQUEST' ? 'Pozvánka na udalosť' : 'Udalosť';
   const reply = method === 'REPLY' ? e.attendees?.[0] : undefined;
+  const meet = findMeeting(e);
   return (
     <div className={`invite ${method === 'CANCEL' ? 'cancel' : ''}`}>
       <div className="invite-head">{head}</div>
       <div className="invite-title">{e.summary}</div>
       <div className="muted">{when}{e.rrule ? ' · opakuje sa' : ''}</div>
       {e.location && <div className="muted">{e.location}</div>}
+      {meet && method !== 'CANCEL' && (
+        <div style={{ margin: '6px 0' }}>
+          <Button size="small" appearance="primary" onClick={() => (meet.kind === 'jitsi' ? void window.mailApi?.meetJitsi(meet.url) : void window.mailApi?.openExternal(meet.url))} title={meet.url}>
+            Pripojiť sa – {MEETING_LABEL[meet.kind]}
+          </Button>
+        </div>
+      )}
       {e.organizer && <div className="muted small">Organizátor: {e.organizer.name || e.organizer.email}</div>}
       {reply && (
         <div className="small">

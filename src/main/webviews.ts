@@ -47,7 +47,7 @@ const isMs = (url: string) => {
 /** User-agent bez „Electron/…“ a názvu aplikácie, aby weby (Outlook, WhatsApp) videli bežný Chrome. */
 const chromeUserAgent = (ua: string) => ua.replace(/\s(MailKlient|mailklient)\/\S+/g, '').replace(/\sElectron\/\S+/g, '');
 
-function prepareSession(partition: string) {
+export function prepareSession(partition: string) {
   const ses = session.fromPartition(partition);
   if (prepared.has(ses)) return ses;
   prepared.add(ses);

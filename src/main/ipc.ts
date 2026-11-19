@@ -28,6 +28,7 @@ import * as cal from './calendar';
 import * as dav from './dav';
 import * as localbook from './localcontacts';
 import * as recent from './recent';
+import * as meeting from './meeting';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -146,6 +147,10 @@ export function registerIpc() {
   handle('cal:save', (id: string, calendarId: string, e: CalEvent, invite: boolean) => cal.save(store.getImap(id), calendarId, e, invite));
   handle('cal:delete', (id: string, e: CalEvent, notify: boolean) => cal.remove(store.getImap(id), e, notify));
   handle('cal:respond', (id: string, folder: string, uid: number, ps: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => cal.respond(store.getImap(id), folder, uid, ps));
+  handle('meet:teams', (accountId: string) => meeting.openTeamsForLink(accountId));
+  handle('meet:teamsClose', () => meeting.closeTeamsWindow());
+  handle('meet:jitsi', (url: string) => meeting.openJitsi(url));
+  handle('clipboard:read', () => meeting.readClipboardText());
   handle('recent:list', () => recent.list());
   handle('recent:add', (items: { name?: string; email: string }[], migrate?: boolean) => recent.add(items, !!migrate));
   handle('recent:remove', (emails: string[]) => recent.remove(emails));

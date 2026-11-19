@@ -803,3 +803,14 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .read-rcpt { line-height: 1.45; }
 .read-rcpt.open .read-rcpt-list { display: block; max-height: 140px; overflow: auto; margin-top: 2px; padding: 4px 6px; border-radius: 6px; background: var(--colorNeutralBackground2); }
 .read-rcpt-more { margin-left: 4px; font-size: inherit; }
+/* online schôdza v udalosti */
+.meet { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground2); }
+.meet-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.meet-row .grow { flex: 1; min-width: 220px; }
+.meet-help { display: flex; flex-direction: column; gap: 6px; }
+.meet-link { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; border-radius: 6px; background: var(--colorNeutralBackground1); }
+.meet-kind { font-weight: 600; white-space: nowrap; }
+.meet-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.meet-adv summary { cursor: pointer; }
+.meet-def { display: flex; align-items: center; gap: 4px; }
+.rail-footer { margin-top: auto; padding: 8px 0 6px; border-top: 1px solid var(--colorNeutralStroke3); display: flex; flex-direction: column; align-items: center; width: 100%; }

@@ -89,6 +89,8 @@ export interface AppSettings {
   accountListPinned?: boolean;
   /** náhľad kalendára / úloh vedľa čítacieho panela v pošte */
   myDay?: { calendar: boolean; tasks: boolean };
+  /** online schôdze v udalostiach (Teams cez zvolené Outlook konto, Jitsi server) */
+  meetings?: import('./meeting').MeetingSettings;
   /** zoradenie zoznamu správ */
   listSort?: { by: 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category'; dir: 'desc' | 'asc' };
   /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
