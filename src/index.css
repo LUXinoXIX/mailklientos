@@ -799,3 +799,7 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .ci-prev-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ci-sum { padding: 8px 10px; border-radius: 6px; background: var(--colorNeutralBackground2); }
 .ab-hint { padding: 8px 12px; line-height: 1.45; border-bottom: 1px solid var(--colorNeutralStroke3); }
+/* príjemcovia v hlavičke: pri rozbalení veľa adresátov obmedzená výška */
+.read-rcpt { line-height: 1.45; }
+.read-rcpt.open .read-rcpt-list { display: block; max-height: 140px; overflow: auto; margin-top: 2px; padding: 4px 6px; border-radius: 6px; background: var(--colorNeutralBackground2); }
+.read-rcpt-more { margin-left: 4px; font-size: inherit; }

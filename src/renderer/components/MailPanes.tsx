@@ -682,7 +682,8 @@ export function ReadingPane(props: {
               </span>
             )}
           </div>
-          <div className="muted">Komu: {m.to}{m.cc ? ` · Kópia: ${m.cc}` : ''}</div>
+          <Recipients label="Komu" value={m.to} />
+          {m.cc && <Recipients label="Kópia" value={m.cc} />}
           <div className="muted read-date">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
         </div>
       </div>
@@ -822,5 +823,63 @@ export function ReadingPane(props: {
       )}
       <div className="read-body">{m.html ? <HtmlBody html={m.html} showImages={showImages} /> : <pre className="plain">{m.text}</pre>}</div>
     </section>
+  );
+}
+
+/** „Meno" <adresa>, adresa, … → zoznam (čiarky v úvodzovkách sa nedelia) */
+export function splitAddresses(s: string): { name: string; email: string }[] {
+  const out: { name: string; email: string }[] = [];
+  let cur = '';
+  let q = false;
+  let angle = false;
+  for (const ch of s + ',') {
+    if (ch === '"') q = !q;
+    else if (ch === '<' && !q) angle = true;
+    else if (ch === '>' && !q) angle = false;
+    if ((ch === ',' || ch === ';') && !q && !angle) {
+      const t = cur.trim();
+      cur = '';
+      if (!t) continue;
+      const m = /^(.*?)\s*<([^>]+)>$/.exec(t);
+      const name = (m ? m[1]! : '').replace(/^"|"$/g, '').trim();
+      const email = (m ? m[2]! : t).trim();
+      out.push({ name: name && name !== email ? name : '', email });
+    } else cur += ch;
+  }
+  return out;
+}
+
+/** Príjemcovia v hlavičke otvorenej správy: pri veľa adresátoch (hromadné pozvánky na Teams a pod.)
+    len prví traja menom + „a ďalších N“, po rozbalení všetci v obmedzenej výške s posuvníkom. */
+function Recipients(props: { label: string; value: string }) {
+  const [open, setOpen] = useState(false);
+  const list = useMemo(() => splitAddresses(props.value), [props.value]);
+  const LIMIT = 3;
+  if (!list.length) return null;
+  const many = list.length > LIMIT + 2; // pri 4–5 adresátoch sa ukážu všetci
+  const shown = open || !many ? list : list.slice(0, LIMIT);
+  const rest = list.length - LIMIT;
+  return (
+    <div className={`muted read-rcpt ${open && many ? 'open' : ''}`}>
+      <span className="read-rcpt-label">{props.label}:</span>{' '}
+      {open && many && (
+        <button className="link read-rcpt-more" onClick={() => setOpen(false)}>
+          skryť ({list.length})
+        </button>
+      )}
+      <span className="read-rcpt-list">
+        {shown.map((a, i) => (
+          <span key={i} className="read-rcpt-item" title={a.name ? `${a.name} <${a.email}>` : a.email}>
+            {open && a.name ? `${a.name} <${a.email}>` : a.name || a.email}
+            {i < shown.length - 1 ? '; ' : ''}
+          </span>
+        ))}
+        {many && !open && (
+          <button className="link read-rcpt-more" onClick={() => setOpen(true)} title="Zobraziť všetkých adresátov">
+            {` a ${rest < 5 ? 'ďalší' : 'ďalších'} ${rest}`}
+          </button>
+        )}
+      </span>
+    </div>
   );
 }
