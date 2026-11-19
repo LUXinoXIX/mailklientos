@@ -878,3 +878,7 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .sum-count { font: inherit; font-size: 12px; padding: 3px 4px; border-radius: 6px; border: 1px solid rgba(127, 127, 127, .45); background: rgba(255, 255, 255, .6); color: inherit; margin-top: 6px; }
 .sum-tile-set .sum-input.grow { flex: 1; width: auto; }
 .sum-feed .sum-row:first-child, .sum-feed .sum-feed-name + .sum-row { border-top: 0; }
+.webmail-cred { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--colorNeutralBackground2); }
+/* Súhrn: tenká deliaca čiara pod pozdravom, dlaždice nie sú nalepené na nadpis */
+.sum-head { padding-bottom: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .45); box-shadow: 0 1px 0 rgba(0, 0, 0, .06); }
+.dialog-content > .fui-MessageBar { flex-shrink: 0; }
