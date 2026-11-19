@@ -116,6 +116,8 @@ export function SummaryPage(props: {
   const [feedData, setFeedData] = useState<Record<string, { list?: CalEvent[]; error?: string }>>({});
   const [feedForm, setFeedForm] = useState({ url: '', name: '', count: 5 });
   const feeds = s.feeds ?? [];
+  // kalendáre z odkazu na celú šírku: každý vo vlastnom stĺpci, vždy pod ostatnými dlaždicami
+  const wideFeeds = !!s.feedsWide && feeds.length > 0 && (s.tiles ?? []).find((t) => t.id === 'feeds')?.on !== false;
   const feedKey = feeds.map((f) => `${f.url}|${f.count}`).join(',');
   useEffect(() => {
     if (!api || !feeds.length) return;
@@ -264,7 +266,7 @@ export function SummaryPage(props: {
               const d = feedData[f.id];
               return (
                 <div key={f.id} className="sum-feed">
-                  {feeds.length > 1 && <div className="sum-feed-name">{f.name}</div>}
+                  {(feeds.length > 1 || wideFeeds) && <div className="sum-feed-name">{f.name}</div>}
                   {!d && <div className="sum-dim">Načítavam…</div>}
                   {d?.error && <div className="sum-dim">⚠ {d.error}</div>}
                   {d?.list && !d.list.length && <div className="sum-dim">Žiadne nadchádzajúce udalosti.</div>}
@@ -381,6 +383,7 @@ export function SummaryPage(props: {
               </section>
               <section>
                 <div className="sum-h">Kalendár z odkazu (iCal)</div>
+                <Checkbox label="Na celú šírku – každý kalendár vo vlastnom stĺpci, pod ostatnými dlaždicami" checked={!!s.feedsWide} onChange={(_, d) => props.onSettings({ ...s, feedsWide: !!d.checked })} />
                 {feeds.map((f) => (
                   <div key={f.id} className="sum-tile-set">
                     <span className="grow sum-ell" title={f.url}>{f.name}</span>
@@ -432,13 +435,27 @@ export function SummaryPage(props: {
         )}
 
         <div className="sum-grid">
-          {tiles.filter((t) => t.on).map((t) => (
+          {tiles.filter((t) => t.on && !(t.id === 'feeds' && wideFeeds)).map((t) => (
             <div key={t.id} className={`sum-card sum-${t.id}`} style={cardStyle}>
-              <div className="sum-h">{TILE_LABEL[t.id]}</div>
+              <div className="sum-h">
+                {TILE_LABEL[t.id]}
+                {t.id === 'feeds' && feeds.length > 1 && (
+                  <button className="sum-wide-btn" title="Na celú šírku – každý kalendár vo vlastnom stĺpci, pod ostatnými dlaždicami" onClick={() => props.onSettings({ ...s, feedsWide: true })}>⇔</button>
+                )}
+              </div>
               {tile(t.id)}
             </div>
           ))}
         </div>
+        {wideFeeds && (
+          <div className="sum-card sum-feeds-wide" style={cardStyle}>
+            <div className="sum-h">
+              {TILE_LABEL.feeds}
+              <button className="sum-wide-btn" title="Späť medzi ostatné dlaždice" onClick={() => props.onSettings({ ...s, feedsWide: false })}>⇤⇥</button>
+            </div>
+            <div className="sum-feed-cols" style={{ gridTemplateColumns: `repeat(${Math.max(1, feeds.length)}, minmax(0, 1fr))` }}>{tile('feeds')}</div>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -889,3 +889,13 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .msg.multi-sel.unread { box-shadow: inset 6px 0 0 var(--colorBrandBackground), inset 0 0 0 1.5px var(--colorBrandBackground); }
 .msg.multi-sel + .msg.multi-sel { box-shadow: inset 0 0 0 1.5px var(--colorBrandBackground), inset 0 1px 0 color-mix(in srgb, var(--colorBrandBackground) 26%, var(--colorNeutralBackground1)); }
 .msg.multi-sel .msg-from, .msg.multi-sel .msg-subject { color: var(--colorNeutralForeground1); }
+/* kalendáre z odkazu na celú šírku: stĺpec pre každý kalendár */
+.sum-feeds-wide { margin-top: 0; }
+.sum-feed-cols { display: grid; gap: 18px; }
+.sum-feed-cols .sum-feed + .sum-feed { margin-top: 0; }
+.sum-feed-cols .sum-feed { min-width: 0; }
+.sum-feed-cols .sum-feed-name { font-size: 13px; font-weight: 600; opacity: .9; padding-bottom: 4px; border-bottom: 1px solid rgba(127, 127, 127, .3); margin-bottom: 2px; }
+.sum-h { display: flex; align-items: center; gap: 6px; }
+.sum-wide-btn { margin-left: auto; border: 0; background: rgba(127, 127, 127, .15); color: inherit; border-radius: 6px; padding: 1px 7px; cursor: pointer; font-size: 12px; }
+.sum-wide-btn:hover { background: rgba(127, 127, 127, .3); }
+@media (max-width: 900px) { .sum-feed-cols { grid-template-columns: 1fr !important; } }
