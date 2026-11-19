@@ -29,6 +29,7 @@ import * as dav from './dav';
 import * as localbook from './localcontacts';
 import * as recent from './recent';
 import * as meeting from './meeting';
+import * as localcal from './localcal';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -85,6 +86,7 @@ export function registerIpc() {
     mail.closeAllConnections(id);
     store.deleteAccount(id);
     cache.removeFolder(id);
+    localcal.forgetAccount(id);
     syncWatchers();
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
@@ -147,6 +149,16 @@ export function registerIpc() {
   handle('cal:events', (id: string, ids: string[], from: string, to: string) => cal.events(store.getImap(id), ids, from, to));
   handle('cal:save', (id: string, calendarId: string, e: CalEvent, invite: boolean) => cal.save(store.getImap(id), calendarId, e, invite));
   handle('cal:delete', (id: string, e: CalEvent, notify: boolean) => cal.remove(store.getImap(id), e, notify));
+  handle('cal:addLocal', (id: string, name: string, color?: string) => localcal.addLocal(store.getImap(id).id, name, color));
+  handle('cal:subscribe', (id: string, url: string, name?: string, color?: string) => localcal.subscribe(store.getImap(id).id, url, name, color));
+  handle('cal:rename', (calId: string, name: string, color?: string) => localcal.rename(calId, name, color));
+  handle('cal:removeCal', (calId: string) => localcal.removeCal(calId));
+  handle('ics:upcoming', (url: string, count: number) => localcal.upcoming(url, count));
+  handle('cal:subInfo', (calId: string) => localcal.subInfo(calId));
+  handle('cal:import', async (id: string, calendarId: string) => {
+    const text = await localcal.pickIcs(winOf());
+    return text === null ? null : cal.importIcs(store.getImap(id), calendarId, text);
+  });
   handle('cal:respond', (id: string, folder: string, uid: number, ps: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => cal.respond(store.getImap(id), folder, uid, ps));
   handle('meet:teams', (accountId: string) => meeting.openTeamsForLink(accountId));
   handle('meet:teamsClose', () => meeting.closeTeamsWindow());
