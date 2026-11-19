@@ -128,8 +128,12 @@ export function M365Dialog(props: {
   async function remove() {
     if (!e || !window.mailApi) return;
     setBusy(true);
-    await window.mailApi.deleteAccount(e.id);
+    const r = await window.mailApi.deleteAccount(e.id);
     setBusy(false);
+    if (r && 'ok' in r && !r.ok) {
+      setConfirmDelete(false);
+      return setError(r.error);
+    }
     props.onDeleted();
   }
 
@@ -215,24 +219,25 @@ export function M365Dialog(props: {
               </div>
             </Field>
             {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
-            {confirmDelete && (
-              <MessageBar intent="warning">
-                <MessageBarBody>
-                  Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta {web ? 'na serveri' : 'v Microsoft 365'} zostane nedotknutá.
-                  <div className="row gap">
-                    <Button size="small" appearance="primary" onClick={() => void remove()}>Odstrániť</Button>
-                    <Button size="small" onClick={() => setConfirmDelete(false)}>Nie</Button>
-                  </div>
-                </MessageBarBody>
-              </MessageBar>
-            )}
           </DialogContent>
           <DialogActions className="dialog-actions">
-            {e && <Button appearance="subtle" onClick={() => setConfirmDelete(true)}>Odstrániť konto</Button>}
-            {e && <Button appearance="subtle" onClick={() => void signOut()}>Odhlásiť</Button>}
-            <div className="grow" />
-            <Button appearance="primary" disabled={busy} onClick={() => void save()}>Uložiť</Button>
-            <Button onClick={props.onClose}>Zrušiť</Button>
+            {confirmDelete ? (
+              // potvrdenie priamo v lište tlačidiel – vždy viditeľné (v obsahu dialógu bolo pod posúvaním a nebolo ho vidieť)
+              <>
+                <span className="confirm-del">Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta {web ? 'na serveri' : 'v Microsoft 365'} zostane nedotknutá.</span>
+                <div className="grow" />
+                <Button appearance="primary" disabled={busy} onClick={() => void remove()}>{busy ? 'Odstraňujem…' : 'Odstrániť'}</Button>
+                <Button disabled={busy} onClick={() => setConfirmDelete(false)}>Nie</Button>
+              </>
+            ) : (
+              <>
+                {e && <Button appearance="subtle" onClick={() => setConfirmDelete(true)}>Odstrániť konto</Button>}
+                {e && <Button appearance="subtle" onClick={() => void signOut()}>Odhlásiť</Button>}
+                <div className="grow" />
+                <Button appearance="primary" disabled={busy} onClick={() => void save()}>Uložiť</Button>
+                <Button onClick={props.onClose}>Zrušiť</Button>
+              </>
+            )}
           </DialogActions>
         </DialogBody>
       </DialogSurface>
