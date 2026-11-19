@@ -33,6 +33,9 @@ export function AccountRail(props: {
   gpuOff: boolean;
   onToggleGpu: () => void;
   notifications: boolean;
+  /** zobraziť položku Súhrn (úvodná stránka) */
+  showSummary: boolean;
+  onToggleSummary: () => void;
   onCrypto: () => void;
   onAbout: () => void;
   /** krátke označenie typu konta na ikone (Z, IMAP, 365) */
@@ -88,6 +91,7 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>
+            <MenuItem onClick={props.onToggleSummary}>{props.showSummary ? 'Vypnúť úvodnú stránku Súhrn' : 'Zapnúť úvodnú stránku Súhrn'}</MenuItem>
             <MenuDivider />
             <MenuItem onClick={props.onToggleGpu}>
               {props.gpuOff ? 'Zapnúť hardvérovú akceleráciu (reštart)' : 'Vypnúť hardvérovú akceleráciu, ak obraz bliká (reštart)'}
@@ -168,10 +172,12 @@ export function AccountRail(props: {
           <PinIcon />
         </button>
       </div>
-      <button className={`acc-row ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => pick(SUMMARY)} aria-pressed={props.active === SUMMARY}>
-        <HomeIcon className="acc-row-ico" />
-        <span className="n">Súhrn</span>
-      </button>
+      {props.showSummary && (
+        <button className={`acc-row ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => pick(SUMMARY)} aria-pressed={props.active === SUMMARY}>
+          <HomeIcon className="acc-row-ico" />
+          <span className="n">Súhrn</span>
+        </button>
+      )}
       {props.showAll && (
         <button className={`acc-row ${props.active === ALL ? 'on' : ''}`} onClick={() => pick(ALL)} aria-pressed={props.active === ALL}>
           <AllInboxIcon className="acc-row-ico" />
@@ -228,12 +234,14 @@ export function AccountRail(props: {
           »
         </button>
       </Tooltip>
-      <Tooltip content="Súhrn – prehľad kont, dnešných stretnutí a úloh" relationship="label" positioning="after">
-        <button className={`acc-btn ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => props.onSelect(SUMMARY)} aria-pressed={props.active === SUMMARY}>
-          <span className="acc-sq all"><HomeIcon /></span>
-          <span className="acc-label">Súhrn</span>
-        </button>
-      </Tooltip>
+      {props.showSummary && (
+        <Tooltip content="Súhrn – prehľad kont, dnešných stretnutí a úloh" relationship="label" positioning="after">
+          <button className={`acc-btn ${props.active === SUMMARY ? 'on' : ''}`} onClick={() => props.onSelect(SUMMARY)} aria-pressed={props.active === SUMMARY}>
+            <span className="acc-sq all"><HomeIcon /></span>
+            <span className="acc-label">Súhrn</span>
+          </button>
+        </Tooltip>
+      )}
       {props.showAll && (
         <Tooltip content={`Všetky doručené${totalUnread ? ` · ${fmt(totalUnread)} neprečítaných` : ''}`} relationship="label" positioning="after">
           <button className={`acc-btn ${props.active === ALL ? 'on' : ''}`} onClick={() => props.onSelect(ALL)} aria-pressed={props.active === ALL}>

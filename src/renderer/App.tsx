@@ -305,14 +305,15 @@ export function App() {
       if (!POP_COMPOSE && !POP_VIEW && !startupDone.current) {
         startupDone.current = true;
         const st = r.data.summary?.startup ?? 'summary';
-        if (st === 'summary') setActiveId(SUMMARY);
+        if (st === 'summary' && r.data.summary?.enabled !== false) setActiveId(SUMMARY);
         else if (st === 'all') setActiveId(ALL);
         else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
       }
     });
   }, [loadAccounts, api]); // eslint-disable-line react-hooks/exhaustive-deps
   const startupDone = useRef(false);
-  const summaryOn = activeId === SUMMARY && !POP_COMPOSE && !POP_VIEW;
+  const summaryEnabled = settings.summary?.enabled !== false;
+  const summaryOn = summaryEnabled && activeId === SUMMARY && !POP_COMPOSE && !POP_VIEW;
   useEffect(() => {
     if (activeId && activeId !== SUMMARY) localStorage.setItem('lastAccount', activeId);
   }, [activeId]);
@@ -1501,6 +1502,13 @@ export function App() {
           onSignatures={() => openDialog({ kind: 'signatures' })}
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
+          showSummary={summaryEnabled}
+          onToggleSummary={() => {
+            const on = !summaryEnabled;
+            saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: on } });
+            if (on) setActiveId(SUMMARY);
+            else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
+          }}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
           kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
@@ -1535,6 +1543,11 @@ export function App() {
               onOpenCalendar={(id) => {
                 setActiveId(id);
                 setImapModule((x) => ({ ...x, [id]: 'calendar' }));
+              }}
+              onDisable={() => {
+                saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: false } });
+                setActiveId(localStorage.getItem('lastAccount') ?? '');
+                setStatus('Súhrn je vypnutý. Zapneš ho v ozubenom kolieske dole vľavo.');
               }}
             />
           )}
