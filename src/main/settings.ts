@@ -57,10 +57,13 @@ export async function pickProgram(win: BrowserWindow | null): Promise<{ target: 
   const filters =
     process.platform === 'win32'
       ? [{ name: 'Programy', extensions: ['exe', 'lnk', 'bat', 'cmd', 'msc'] }, { name: 'Všetky súbory', extensions: ['*'] }]
-      : [{ name: 'Všetky súbory', extensions: ['*'] }];
+      : process.platform === 'darwin'
+        ? [{ name: 'Aplikácie', extensions: ['app'] }, { name: 'Všetky súbory', extensions: ['*'] }]
+        : [{ name: 'Všetky súbory', extensions: ['*'] }];
   const opts: Electron.OpenDialogOptions = {
     title: 'Vyber program',
-    properties: process.platform === 'darwin' ? ['openFile', 'treatPackageAsDirectory'] : ['openFile'],
+    // Mac: aplikácia (.app) je balík – vyberá sa ako súbor (s treatPackageAsDirectory by sa otvorila ako priečinok)
+    properties: ['openFile'],
     filters,
     defaultPath: process.platform === 'win32' ? 'C:\\Program Files' : process.platform === 'darwin' ? '/Applications' : '/usr/bin',
   };

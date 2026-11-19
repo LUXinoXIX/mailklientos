@@ -41,11 +41,23 @@ export interface SignatureDefaults {
 }
 
 /** vlastný pravý panel (weby + programy), ktorý môže používať jedno alebo viac kont */
+/** Kalendár z odkazu (ICS/webcal) v karte pravého panela – poradie = poradie v zozname. */
+export interface IcsFeed {
+  id: string;
+  name: string;
+  url: string;
+  /** počet zobrazených najbližších udalostí */
+  count: number;
+  color?: string;
+}
+
 export interface RightPanelDef {
   id: string;
   name: string;
   webs: WebItem[];
   launchers: LauncherItem[];
+  /** karta „Kalendáre (ICS)“ v tomto paneli */
+  icsFeeds?: IcsFeed[];
 }
 
 export interface AppSettings {
@@ -91,6 +103,8 @@ export interface AppSettings {
   myDay?: { calendar: boolean; tasks: boolean };
   /** online schôdze v udalostiach (Teams cez zvolené Outlook konto, Jitsi server) */
   meetings?: import('./meeting').MeetingSettings;
+  /** karta „Kalendáre (ICS)“ v spoločnom pravom paneli */
+  icsFeeds?: IcsFeed[];
   /** úvodná stránka Súhrn */
   summary?: SummarySettings;
   /** zoradenie zoznamu správ */

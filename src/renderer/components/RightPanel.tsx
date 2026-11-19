@@ -7,6 +7,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type Task, type WebItem } from '../../core/settings';
 import type { CalEvent } from '../../core/ical';
+import { IcsPane } from './IcsPane';
 import { AddIcon, AppsIcon, ChevronDownIcon, PanelIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
 import { WebSlot, type WebSlotHandle } from './WebSlot';
 
@@ -23,10 +24,11 @@ function LauncherButton(props: { item: LauncherItem; editing: boolean; onRun: ()
   }, [props.item.target]);
   return (
     <div className="launcher">
-      <button className="launcher-btn" onClick={props.onRun} title={props.item.target} disabled={props.editing}>
-        {icon ? <img src={icon} alt="" width={28} height={28} /> : <AppsIcon />}
-        <span>{props.item.name}</span>
-      </button>
+      <Tooltip content={props.item.name} relationship="label">
+        <button className="launcher-btn" onClick={props.onRun} disabled={props.editing} aria-label={props.item.name}>
+          {icon ? <img src={icon} alt="" width={22} height={22} /> : <AppsIcon />}
+        </button>
+      </Tooltip>
       {props.editing && (
         <button className="launcher-x" onClick={props.onRemove} aria-label={`Odstrániť ${props.item.name}`}>
           <CloseSmallIcon />
@@ -189,7 +191,13 @@ export function RightPanel(props: {
   const { settings } = props;
   const [editing, setEditing] = useState(false);
   const [addWeb, setAddWeb] = useState<{ name: string; url: string; error?: string } | null>(null);
-  const agendaOn = props.active === 'agenda' && !!props.agenda;
+  // karta Kalendáre (ICS) – po pridaní cez + sa zobrazí aj kým ešte nemá žiadny kalendár
+  const [icsAdded, setIcsAdded] = useState(false);
+  const showIcs = !!settings.icsFeeds || icsAdded;
+  const icsOn = props.active === 'ics' && (!!settings.icsFeeds || icsAdded);
+  const agendaOnly = props.active === 'agenda' && !!props.agenda && !icsOn;
+  // agendaOn = nezobrazuje sa web (Agenda alebo Kalendáre)
+  const agendaOn = agendaOnly || icsOn;
   const web: WebItem | undefined = agendaOn ? undefined : settings.webs.find((w) => w.id === props.active) ?? settings.webs[0];
   const slots = useRef(new Map<string, WebSlotHandle>());
   const cur = () => (web ? slots.current.get(web.id) : undefined);
@@ -229,8 +237,18 @@ export function RightPanel(props: {
       {props.choice && <PanelChooser c={props.choice} onOverlay={props.onOverlay} />}
       <div className="right-tabs">
         {props.agenda && (
-          <div className={`right-tab ${agendaOn ? 'on' : ''}`}>
+          <div className={`right-tab ${agendaOnly ? 'on' : ''}`}>
             <button onClick={() => props.onActive('agenda')}>Agenda</button>
+          </div>
+        )}
+        {showIcs && (
+          <div className={`right-tab ${icsOn ? 'on' : ''}`}>
+            <button onClick={() => props.onActive('ics')} title="Kalendáre z odkazu (ICS)">Kalendáre</button>
+            {editing && (
+              <button className="right-tab-x" aria-label="Odstrániť kartu Kalendáre" onClick={() => { setIcsAdded(false); props.onSettings({ ...settings, icsFeeds: undefined }); if (icsOn) props.onActive('agenda'); }}>
+                <CloseSmallIcon />
+              </button>
+            )}
           </div>
         )}
         {settings.webs.map((w) => (
@@ -249,15 +267,28 @@ export function RightPanel(props: {
             )}
           </div>
         ))}
-        <Tooltip content="Pridať web" relationship="label">
-          <Button size="small" appearance="subtle" icon={<AddIcon />} onClick={() => openAdd(true)} aria-label="Pridať web" />
-        </Tooltip>
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Tooltip content="Pridať kartu" relationship="label">
+              <Button size="small" appearance="subtle" icon={<AddIcon />} aria-label="Pridať kartu" />
+            </Tooltip>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem icon={<GlobeIcon />} onClick={() => openAdd(true)}>Web podľa adresy…</MenuItem>
+              <MenuItem disabled={showIcs} onClick={() => { setIcsAdded(true); props.onActive('ics'); }}>Kalendáre z odkazu (ICS){showIcs ? ' – už je pridaná' : '…'}</MenuItem>
+              <MenuItem icon={<AppsIcon />} onClick={() => void addProgram()}>Program (.exe)…</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
         <div className="grow" />
         <Tooltip content={editing ? 'Hotovo' : 'Upraviť weby a programy'} relationship="label">
           <Button size="small" appearance={editing ? 'primary' : 'subtle'} icon={<EditSmallIcon />} onClick={() => setEditing(!editing)} aria-label="Upraviť" />
         </Tooltip>
       </div>
-      {agendaOn && props.agenda ? (
+      {icsOn ? (
+        <IcsPane feeds={settings.icsFeeds ?? []} onFeeds={(f) => props.onSettings({ ...settings, icsFeeds: f })} onStatus={props.onStatus} />
+      ) : agendaOn && props.agenda ? (
         <Agenda data={props.agenda} />
       ) : null}
       {/* weby ostávajú načítané aj pri zobrazenej Agende a pri prepnutí na iný panel */}
@@ -297,12 +328,12 @@ export function RightPanel(props: {
               onRemove={() => props.onSettings({ ...settings, launchers: settings.launchers.filter((x) => x.id !== l.id) })}
             />
           ))}
-          <button className="launcher-add" onClick={() => void addProgram()}>
-            <AddIcon />
-            <span>Program</span>
-          </button>
+          <Tooltip content="Pridať program (otvára sa vo vlastnom okne)" relationship="label">
+            <button className="launcher-add" onClick={() => void addProgram()} aria-label="Pridať program">
+              <AddIcon />
+            </button>
+          </Tooltip>
         </div>
-        <div className="muted small">Programy sa otvárajú vo vlastnom okne.</div>
       </div>
 
       {addWeb && (
