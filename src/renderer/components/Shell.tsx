@@ -478,8 +478,8 @@ export function Ribbon(props: {
                   <MenuItem onClick={() => p.onIo('mbox')}>Exportovať priečinok (.mbox)</MenuItem>
                   <MenuItem onClick={() => p.onIo('import')}>Importovať .eml / .mbox…</MenuItem>
                   <MenuItem onClick={() => p.onIo('thunderbird')}>Importovať z Thunderbirdu…</MenuItem>
-                  <MenuItem onClick={() => p.onIo('backup')}>Zálohovať nastavenia…</MenuItem>
-                  <MenuItem onClick={() => p.onIo('restore')}>Obnoviť nastavenia zo zálohy…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('backup')}>Exportovať nastavenia…</MenuItem>
+                  <MenuItem onClick={() => p.onIo('restore')}>Importovať nastavenia…</MenuItem>
                   <MenuItem onClick={() => p.onIo('shortcuts')}>Klávesové skratky</MenuItem>
                   <MenuItem onClick={() => p.onIo('update')}>Skontrolovať aktualizácie</MenuItem>
                 </MenuList>

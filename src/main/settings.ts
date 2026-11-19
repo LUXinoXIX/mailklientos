@@ -33,7 +33,7 @@ export function saveSettings(s: AppSettings): AppSettings {
   return s;
 }
 
-const isUrlScheme = (t: string) => /^[a-z][a-z0-9+.-]+:/i.test(t) && !/^[a-z]:[\\/]/i.test(t);
+export const isUrlScheme = (t: string) => /^[a-z][a-z0-9+.-]+:/i.test(t) && !/^[a-z]:[\\/]/i.test(t);
 
 /** Spustí program alebo otvorí URL schému. Vráti text chyby alebo prázdny reťazec. */
 export async function runLauncher(l: LauncherItem): Promise<string> {

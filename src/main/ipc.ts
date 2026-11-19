@@ -30,6 +30,7 @@ import * as localbook from './localcontacts';
 import * as recent from './recent';
 import * as meeting from './meeting';
 import * as localcal from './localcal';
+import * as backup from './backup';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -262,8 +263,6 @@ export function registerIpc() {
   handle('mail:previewFile', (file: string, filename?: string) => extras.previewLocalFile(file, filename));
   handle('mail:preview', (id: string, folder: string, uid: number, index: number) => extras.previewAttachment(store.getImap(id), folder, uid, index));
   handle('mail:unsubscribe', (id: string, u: { url?: string; mailto?: string; oneClick?: boolean }) => extras.unsubscribe(store.getImap(id), u));
-  handle('backup:export', () => extras.backupExport());
-  handle('backup:import', () => extras.backupImport());
   handle('app:unread', (total: number, badge?: string) => {
     extras.setUnread(total, badge);
     return true as const;
@@ -329,6 +328,9 @@ export function registerIpc() {
   handle('launcher:pick', () => settings.pickProgram(winOf()));
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
   handle('launcher:icon', (target: string) => settings.programIcon(target));
+  handle('backup:export', (parts: backup.BackupParts) => backup.exportBackup(winOf(), parts));
+  handle('backup:pick', () => backup.pickBackup(winOf()));
+  handle('backup:apply', (token: string, parts: backup.BackupParts & { settings: boolean }) => backup.applyBackup(token, parts));
 
   ipcMain.handle('app:openExternal', async (_e, url: string) => {
     if (/^(https?|mailto):/i.test(url)) await shell.openExternal(url);
