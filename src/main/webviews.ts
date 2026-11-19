@@ -236,5 +236,6 @@ export async function openOutside(url: string) {
 
 /** Odhlásenie / zmazanie konta: vymaže uložené prihlásenie relácie. */
 export async function clearPartition(partition: string) {
-  await session.fromPartition(partition).clearStorageData();
+  // nečakať donekonečna (otvorená webová relácia vedela zdržať) – pri odstraňovaní konta to nesmie zablokovať
+  await Promise.race([session.fromPartition(partition).clearStorageData().catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
 }

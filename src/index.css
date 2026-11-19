@@ -952,3 +952,5 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .sum-news { align-items: flex-start; }
 .sum-news-img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; flex: none; }
 .sum-news-t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+.confirm-del { font-size: 13px; color: var(--colorPaletteRedForeground1); max-width: 330px; }

@@ -84,11 +84,19 @@ export function registerIpc() {
   });
   handle('accounts:delete', async (id: string) => {
     const acc = store.loadAccounts().find((a) => a.id === id);
-    mail.closeAllConnections(id);
     store.deleteAccount(id);
-    cache.removeFolder(id);
-    localcal.forgetAccount(id);
-    syncWatchers();
+    // upratovanie nesmie zabrániť odstráneniu (pri vloženom Outlooku nie je IMAP spojenie ani cache)
+    const tidy = (what: string, f: () => unknown) => {
+      try {
+        f();
+      } catch (err) {
+        diag.log(`odstránenie konta – ${what}:`, String(err));
+      }
+    };
+    tidy('spojenia', () => mail.closeAllConnections(id));
+    tidy('cache', () => cache.removeFolder(id));
+    tidy('kalendáre', () => localcal.forgetAccount(id));
+    tidy('sledovanie', () => syncWatchers());
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
   });
