@@ -288,6 +288,8 @@ export interface SummarySettings {
   customDark?: boolean;
   /** kalendáre z odkazu (iCal/webcal) – najbližšie udalosti */
   feeds?: { id: string; name: string; url: string; count: number }[];
+  /** kalendáre z odkazu na celú šírku (stĺpec pre každý), pod ostatnými dlaždicami */
+  feedsWide?: boolean;
   /** nepriehľadnosť blokov 0.3–1 */
   opacity?: number;
   /** rozmazanie pozadia pod blokmi */
