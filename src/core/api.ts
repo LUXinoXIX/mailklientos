@@ -252,6 +252,8 @@ export interface MailApi {
   calSubInfo(calendarId: string): Promise<Result<{ url?: string; refreshedAt?: string; error?: string; kind: 'local' | 'sub' } | null>>;
   /** najbližšie udalosti z kalendára na adrese (ICS/webcal) – dlaždica v Súhrne */
   icsUpcoming(url: string, count: number): Promise<Result<CalEvent[]>>;
+  /** text RSS/Atom kanála alebo webovej stránky (na nájdenie kanála) – dlaždica Správy v Súhrne */
+  rssFetch(url: string): Promise<Result<{ text: string; url: string }>>;
   /** import súboru .ics do kalendára; null = zrušené */
   calImport(accountId: string, calendarId: string): Promise<Result<{ ok: number; failed: number } | null>>;
   /** otvorí Teams na webe s prihlásením Outlook konta – na vytvorenie odkazu na schôdzu */

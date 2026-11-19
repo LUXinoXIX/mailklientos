@@ -1,5 +1,5 @@
 // Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, FluentProvider, Input } from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, FluentProvider, Input, Tooltip } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
@@ -17,7 +17,7 @@ import { TemplatesDialog } from './components/TemplatesDialog';
 import { ThemeDialog } from './components/ThemeDialog';
 import { CryptoDialog } from './components/CryptoDialog';
 import { AboutDialog, ShortcutsDialog } from './components/AboutDialog';
-import { MailIcon } from './icons';
+import { EditSmallIcon, MailIcon } from './icons';
 import { MessageView, type MessageRef } from './components/MessageView';
 import { Splitter } from './components/Splitter';
 import { ContextMenu, type CtxItem, type CtxState } from './components/ContextMenu';
@@ -33,7 +33,7 @@ import { AddressBook } from './components/AddressBook';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, WEBMAIL_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, WEBMAIL_MODULES, AccountRailFooter, ModuleRail, RailEditor, Ribbon, TopBar, customizeRail, type ImapModule, type M365Module, type ModuleDef, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
 
@@ -1013,12 +1013,12 @@ export function App() {
   const rPanels = settings.rightPanels ?? [];
   const rPanelId = settings.rightPanelOf?.[activeKey] ?? 'shared';
   const rPanel = rPanels.find((p) => p.id === rPanelId);
-  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers } : settings;
+  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers, icsFeeds: rPanel.icsFeeds } : settings;
   const savePanelView = (v: AppSettings) =>
     saveSettings(
       rPanel
-        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers } : p)) }
-        : { ...settings, webs: v.webs, launchers: v.launchers },
+        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds } : p)) }
+        : { ...settings, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds },
     );
   const allPanelWebs = [...settings.webs, ...rPanels.flatMap((p) => p.webs)];
   const panelKeyName = (k: string) => (k === ALL ? 'Všetky kontá' : railAccounts.find((a) => a.id === k)?.name ?? '');
@@ -1046,7 +1046,7 @@ export function App() {
       // kópia dostane nové id webov = vlastné prihlásenie, oddelené od pôvodného panela
       const webs = copy ? panelView.webs.map((w) => ({ ...w, id: nid() })) : [];
       const launchers = copy ? panelView.launchers.map((l) => ({ ...l, id: nid() })) : [];
-      saveSettings({ ...settings, rightPanels: [...rPanels, { id, name, webs, launchers }], rightPanelOf: { ...(settings.rightPanelOf ?? {}), [activeKey]: id } });
+      saveSettings({ ...settings, rightPanels: [...rPanels, { id, name, webs, launchers, icsFeeds: copy ? panelView.icsFeeds?.map((f) => ({ ...f })) : undefined }], rightPanelOf: { ...(settings.rightPanelOf ?? {}), [activeKey]: id } });
       if (webs[0]) setRightActive(webs[0].id);
     },
     onRename: (id, name) => saveSettings({ ...settings, rightPanels: rPanels.map((p) => (p.id === id ? { ...p, name } : p)) }),
@@ -1374,11 +1374,20 @@ export function App() {
   }, [selection, folders]);
 
   // modul M365: otvorí alebo prepne kartu
+  const m365Base = (acc: M365Account) => (acc.host === 'web' ? WEBMAIL_MODULES : acc.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES);
+  const [railEdit, setRailEdit] = useState(false);
+  const railOff = !!activeM365?.railOff;
   function selectM365Module(acc: M365Account, mod: M365Module) {
     const st = tabs[acc.id] ?? initialTabs(acc);
     if (mod === 'mail') return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
     const key = `${baseKey(acc.id)}:${mod}`;
     const exists = st.tabs.some((x) => x.key === key);
+    // vlastný odkaz v páse aplikácií
+    const cust = (mod as string).startsWith('custom:') ? acc.railCustom?.find((c) => c.key === mod) : undefined;
+    if (cust) {
+      setTabs((t) => ({ ...t, [acc.id]: { tabs: exists ? st.tabs : [...st.tabs, { key, title: cust.label, url: cust.url }], active: key } }));
+      return;
+    }
     setTabs((t) => ({
       ...t,
       [acc.id]: {
@@ -1674,7 +1683,10 @@ export function App() {
           {secretsWarning && (
             <div className="banner warn">Systémové úložisko hesiel nie je dostupné: heslá sa držia len do zatvorenia aplikácie.</div>
           )}
-          <main className={`body ${rightOpen ? 'with-right' : ''}`} style={rightOpen ? { gridTemplateColumns: `68px minmax(0, 1fr) ${widths.right}px` } : undefined}>
+          <main
+            className={`body ${rightOpen ? 'with-right' : ''} ${railOff ? 'no-rail' : ''}`}
+            style={rightOpen ? { gridTemplateColumns: `${railOff ? '0px' : '68px'} minmax(0, 1fr) ${widths.right}px` } : railOff ? { gridTemplateColumns: '0px minmax(0, 1fr)' } : undefined}
+          >
             {rightOpen && (
               <Splitter
                 side="right"
@@ -1689,7 +1701,21 @@ export function App() {
               />
             )}
             {activeM365 ? (
-              <ModuleRail modules={activeM365.host === 'web' ? WEBMAIL_MODULES : activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              activeM365.railOff ? null : (
+                <ModuleRail
+                  modules={customizeRail(m365Base(activeM365) as ModuleDef<string>[], activeM365)}
+                  active={m365ActiveModule}
+                  color={topColor}
+                  onSelect={(k) => selectM365Module(activeM365, k as M365Module)}
+                  footer={
+                    <Tooltip content="Upraviť pás aplikácií: poradie, skryť/pridať, vypnúť" relationship="label" positioning="after">
+                      <button className="rail-btn rail-edit-btn" onClick={() => setRailEdit(true)} aria-label="Upraviť pás aplikácií">
+                        <EditSmallIcon />
+                      </button>
+                    </Tooltip>
+                  }
+                />
+              )
             ) : (
               <ModuleRail
                 modules={activeImap ? IMAP_MODULES : IMAP_MODULES.filter((m) => m.key !== 'calendar')}
@@ -2079,6 +2105,19 @@ export function App() {
               />
             )}
           </main>
+          {railEdit && activeM365 && (
+            <RailEditor
+              base={m365Base(activeM365) as ModuleDef<string>[]}
+              acc={activeM365}
+              onClose={() => setRailEdit(false)}
+              onSave={(v) => {
+                setRailEdit(false);
+                const { hasPassword: _h, webHasPassword: _w, ...plain } = activeM365 as M365Account & { hasPassword?: boolean; webHasPassword?: boolean };
+                void api?.saveAccount({ ...plain, ...v }).then(() => void loadAccounts());
+                if (v.railOff) setStatus('Pás aplikácií je vypnutý. Zapneš ho v nastaveniach konta (pravý klik na konto → Nastavenia).');
+              }}
+            />
+          )}
           {undo && (
             <div className="undo-bar" role="status">
               <span>Odosiela sa „{undo.subject || '(bez predmetu)'}“…</span>

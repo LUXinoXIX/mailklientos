@@ -882,3 +882,62 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 /* Súhrn: tenká deliaca čiara pod pozdravom, dlaždice nie sú nalepené na nadpis */
 .sum-head { padding-bottom: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .45); box-shadow: 0 1px 0 rgba(0, 0, 0, .06); }
 .dialog-content > .fui-MessageBar { flex-shrink: 0; }
+/* výber správ: výraznejšia (tmavšia) modrá a orámovanie, pri viacerých vybraných ešte zreteľnejšie */
+.msg.selected { background: color-mix(in srgb, var(--colorBrandBackground) 16%, var(--colorNeutralBackground1)) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--colorBrandBackground) 45%, transparent); }
+.msg.selected.unread { box-shadow: inset 6px 0 0 var(--colorBrandBackground), inset 0 0 0 1px color-mix(in srgb, var(--colorBrandBackground) 45%, transparent); }
+.msg.multi-sel { background: color-mix(in srgb, var(--colorBrandBackground) 26%, var(--colorNeutralBackground1)) !important; box-shadow: inset 0 0 0 1.5px var(--colorBrandBackground); }
+.msg.multi-sel.unread { box-shadow: inset 6px 0 0 var(--colorBrandBackground), inset 0 0 0 1.5px var(--colorBrandBackground); }
+.msg.multi-sel + .msg.multi-sel { box-shadow: inset 0 0 0 1.5px var(--colorBrandBackground), inset 0 1px 0 color-mix(in srgb, var(--colorBrandBackground) 26%, var(--colorNeutralBackground1)); }
+.msg.multi-sel .msg-from, .msg.multi-sel .msg-subject { color: var(--colorNeutralForeground1); }
+/* kalendáre z odkazu na celú šírku: stĺpec pre každý kalendár */
+.sum-feeds-wide { margin-top: 0; }
+.sum-feed-cols { display: grid; gap: 18px; }
+.sum-feed-cols .sum-feed + .sum-feed { margin-top: 0; }
+.sum-feed-cols .sum-feed { min-width: 0; }
+.sum-feed-cols .sum-feed-name { font-size: 13px; font-weight: 600; opacity: .9; padding-bottom: 4px; border-bottom: 1px solid rgba(127, 127, 127, .3); margin-bottom: 2px; }
+.sum-h { display: flex; align-items: center; gap: 6px; }
+.sum-wide-btn { margin-left: auto; border: 0; background: rgba(127, 127, 127, .15); color: inherit; border-radius: 6px; padding: 1px 7px; cursor: pointer; font-size: 12px; }
+.sum-wide-btn:hover { background: rgba(127, 127, 127, .3); }
+@media (max-width: 900px) { .sum-feed-cols { grid-template-columns: 1fr !important; } }
+/* Programy v pravom paneli: malé ikony s popisom v tooltipe */
+.launchers-grid { grid-template-columns: repeat(auto-fill, 36px); gap: 6px; }
+.launcher-btn, .launcher-add { width: 36px; height: 36px; padding: 0; gap: 0; }
+.launcher-btn svg, .launcher-add svg { width: 18px; height: 18px; }
+.launcher-x { top: -5px; right: -5px; width: 16px; height: 16px; }
+.launchers-title { margin-bottom: 4px; }
+/* karta Kalendáre (ICS) */
+.ics-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ics-tools { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--colorNeutralStroke3); }
+.ics-tools .grow { flex: 1; }
+.ics-edit { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--colorNeutralBackground2); border-bottom: 1px solid var(--colorNeutralStroke3); }
+.ics-edit-row { display: flex; align-items: center; gap: 4px; }
+.ics-edit-row .grow { flex: 1; min-width: 0; }
+.ics-edit select { font: inherit; font-size: 12px; padding: 2px; border-radius: 4px; border: 1px solid var(--colorNeutralStroke1); background: var(--colorNeutralBackground1); color: inherit; }
+.ics-name { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground1); color: inherit; }
+.ics-color { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
+.ics-add { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--colorNeutralStroke2); }
+.ics-list { flex: 1; overflow: auto; padding: 4px 10px 12px; }
+.ics-sec { padding-top: 8px; }
+.ics-sec-h { display: flex; align-items: center; gap: 6px; font-weight: 600; padding-bottom: 4px; }
+.ics-sec .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.ics-ev { display: flex; flex-direction: column; padding: 4px 8px; margin: 3px 0; border-left: 3px solid; border-radius: 0 6px 6px 0; background: var(--colorNeutralBackground2); }
+.ics-ev.live { background: var(--colorBrandBackground2); }
+.ics-when { font-size: 11px; color: var(--colorNeutralForeground3); }
+.ics-sum { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ics-loc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ics-mini { border: 0; background: none; width: 22px; height: 22px; border-radius: 4px; cursor: pointer; color: inherit; padding: 0; flex: none; } .ics-mini:hover:not(:disabled) { background: var(--colorNeutralBackground1Hover); } .ics-mini:disabled { opacity: .3; cursor: default; }
+/* úprava pása aplikácií Outlooku */
+.body.no-rail > .rail { display: none; }
+.rail-edit-btn { opacity: .55; }
+.rail-edit-btn:hover { opacity: 1; }
+.rail-edit { display: flex; flex-direction: column; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; max-height: 340px; overflow: auto; }
+.rail-edit-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--colorNeutralStroke3); background: var(--colorNeutralBackground1); cursor: grab; }
+.rail-edit-row.dragging { opacity: .5; background: var(--colorBrandBackground2); }
+.rail-edit-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-edit-grip { color: var(--colorNeutralForeground3); letter-spacing: -2px; }
+.rail-edit-ico { display: inline-flex; width: 20px; justify-content: center; }
+.rail-edit-ico svg { width: 18px; height: 18px; }
+/* Súhrn – správy z RSS */
+.sum-news { align-items: flex-start; }
+.sum-news-img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; flex: none; }
+.sum-news-t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
