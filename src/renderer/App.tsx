@@ -30,6 +30,7 @@ import { useAttachmentGuard } from './components/AttachmentGuard';
 import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
+import { SettingsTransfer } from './components/SettingsTransfer';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
@@ -173,6 +174,7 @@ export function App() {
   const [outboxTick, setOutboxTick] = useState(0);
   const [scheduled, setScheduled] = useState<OutboxItem[]>([]);
   const [status, setStatus] = useState('');
+  const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
@@ -1173,18 +1175,7 @@ export function App() {
   async function runIo(k: 'eml' | 'mbox' | 'import' | 'thunderbird' | 'update' | 'print' | 'pdf' | 'backup' | 'restore' | 'shortcuts') {
     if (!api) return;
     if (k === 'shortcuts') return openDialog({ kind: 'shortcuts' });
-    if (k === 'backup') {
-      const r = await api.backupExport();
-      return setStatus(r.ok ? (r.data ? `Záloha uložená: ${r.data} (bez hesiel).` : '') : r.error);
-    }
-    if (k === 'restore') {
-      const r = await api.backupImport();
-      if (!r.ok) return setStatus(r.error);
-      if (!r.data.restored) return;
-      await loadAccounts();
-      void api.getSettings().then((x) => x.ok && setSettings(x.data));
-      return setStatus(`Nastavenia obnovené${r.data.accounts ? `, pridané kontá: ${r.data.accounts} – zadajte k nim heslá (Nastavenia konta)` : ''}.`);
-    }
+    if (k === 'backup' || k === 'restore') return setTransfer(k === 'backup' ? 'export' : 'import');
     if (k === 'print' || k === 'pdf') {
       if (!current || current.accountId === DEMO_ID) return setStatus('Vyberte správu.');
       const r = await api.printMessage(current.accountId, current.folder, current.uid, k === 'pdf');
@@ -1501,6 +1492,7 @@ export function App() {
     // pripojené k <body>. Trieda .app (celé okno, pozadie) tam spôsobovala zakrytie celého okna = blikanie.
     <FluentProvider theme={getTheme(themeDef)}>
       <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''}`} style={themeVars(themeDef)}>
+        {transfer && <SettingsTransfer mode={transfer} onClose={() => setTransfer(null)} onStatus={setStatus} />}
       <div className="shell">
         <AccountRail
           accounts={railAccounts}
@@ -1522,6 +1514,7 @@ export function App() {
           onToggleSummary={toggleSummary}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
+          onTransfer={(m) => setTransfer(m)}
           kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}

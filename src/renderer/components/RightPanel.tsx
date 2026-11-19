@@ -25,7 +25,7 @@ function LauncherButton(props: { item: LauncherItem; editing: boolean; onRun: ()
   return (
     <div className="launcher">
       <Tooltip content={props.item.name} relationship="label">
-        <button className="launcher-btn" onClick={props.onRun} disabled={props.editing} aria-label={props.item.name}>
+        <button className="launcher-btn" onClick={props.onRun} aria-label={props.item.name}>
           {icon ? <img src={icon} alt="" width={22} height={22} /> : <AppsIcon />}
         </button>
       </Tooltip>
