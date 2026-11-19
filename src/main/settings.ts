@@ -49,7 +49,17 @@ export async function runLauncher(l: LauncherItem): Promise<string> {
     child.unref();
     return '';
   }
-  return shell.openPath(t); // '' = v poriadku, inak text chyby
+  const err = await shell.openPath(t); // '' = v poriadku, inak text chyby
+  if (err && process.platform === 'darwin') {
+    // Mac: záložne cez príkaz open (aplikácie .app aj súbory)
+    return new Promise((res) => {
+      const child = spawn('open', [t], { detached: true, stdio: 'ignore' });
+      child.on('error', (e) => res(`${err} (${e.message})`));
+      child.on('exit', (code) => res(code === 0 ? '' : err));
+      child.unref();
+    });
+  }
+  return err;
 }
 
 /** Dialóg na výber programu. */
