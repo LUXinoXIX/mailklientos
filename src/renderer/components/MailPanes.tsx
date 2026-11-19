@@ -1,5 +1,6 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
 import { useAttachmentGuard } from './AttachmentGuard';
+import { GmailLabels } from './GmailLabels';
 import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -191,6 +192,11 @@ export function groupThreads(list: MessageSummary[]): MessageSummary[][] {
   for (const m of list) {
     const k = key(m);
     if (!parent.has(k)) parent.set(k, k);
+    // Gmail: vlákno určuje server (X-GM-THRID), rovnako ako na webe Gmailu
+    if (m.threadId) {
+      union(k, `gt:${m.accountId}:${m.threadId}`);
+      continue;
+    }
     if (m.messageId) union(k, `id:${m.accountId}:${m.messageId}`);
     if (m.inReplyTo) union(k, `id:${m.accountId}:${m.inReplyTo}`);
     const ns = normSubject(m.subject);
@@ -675,6 +681,8 @@ export function ReadingPane(props: {
   onTogglePin?: () => void;
   /** ďalšie akcie (⋯) – menu na súradniciach */
   onMore?: (x: number, y: number) => void;
+  /** Gmail: štítky správy (priečinky konta pre „+ Štítok“) */
+  gmail?: { folders: FolderInfo[]; onChanged: (removedCurrent: boolean) => void };
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
@@ -746,6 +754,7 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {props.gmail && !demo && <GmailLabels message={m} folders={props.gmail.folders} onChanged={props.gmail.onChanged} />}
       {props.onUnsubscribe && (
         <div className="unsub">
           Hromadná správa (newsletter).
