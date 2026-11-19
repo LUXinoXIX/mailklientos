@@ -5,7 +5,7 @@
 import { attachContextMenu } from './contextmenu';
 import path from 'node:path';
 import { app, BrowserWindow, session, shell, type Session, type WebContents } from 'electron';
-import { loadAccounts } from './accounts';
+import { getPassword, loadAccounts } from './accounts';
 import type { WebEvent } from '../core/api';
 import { log } from './diagnostics';
 
@@ -102,8 +102,74 @@ function installCertHandler() {
 /** Skupina kariet podľa relácie: „acc-<id>“ pre kontá M365, „web-<id>“ pre pravý panel. */
 const groupOf = (guest: WebContents) => path.basename(guest.session.storagePath ?? '');
 
+/** Skript, ktorý vyplní prihlasovací formulár webmailu (meno + heslo), voliteľne ho odošle.
+    Podporuje aj prihlásenie v dvoch krokoch (najprv meno, potom heslo na ďalšej stránke). */
+const FILL = `(function (u, p, submit) {
+  const vis = (e) => !!e && e.offsetParent !== null && !e.disabled && !e.readOnly;
+  const set = (el, v) => {
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    d.set.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const userLike = (x) => /^(text|email|)$/i.test(x.type || 'text') && !/search|captcha|otp|code/i.test((x.name || '') + (x.id || ''));
+  const pw = [...document.querySelectorAll('input[type=password]')].find(vis);
+  if (!pw) {
+    const only = [...document.querySelectorAll('input')].filter(vis).find((x) => userLike(x) && /user|login|mail|meno|account|name/i.test((x.name || '') + (x.id || '') + (x.autocomplete || '')));
+    if (only && u && !only.value) { set(only, u); return 'user'; }
+    return 'none';
+  }
+  if (pw.value) return 'already';
+  const scope = pw.form || document;
+  const inputs = [...scope.querySelectorAll('input')].filter(vis);
+  const i = inputs.indexOf(pw);
+  const user = inputs.slice(0, i < 0 ? inputs.length : i).reverse().find(userLike);
+  if (user && u && !user.value) set(user, u);
+  set(pw, p);
+  if (submit) {
+    setTimeout(() => {
+      const btn = scope.querySelector('button[type=submit], input[type=submit]') || [...scope.querySelectorAll('button')].find(vis);
+      if (btn) btn.click(); else if (pw.form && pw.form.requestSubmit) pw.form.requestSubmit();
+    }, 350);
+    return 'submitted';
+  }
+  return 'filled';
+})`;
+const lastSubmit = new Map<string, number>();
+
+/** Vložený webmail s uloženým heslom: po načítaní prihlasovacej stránky vyplniť meno a heslo. */
+function autofill(guest: WebContents, group: string) {
+  if (!group.startsWith('acc-')) return;
+  const id = group.slice(4);
+  const acc = loadAccounts().find((a) => a.id === id);
+  if (!acc || acc.kind !== 'm365' || acc.host !== 'web' || !acc.webUrl) return;
+  try {
+    if (siteOf(guest.getURL()) !== siteOf(acc.webUrl)) return; // len na stránke webmailu, nie na cudzej
+  } catch {
+    return;
+  }
+  const pass = getPassword(id);
+  if (!pass) return;
+  // automatické odoslanie najviac raz za 2 minúty – pri zlom hesle sa nezacyklí
+  const canSubmit = !!acc.webAutoLogin && Date.now() - (lastSubmit.get(id) ?? 0) > 120_000;
+  const run = () =>
+    guest
+      .executeJavaScript(`${FILL}(${JSON.stringify(acc.webUser ?? '')}, ${JSON.stringify(pass)}, ${canSubmit})`, true)
+      .then((r: string) => {
+        if (r === 'submitted') lastSubmit.set(id, Date.now());
+        return r;
+      })
+      .catch(() => 'error');
+  void run().then((r) => {
+    // prihlasovací formulár sa niekedy vykreslí až po načítaní (Zimbra, moderné webmaily)
+    if (r === 'none') setTimeout(() => void run(), 1500);
+  });
+}
+
 function setupGuest(guest: WebContents) {
   const group = groupOf(guest);
+  guest.on('did-finish-load', () => autofill(guest, group));
+  guest.on('did-navigate-in-page', () => setTimeout(() => autofill(guest, group), 600));
   guest.setWindowOpenHandler(({ url, disposition }) => {
     // 1) prihlásenie: malé okno (OAuth potrebuje window.opener)
     if (isAuth(url) || (disposition === 'new-window' && isMs(url) && /oauth|authorize|login/i.test(url)))

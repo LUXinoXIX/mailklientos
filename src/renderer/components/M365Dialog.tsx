@@ -68,6 +68,10 @@ export function M365Dialog(props: {
   const [name, setName] = useState(e?.name ?? (props.host === 'web' ? 'Webmail' : props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
   const [webUrl, setWebUrl] = useState(e?.webUrl ?? '');
   const [ignoreCert, setIgnoreCert] = useState(!!e?.webIgnoreCert);
+  const [webUser, setWebUser] = useState(e?.webUser ?? '');
+  const [webPass, setWebPass] = useState('');
+  const [autoLogin, setAutoLogin] = useState(!!e?.webAutoLogin);
+  const hasStored = !!(e as { webHasPassword?: boolean } | undefined)?.webHasPassword;
   const [email, setEmail] = useState(e?.email ?? '');
   const [short, setShort] = useState(e?.short ?? '');
   const [icon, setIcon] = useState<IconCfg>({ iconKind: e?.iconKind, iconText: e?.iconText, iconPreset: e?.iconPreset, iconImage: e?.iconImage });
@@ -99,11 +103,17 @@ export function M365Dialog(props: {
       host,
       webUrl: web ? url : undefined,
       webIgnoreCert: web && ignoreCert ? true : undefined,
+      webUser: web && webUser.trim() ? webUser.trim() : undefined,
+      webAutoLogin: web && webUser.trim() && autoLogin ? true : undefined,
       short: short.trim() || undefined,
       ...icon,
     };
     setBusy(true);
-    const r = await window.mailApi.saveAccount(acc);
+    if (web && webUser.trim() && !webPass && !hasStored) {
+      setBusy(false);
+      return setError('Zadaj heslo, alebo vymaž prihlasovacie meno, ak ho nechceš ukladať.');
+    }
+    const r = await window.mailApi.saveAccount(acc, web && webPass ? webPass : undefined);
     setBusy(false);
     if (r.ok) props.onSaved(acc);
     else setError(r.error);
@@ -133,7 +143,7 @@ export function M365Dialog(props: {
             <MessageBar intent="info">
               <MessageBarBody>
                 {web
-                  ? 'Webová pošta sa zobrazí ako stránka v okne s vlastným, oddeleným prihlásením. Prihlásiš sa priamo v nej; aplikácia heslo neukladá. Počet neprečítaných sa číta z názvu stránky, ak ho webmail uvádza.'
+                  ? 'Webová pošta sa zobrazí ako stránka v okne s vlastným prihlásením. Heslo môžeš uložiť nižšie – program ho vyplní na prihlasovacej stránke.'
                   : 'Konto sa zobrazí ako vložený Outlook na webe. Prihlásiš sa priamo v ňom (aj s overením MFA); aplikácia heslo neukladá.'}
               </MessageBarBody>
             </MessageBar>
@@ -141,6 +151,20 @@ export function M365Dialog(props: {
               <Field label="Adresa webmailu" required>
                 <Input value={webUrl} placeholder="https://mail.pdg.sk" onChange={(_, d) => setWebUrl(d.value)} />
               </Field>
+            )}
+            {web && (
+              <div className="webmail-cred">
+                <div className="grid2">
+                  <Field label="Prihlasovacie meno" hint="Nepovinné. Program ho s heslom vyplní na prihlasovacej stránke.">
+                    <Input value={webUser} autoComplete="off" placeholder="meno alebo meno@pdg.sk" onChange={(_, d) => setWebUser(d.value)} />
+                  </Field>
+                  <Field label="Heslo" hint={hasStored ? 'Heslo je uložené. Nové zadaj len pri zmene.' : 'Uloží sa zašifrované v trezore systému (ako heslá IMAP kont).'}>
+                    <Input type="password" value={webPass} autoComplete="new-password" placeholder={hasStored ? '••••••••' : ''} disabled={!webUser.trim()} onChange={(_, d) => setWebPass(d.value)} />
+                  </Field>
+                </div>
+                <Checkbox label="Po vyplnení sa rovno prihlásiť" checked={autoLogin} disabled={!webUser.trim()} onChange={(_, d) => setAutoLogin(!!d.checked)} />
+                {hasStored && !webUser.trim() && <span className="muted small">Uložené heslo sa po uložení zabudne.</span>}
+              </div>
             )}
             {web && (
               <Checkbox

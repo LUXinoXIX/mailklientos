@@ -313,6 +313,13 @@ export function App() {
   }, [loadAccounts, api]); // eslint-disable-line react-hooks/exhaustive-deps
   const startupDone = useRef(false);
   const summaryEnabled = settings.summary?.enabled !== false;
+  const toggleSummary = () => {
+    const on = !summaryEnabled;
+    saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: on } });
+    if (on) setActiveId(SUMMARY);
+    else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
+    setStatus(on ? 'Súhrn je zapnutý.' : 'Súhrn je vypnutý. Zapneš ho v karte Zobrazenie alebo v ozubenom kolieske.');
+  };
   const summaryOn = summaryEnabled && activeId === SUMMARY && !POP_COMPOSE && !POP_VIEW;
   useEffect(() => {
     if (activeId && activeId !== SUMMARY) localStorage.setItem('lastAccount', activeId);
@@ -1503,12 +1510,7 @@ export function App() {
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
           showSummary={summaryEnabled}
-          onToggleSummary={() => {
-            const on = !summaryEnabled;
-            saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: on } });
-            if (on) setActiveId(SUMMARY);
-            else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
-          }}
+          onToggleSummary={toggleSummary}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
           kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
@@ -1547,7 +1549,7 @@ export function App() {
               onDisable={() => {
                 saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: false } });
                 setActiveId(localStorage.getItem('lastAccount') ?? '');
-                setStatus('Súhrn je vypnutý. Zapneš ho v ozubenom kolieske dole vľavo.');
+                setStatus('Súhrn je vypnutý. Zapneš ho v karte Zobrazenie alebo v ozubenom kolieske dole vľavo.');
               }}
             />
           )}
@@ -1616,6 +1618,8 @@ export function App() {
               onSendReceive={() => void sendReceive()}
               myDay={myDay}
               onMyDay={(v) => saveSettings({ ...settings, myDay: v })}
+              summaryEnabled={summaryEnabled}
+              onToggleSummary={toggleSummary}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
@@ -1860,6 +1864,13 @@ export function App() {
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
                     onMulti={setMultiSel}
+                    listKey={`${selection.accountId}/${selection.folder}/${mailTick}`}
+                    onFlaggedServer={async () => {
+                      if (!api || demo) return [];
+                      const targets = selection.accountId === ALL ? imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, folder: 'INBOX' })) : [{ id: selection.accountId, folder: selection.folder }];
+                      const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, '', 'flagged')));
+                      return rs.flatMap((r) => (r.ok ? r.data : [])).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+                    }}
                     onQuick={(m, a) =>
                       void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }

@@ -1,5 +1,5 @@
 // Kalendár IMAP konta (CalDAV): deň, pracovný týždeň, týždeň, mesiac; viac kalendárov s farbami; nová udalosť kliknutím do mriežky.
-import { Button, Checkbox, Spinner, Tab, TabList } from '@fluentui/react-components';
+import { Button, Checkbox, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, Tab, TabList } from '@fluentui/react-components';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ImapAccountPublic } from '../../core/account';
 import type { DavCollection } from '../../core/api';
@@ -22,6 +22,10 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
   const [view, setView] = useState<View>(() => (localStorage.getItem('calView') as View) || 'workweek');
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [cals, setCals] = useState<DavCollection[] | null>(null);
+  // správa kalendárov: lokálny kalendár, odber z adresy, import .ics, premenovanie
+  const [calTick, setCalTick] = useState(0);
+  const [form, setForm] = useState<{ kind: 'new' | 'sub' | 'rename' | 'import'; calId?: string; name: string; url: string; target: string; busy?: boolean; err?: string } | null>(null);
+  const isLocal = (id: string) => id.startsWith('local:') || id.startsWith('sub:');
   const [hidden, setHidden] = useState<string[]>(() => JSON.parse(localStorage.getItem(`calHidden:${props.account.id}`) ?? '[]') as string[]);
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,7 +58,7 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
         setError(`${r.error}${r.hint ? ` ${r.hint}` : ''}`);
       }
     });
-  }, [api, props.account.id]);
+  }, [api, props.account.id, calTick]);
 
   useEffect(() => {
     if (!api || !cals?.length) return;
@@ -154,8 +158,82 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
                   </span>
                 }
               />
+              {isLocal(c.id) && (
+                <Menu>
+                  <MenuTrigger disableButtonEnhancement>
+                    <button className="cal-more" aria-label={`Možnosti kalendára ${c.name}`}>⋯</button>
+                  </MenuTrigger>
+                  <MenuPopover>
+                    <MenuList>
+                      <MenuItem onClick={() => setForm({ kind: 'rename', calId: c.id, name: c.name.replace(/ \(odber\)$/, ''), url: '', target: '' })}>Premenovať…</MenuItem>
+                      {!c.readOnly && <MenuItem onClick={() => setForm({ kind: 'import', name: '', url: '', target: c.id })}>Importovať .ics sem…</MenuItem>}
+                      {c.readOnly && (
+                        <MenuItem onClick={() => void api?.calSubInfo(c.id).then((r) => r.ok && r.data && props.onStatus(`Odber ${r.data.url} · obnovené ${r.data.refreshedAt ? new Date(r.data.refreshedAt).toLocaleString('sk-SK') : 'ešte nie'}${r.data.error ? ` · chyba: ${r.data.error}` : ''}`))}>
+                          Adresa a stav odberu
+                        </MenuItem>
+                      )}
+                      <MenuItem onClick={() => void api?.calRemove(c.id).then(() => { setCalTick((t) => t + 1); props.onStatus(`Kalendár ${c.name} odstránený.`); })}>
+                        {c.readOnly ? 'Zrušiť odber' : 'Odstrániť kalendár aj udalosti'}
+                      </MenuItem>
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+              )}
             </div>
           ))
+        )}
+        <div className="cal-manage">
+          <button className="link" onClick={() => setForm({ kind: 'new', name: '', url: '', target: '' })}>+ Nový kalendár (v programe)</button>
+          <button className="link" onClick={() => setForm({ kind: 'sub', name: '', url: '', target: '' })}>+ Odber z adresy (iCal, webcal)…</button>
+          <button className="link" onClick={() => setForm({ kind: 'import', name: '', url: '', target: cals?.find((c) => !c.readOnly)?.id ?? '' })} disabled={!cals?.some((c) => !c.readOnly)}>
+            Importovať súbor .ics…
+          </button>
+        </div>
+        {form && (
+          <div className="cal-form">
+            <b>{form.kind === 'new' ? 'Nový kalendár' : form.kind === 'sub' ? 'Odber kalendára' : form.kind === 'rename' ? 'Premenovať kalendár' : 'Import .ics'}</b>
+            {form.kind === 'sub' && (
+              <>
+                <Input size="small" placeholder="https://… alebo webcal://…" value={form.url} onChange={(_, d) => setForm({ ...form, url: d.value })} />
+                <span className="muted small">Napr. sviatky, rozvrh, zdieľaný kalendár z Google/iCloud/Outlooku („verejná adresa vo formáte iCal“). Len na čítanie, obnovuje sa každú hodinu.</span>
+              </>
+            )}
+            {form.kind !== 'import' && <Input size="small" placeholder={form.kind === 'sub' ? 'Názov (nepovinné)' : 'Názov kalendára'} value={form.name} onChange={(_, d) => setForm({ ...form, name: d.value })} />}
+            {form.kind === 'import' && (
+              <Select size="small" value={form.target} onChange={(_, d) => setForm({ ...form, target: d.value })} aria-label="Cieľový kalendár">
+                {(cals ?? []).filter((c) => !c.readOnly).map((c) => <option key={c.id} value={c.id}>{c.name}{isLocal(c.id) ? ' (v programe)' : ' (na serveri)'}</option>)}
+              </Select>
+            )}
+            {form.err && <span className="pane-error">{form.err}</span>}
+            <div className="row gap">
+              <Button
+                size="small"
+                appearance="primary"
+                disabled={form.busy}
+                onClick={async () => {
+                  if (!api) return;
+                  setForm({ ...form, busy: true, err: undefined });
+                  const r =
+                    form.kind === 'new' ? await api.calAddLocal(props.account.id, form.name)
+                    : form.kind === 'sub' ? await api.calSubscribe(props.account.id, form.url, form.name)
+                    : form.kind === 'rename' ? await api.calRename(form.calId!, form.name)
+                    : await api.calImport(props.account.id, form.target);
+                  if (!r.ok) return setForm({ ...form, busy: false, err: r.error });
+                  if (form.kind === 'import') {
+                    const d = r.data as { ok: number; failed: number } | null;
+                    if (!d) return setForm({ ...form, busy: false });
+                    props.onStatus(`Importovaných udalostí: ${d.ok}${d.failed ? `, nepodarilo sa: ${d.failed}` : ''}.`);
+                    setTick((t) => t + 1);
+                  }
+                  setForm(null);
+                  setCalTick((t) => t + 1);
+                }}
+              >
+                {form.busy ? '…' : form.kind === 'import' ? 'Vybrať súbor…' : form.kind === 'sub' ? 'Odoberať' : 'Uložiť'}
+              </Button>
+              <Button size="small" onClick={() => setForm(null)}>Zrušiť</Button>
+            </div>
+          </div>
         )}
       </aside>
       <div className="cal-main">

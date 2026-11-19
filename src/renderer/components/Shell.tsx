@@ -9,7 +9,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  SendReceiveIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  SendReceiveIcon, HomeIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
   CalendarSmallIcon, TasksSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
@@ -265,6 +265,9 @@ export function Ribbon(props: {
   /** náhľad kalendára / úloh vedľa čítacieho panela (len pošta IMAP/Zimbra) */
   myDay?: { calendar: boolean; tasks: boolean };
   onMyDay?: (v: { calendar: boolean; tasks: boolean }) => void;
+  /** úvodná stránka Súhrn zapnutá */
+  summaryEnabled?: boolean;
+  onToggleSummary?: () => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -509,6 +512,11 @@ export function Ribbon(props: {
                   {p.myDay!.tasks ? '✓ ' : ''}Úlohy pri pošte
                 </ToolbarButton>
               </>
+            )}
+            {p.onToggleSummary && (
+              <ToolbarButton icon={<HomeIcon />} onClick={p.onToggleSummary} aria-pressed={!!p.summaryEnabled} title="Úvodná stránka s prehľadom kont, stretnutí a úloh">
+                {p.summaryEnabled ? '✓ ' : ''}Súhrn
+              </ToolbarButton>
             )}
             <ToolbarButton icon={<ConversationIcon />} onClick={() => p.onConversations(!p.conversations)} aria-pressed={p.conversations}>
               {p.conversations ? '✓ ' : ''}Konverzácie
