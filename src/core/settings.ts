@@ -275,6 +275,8 @@ export function normalizeUrl(input: string): string | null {
 
 export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice';
 export interface SummarySettings {
+  /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
+  enabled?: boolean;
   /** čo otvoriť po spustení (predvolene Súhrn) */
   startup?: 'summary' | 'all' | 'last';
   /** poradie a viditeľnosť dlaždíc */

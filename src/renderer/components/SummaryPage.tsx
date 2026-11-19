@@ -100,6 +100,8 @@ export function SummaryPage(props: {
   onOpenTasks: () => void;
   onToggleTask: (t: Task) => void;
   onOpenCalendar: (accountId: string) => void;
+  /** úplne vypnúť Súhrn (zapína sa späť v ozubenom kolieske) */
+  onDisable: () => void;
 }) {
   const api = window.mailApi;
   const s = props.settings;
@@ -280,6 +282,9 @@ export function SummaryPage(props: {
                   <Radio value="all" label="Všetky doručené" />
                   <Radio value="last" label="Naposledy otvorené konto" />
                 </RadioGroup>
+                <Button size="small" appearance="subtle" onClick={props.onDisable} title="Súhrn zmizne z pásu kont; zapneš ho späť v ozubenom kolieske dole vľavo">
+                  Vypnúť Súhrn úplne
+                </Button>
               </section>
               <section>
                 <div className="sum-h">Dlaždice</div>
