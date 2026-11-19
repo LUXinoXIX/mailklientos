@@ -221,3 +221,27 @@ export async function upcoming(url: string, count: number): Promise<CalEvent[]> 
   for (const e of c.list.filter((x) => !x.recurrenceId)) for (const occ of expand(e, from, to, 50)) out.push(occ);
   return out.filter((e) => Date.parse(e.end) > from).sort((a, b) => a.start.localeCompare(b.start)).slice(0, Math.max(1, Math.min(30, count)));
 }
+
+/** Text stránky/kanála RSS pre dlaždicu Správy (spracuje ho rozhranie); 15 min v pamäti, max. 3 MB. */
+const rssCache = new Map<string, { at: number; text: string; url: string }>();
+export async function fetchFeedText(url: string): Promise<{ text: string; url: string }> {
+  const u = url.trim().replace(/^feed:\/\//i, 'https://');
+  if (!/^https?:\/\/\S+$/i.test(u)) throw new UserError('Neplatná adresa (https://…).');
+  const c = rssCache.get(u);
+  if (c && Date.now() - c.at < 15 * 60_000) return { text: c.text, url: c.url };
+  const r = await net.fetch(u, { headers: { Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8, */*;q=0.5' } });
+  if (!r.ok) throw new UserError(`Stránka vrátila chybu ${r.status}.`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 3 * 1024 * 1024) throw new UserError('Kanál je príliš veľký.');
+  // kódovanie z hlavičky XML (napr. windows-1250), inak UTF-8
+  const head = buf.subarray(0, 300).toString('latin1');
+  const enc = /encoding=["']([\w-]+)["']/i.exec(head)?.[1] ?? /charset=([\w-]+)/i.exec(r.headers.get('content-type') ?? '')?.[1] ?? 'utf-8';
+  let text: string;
+  try {
+    text = new TextDecoder(enc.toLowerCase()).decode(buf);
+  } catch {
+    text = new TextDecoder('utf-8').decode(buf);
+  }
+  rssCache.set(u, { at: Date.now(), text, url: r.url || u });
+  return { text, url: r.url || u };
+}

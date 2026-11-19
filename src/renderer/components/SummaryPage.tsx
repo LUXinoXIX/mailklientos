@@ -8,6 +8,7 @@ import type { MessageSummary, OutboxItem } from '../../core/api';
 import type { CalEvent } from '../../core/ical';
 import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { SummarySettings, SummaryTile, Task } from '../../core/settings';
+import { loadFeed, type Feed } from '../rss';
 
 export const SUMMARY = '__summary__';
 
@@ -18,8 +19,9 @@ const TILE_LABEL: Record<SummaryTile, string> = {
   flagged: 'S vlajkou a pripnuté',
   notice: 'Treba si všimnúť',
   feeds: 'Kalendár z odkazu',
+  news: 'Správy',
 };
-const DEFAULT_TILES: { id: SummaryTile; on: boolean }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' }));
+const DEFAULT_TILES: { id: SummaryTile; on: boolean }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds', 'news'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' && id !== 'news' }));
 
 // Vstavané tapety – vlastné jednoduché kresby (vlny), žiadne cudzie obrázky.
 const WALLS: Record<string, { name: string; dark: boolean; bg: [string, string, string]; waves: [string, string, string] }> = {
@@ -115,6 +117,24 @@ export function SummaryPage(props: {
   const fileRef = useRef<HTMLInputElement>(null);
   const [feedData, setFeedData] = useState<Record<string, { list?: CalEvent[]; error?: string }>>({});
   const [feedForm, setFeedForm] = useState({ url: '', name: '', count: 5 });
+  // správy z RSS
+  const news = s.news ?? [];
+  const [newsData, setNewsData] = useState<Record<string, { feed?: Feed; error?: string }>>({});
+  const [newsForm, setNewsForm] = useState({ url: '', name: '', count: 5 });
+  const newsKey = news.map((n) => n.url).join(',');
+  useEffect(() => {
+    if (!news.length) return;
+    let alive = true;
+    const load = () => {
+      for (const n of news) void loadFeed(n.url).then((feed) => alive && setNewsData((d) => ({ ...d, [n.id]: { feed } }))).catch((e) => alive && setNewsData((d) => ({ ...d, [n.id]: { error: (e as Error).message } })));
+    };
+    load();
+    const t = window.setInterval(load, 20 * 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [newsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const feeds = s.feeds ?? [];
   // kalendáre z odkazu na celú šírku: každý vo vlastnom stĺpci, vždy pod ostatnými dlaždicami
   const wideFeeds = !!s.feedsWide && feeds.length > 0 && (s.tiles ?? []).find((t) => t.id === 'feeds')?.on !== false;
@@ -288,6 +308,33 @@ export function SummaryPage(props: {
             })}
           </>
         );
+      case 'news':
+        return (
+          <>
+            {!news.length && <div className="sum-dim">Pridaj RSS kanál v „Upraviť súhrn“ – napr. dennikn.sk/feed alebo adresu webu, kanál sa nájde sám.</div>}
+            {news.map((n) => {
+              const d = newsData[n.id];
+              return (
+                <div key={n.id} className="sum-feed">
+                  {news.length > 1 && <div className="sum-feed-name">{n.name}</div>}
+                  {!d && <div className="sum-dim">Načítavam…</div>}
+                  {d?.error && <div className="sum-dim">⚠ {d.error}</div>}
+                  {d?.feed?.items.slice(0, n.count).map((it, i) => (
+                    <button key={i} className="sum-row sum-click sum-news" onClick={() => void api?.openExternal(it.link)} title={it.title}>
+                      {it.image && <img src={it.image} alt="" className="sum-news-img" loading="lazy" referrerPolicy="no-referrer" />}
+                      <span className="grow sum-news-t">{it.title}</span>
+                      {it.date && !Number.isNaN(Date.parse(it.date)) && (
+                        <span className="sum-pill">
+                          {dayKey(new Date(it.date)) === today ? new Date(it.date).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' }) : new Date(it.date).toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' })}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </>
+        );
       case 'notice': {
         const items: string[] = [];
         if (failed.length) items.push(`${failed.length} ${failed.length === 1 ? 'správa sa nepodarila odoslať' : 'správy sa nepodarilo odoslať'} – skúsi sa znova (Odoslať a prijať)`);
@@ -413,6 +460,46 @@ export function SummaryPage(props: {
                       const tilesNow = tiles.map((t) => (t.id === 'feeds' ? { ...t, on: true } : t));
                       props.onSettings({ ...s, tiles: tilesNow, feeds: [...feeds, { id: Math.random().toString(36).slice(2, 10), name, url, count: feedForm.count }] });
                       setFeedForm({ url: '', name: '', count: 5 });
+                    }}
+                  >
+                    Pridať
+                  </Button>
+                </div>
+              </section>
+              <section>
+                <div className="sum-h">Správy (RSS)</div>
+                {news.map((n) => (
+                  <div key={n.id} className="sum-tile-set">
+                    <span className="grow sum-ell" title={n.url}>{newsData[n.id]?.feed?.title && n.name === n.url ? newsData[n.id]!.feed!.title : n.name}</span>
+                    <select className="sum-count" value={n.count} onChange={(ev) => props.onSettings({ ...s, news: news.map((x) => (x.id === n.id ? { ...x, count: Number(ev.target.value) } : x)) })} aria-label="Počet správ">
+                      {[3, 5, 8, 10, 15].map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                    <Button size="small" appearance="subtle" onClick={() => props.onSettings({ ...s, news: news.filter((x) => x.id !== n.id) })} aria-label={`Odstrániť ${n.name}`}>×</Button>
+                  </div>
+                ))}
+                <input className="sum-input" placeholder="dennikn.sk/feed alebo adresa webu" value={newsForm.url} onChange={(ev) => setNewsForm({ ...newsForm, url: ev.target.value })} />
+                <div className="sum-tile-set">
+                  <input className="sum-input grow" placeholder="Názov (nepovinné)" value={newsForm.name} onChange={(ev) => setNewsForm({ ...newsForm, name: ev.target.value })} />
+                  <select className="sum-count" value={newsForm.count} onChange={(ev) => setNewsForm({ ...newsForm, count: Number(ev.target.value) })} aria-label="Počet správ">
+                    {[3, 5, 8, 10, 15].map((k) => <option key={k} value={k}>{k} správ</option>)}
+                  </select>
+                  <Button
+                    size="small"
+                    disabled={!newsForm.url.trim()}
+                    onClick={async () => {
+                      let url = newsForm.url.trim();
+                      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+                      let name = newsForm.name.trim();
+                      if (!name) {
+                        try {
+                          name = (await loadFeed(url)).title || new URL(url).hostname.replace(/^www\./, '');
+                        } catch {
+                          name = new URL(url).hostname.replace(/^www\./, '');
+                        }
+                      }
+                      const tilesNow = tiles.map((t) => (t.id === 'news' ? { ...t, on: true } : t));
+                      props.onSettings({ ...s, tiles: tilesNow, news: [...news, { id: Math.random().toString(36).slice(2, 10), name, url, count: newsForm.count }] });
+                      setNewsForm({ url: '', name: '', count: 5 });
                     }}
                   >
                     Pridať
