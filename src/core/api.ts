@@ -273,6 +273,8 @@ export interface MailApi {
   runRules(accountId: string, folder: string): Promise<Result<number>>;
   /** fulltext v lokálnej cache */
   searchLocal(q: string, accountId?: string, folder?: string, field?: string): Promise<Result<MessageSummary[]>>;
+  /** správy s vlajkou alebo pripnuté zo všetkých kont (z lokálnej cache) */
+  flaggedAll(limit?: number): Promise<Result<MessageSummary[]>>;
   /** hľadanie na serveri (IMAP SEARCH) */
   searchServer(accountId: string, folder: string, q: string, field?: string): Promise<Result<MessageSummary[]>>;
   send(accountId: string, msg: SendInput): Promise<Result<{ messageId: string; savedToSent: boolean }>>;

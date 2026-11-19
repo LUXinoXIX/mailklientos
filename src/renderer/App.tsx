@@ -30,6 +30,7 @@ import { useAttachmentGuard } from './components/AttachmentGuard';
 import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
+import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
   IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
@@ -297,8 +298,24 @@ export function App() {
   }, [api]);
   useEffect(() => {
     void loadAccounts();
-    void api?.getSettings().then((r) => r.ok && setSettings(r.data));
-  }, [loadAccounts, api]);
+    void api?.getSettings().then((r) => {
+      if (!r.ok) return;
+      setSettings(r.data);
+      // úvodná stránka po spustení (len hlavné okno)
+      if (!POP_COMPOSE && !POP_VIEW && !startupDone.current) {
+        startupDone.current = true;
+        const st = r.data.summary?.startup ?? 'summary';
+        if (st === 'summary') setActiveId(SUMMARY);
+        else if (st === 'all') setActiveId(ALL);
+        else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
+      }
+    });
+  }, [loadAccounts, api]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startupDone = useRef(false);
+  const summaryOn = activeId === SUMMARY && !POP_COMPOSE && !POP_VIEW;
+  useEffect(() => {
+    if (activeId && activeId !== SUMMARY) localStorage.setItem('lastAccount', activeId);
+  }, [activeId]);
 
   const saveSettings = (s: AppSettings) => {
     setSettings(s);
@@ -1470,7 +1487,7 @@ export function App() {
       <div className="shell">
         <AccountRail
           accounts={railAccounts}
-          active={activeKey}
+          active={summaryOn ? SUMMARY : activeKey}
           unread={unread}
           showAll={imapAccounts.length > 1}
           onSelect={setActiveId}
@@ -1497,7 +1514,30 @@ export function App() {
           onPin={(v) => saveSettings({ ...settings, accountListPinned: v })}
           onMenuOpen={setMenuOverlay}
         />
-        <div className="workspace">
+        <div className={`workspace ${summaryOn ? 'with-summary' : ''}`}>
+          {summaryOn && (
+            <SummaryPage
+              accounts={railAccounts.filter((a) => a.id !== DEMO_ID)}
+              unread={unread}
+              colorOf={colorOf}
+              calendarAccounts={imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, name: a.name }))}
+              tasks={settings.tasks ?? []}
+              quota={quota}
+              settings={settings.summary ?? {}}
+              onSettings={(sm) => saveSettings({ ...settings, summary: sm })}
+              onOpenAccount={(id) => setActiveId(id)}
+              onOpenMessage={(m) => openTaskMessage({ accountId: m.accountId, folder: m.folder, uid: m.uid, subject: m.subject, from: m.fromName || m.fromAddress })}
+              onOpenTasks={() => {
+                setActiveId(ALL);
+                setImapModule((x) => ({ ...x, [ALL_MODULES]: 'tasks' }));
+              }}
+              onToggleTask={(t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done, dirty: true } : x)) })}
+              onOpenCalendar={(id) => {
+                setActiveId(id);
+                setImapModule((x) => ({ ...x, [id]: 'calendar' }));
+              }}
+            />
+          )}
           <TopBar
             kind={activeM365 ? (activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
