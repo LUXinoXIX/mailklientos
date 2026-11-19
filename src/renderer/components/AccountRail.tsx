@@ -105,7 +105,7 @@ export function AccountRail(props: {
   const kindWord = (a: AccountPublic) => {
     if (a.short) return a.short;
     const k = props.kindOf?.(a) ?? '';
-    return k === 'Z' ? 'ZIMBRA' : k === 'OS' ? 'MSO' : k === '365' ? 'MS365' : k;
+    return k === 'Z' ? 'ZIMBRA' : k === 'OS' ? 'MSO' : k === '365' ? 'MS365' : k === 'WEB' ? 'WEBMAIL' : k;
   };
   const setFly = (v: boolean) => {
     setOpen(v);

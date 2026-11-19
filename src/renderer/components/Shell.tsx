@@ -579,6 +579,9 @@ export const M365_WORK_MODULES: ModuleDef<M365Module>[] = [
 ];
 
 /** Osobný Outlook (Outlook.com, Hotmail, Live): pošta + osobné aplikácie. */
+/** Vložený webmail (Zimbra, Roundcube, SOGo, Horde…): len samotná stránka. */
+export const WEBMAIL_MODULES: ModuleDef<M365Module>[] = [{ key: 'mail', label: 'Webmail', icon: <MailIcon /> }];
+
 export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
   { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },

@@ -22,7 +22,8 @@ export interface TabsState {
 export const baseKey = (accountId: string) => `acc-${accountId}`;
 
 /** Adresy webových aplikácií pre firemné (office) a osobné (live) kontá. */
-export function moduleUrl(m: M365Module, host: 'office' | 'live' = 'office'): string {
+export function moduleUrl(m: M365Module, host: 'office' | 'live' | 'web' = 'office', webUrl?: string): string {
+  if (host === 'web') return webUrl || 'about:blank';
   const o = host === 'office';
   switch (m) {
     case 'mail': return o ? 'https://outlook.office.com/mail/' : 'https://outlook.live.com/mail/';
@@ -53,7 +54,7 @@ export const MODULE_TITLES: Record<M365Module, string> = {
 
 export function initialTabs(acc: M365Account): TabsState {
   const key = baseKey(acc.id);
-  return { tabs: [{ key, title: 'Outlook', url: moduleUrl('mail', acc.host), module: 'mail' }], active: key };
+  return { tabs: [{ key, title: acc.host === 'web' ? 'Webmail' : 'Outlook', url: moduleUrl('mail', acc.host, acc.webUrl), module: 'mail' }], active: key };
 }
 
 /** Pekný názov karty z titulku stránky („Pošta – Ján Novák – Outlook“ → „Pošta“). */
