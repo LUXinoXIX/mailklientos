@@ -69,8 +69,13 @@ export interface M365Account {
   name: string;
   email: string;
   color: string;
-  /** Adresa Outlooku: outlook.office.com (firemné M365) alebo outlook.live.com (osobné). */
-  host?: 'office' | 'live';
+  /** Adresa Outlooku: outlook.office.com (firemné M365) alebo outlook.live.com (osobné);
+      'web' = ľubovoľný webmail (Zimbra, Roundcube, SOGo…) vložený ako stránka. */
+  host?: 'office' | 'live' | 'web';
+  /** adresa webmailu pri host 'web' (napr. https://mail.firma.sk) */
+  webUrl?: string;
+  /** webmail s neplatným certifikátom (interný server) – dôverovať mu */
+  webIgnoreCert?: boolean;
   /** krátky štítok v zbalenom páse kont (prázdne = MS365 / MSO) */
   short?: string;
   /** ikonka v páse kont */
@@ -89,6 +94,8 @@ export type AccountPublic = ImapAccountPublic | (M365Account & { hasPassword: fa
 
 export const isImap = (a: { kind: string }): a is ImapAccountPublic => a.kind === 'imap';
 export const isM365 = (a: { kind: string }): a is M365Account & { hasPassword: false } => a.kind === 'm365';
+/** vložený webmail (nie Outlook) */
+export const isWebmail = (a: { kind: string; host?: string }) => a.kind === 'm365' && a.host === 'web';
 
 /** Webová relácia (cookies, prihlásenie) konta M365. */
 export const accountPartition = (id: string) => `persist:acc-${id}`;

@@ -2,15 +2,15 @@
 import { AccountIconPicker, type IconCfg } from './AccountIcon';
 import { initials } from './AccountRail';
 import {
-  Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar,
+  Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar,
   MessageBarBody, Radio, RadioGroup,
 } from '@fluentui/react-components';
 import { useState } from 'react';
 import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
-import { MailIcon, TeamsIcon } from '../icons';
+import { MailIcon, TeamsIcon, WebmailIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: (host: 'office' | 'live') => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -38,6 +38,13 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
                 <span className="muted">Osobné konto Microsoft. Vložený Outlook.com a osobné aplikácie: OneDrive, Word, Excel, OneNote, Copilot…</span>
               </span>
             </button>
+            <button className="chooser-card" onClick={() => props.onM365('web')}>
+              <WebmailIcon />
+              <span>
+                <b>Webmail (vložená stránka)</b>
+                <span className="muted">Ľubovoľná webová pošta – napr. mail.pdg.sk, Zimbra, Roundcube, SOGo. Zobrazí sa ako stránka v okne s vlastným prihlásením, ako Outlook na webe.</span>
+              </span>
+            </button>
           </DialogContent>
           <DialogActions>
             <Button onClick={props.onClose}>Zrušiť</Button>
@@ -51,18 +58,21 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
 export function M365Dialog(props: {
   edit?: M365Account;
   /** typ nového konta zvolený pri pridávaní */
-  host?: 'office' | 'live';
+  host?: 'office' | 'live' | 'web';
   usedColors: string[];
   onClose: () => void;
   onSaved: (a: M365Account) => void;
   onDeleted: () => void;
 }) {
   const e = props.edit;
-  const [name, setName] = useState(e?.name ?? (props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
+  const [name, setName] = useState(e?.name ?? (props.host === 'web' ? 'Webmail' : props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
+  const [webUrl, setWebUrl] = useState(e?.webUrl ?? '');
+  const [ignoreCert, setIgnoreCert] = useState(!!e?.webIgnoreCert);
   const [email, setEmail] = useState(e?.email ?? '');
   const [short, setShort] = useState(e?.short ?? '');
   const [icon, setIcon] = useState<IconCfg>({ iconKind: e?.iconKind, iconText: e?.iconText, iconPreset: e?.iconPreset, iconImage: e?.iconImage });
-  const [host, setHost] = useState<'office' | 'live'>(e?.host ?? props.host ?? 'office');
+  const [host, setHost] = useState<'office' | 'live' | 'web'>(e?.host ?? props.host ?? 'office');
+  const web = host === 'web';
   const [color, setColor] = useState(accountColor(e?.color ?? ACCOUNT_COLORS.find((c) => !props.usedColors.includes(c)) ?? ACCOUNT_COLORS[1]!));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -71,6 +81,15 @@ export function M365Dialog(props: {
   async function save() {
     if (!window.mailApi) return;
     if (!name.trim()) return setError('Zadaj názov konta.');
+    let url = webUrl.trim();
+    if (web) {
+      if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+      try {
+        if (!url || !/^https?:$/.test(new URL(url).protocol)) throw new Error();
+      } catch {
+        return setError('Zadaj adresu webmailu, napr. https://mail.pdg.sk');
+      }
+    }
     const acc: M365Account = {
       id: e?.id ?? `m365-${Date.now().toString(36)}`,
       kind: 'm365',
@@ -78,6 +97,8 @@ export function M365Dialog(props: {
       email: email.trim(),
       color,
       host,
+      webUrl: web ? url : undefined,
+      webIgnoreCert: web && ignoreCert ? true : undefined,
       short: short.trim() || undefined,
       ...icon,
     };
@@ -107,31 +128,45 @@ export function M365Dialog(props: {
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="compose-dialog">
         <DialogBody>
-          <DialogTitle>{e ? 'Nastavenia konta Microsoft 365' : 'Nové konto Microsoft 365'}</DialogTitle>
+          <DialogTitle>{web ? (e ? 'Nastavenia webmailu' : 'Nový webmail') : e ? 'Nastavenia konta Microsoft 365' : 'Nové konto Microsoft 365'}</DialogTitle>
           <DialogContent className="dialog-content">
             <MessageBar intent="info">
               <MessageBarBody>
-                Konto sa zobrazí ako vložený Outlook na webe. Prihlásiš sa priamo v ňom (aj s overením MFA); aplikácia heslo neukladá.
+                {web
+                  ? 'Webová pošta sa zobrazí ako stránka v okne s vlastným, oddeleným prihlásením. Prihlásiš sa priamo v nej; aplikácia heslo neukladá. Počet neprečítaných sa číta z názvu stránky, ak ho webmail uvádza.'
+                  : 'Konto sa zobrazí ako vložený Outlook na webe. Prihlásiš sa priamo v ňom (aj s overením MFA); aplikácia heslo neukladá.'}
               </MessageBarBody>
             </MessageBar>
+            {web && (
+              <Field label="Adresa webmailu" required>
+                <Input value={webUrl} placeholder="https://mail.pdg.sk" onChange={(_, d) => setWebUrl(d.value)} />
+              </Field>
+            )}
+            {web && (
+              <Checkbox
+                label="Dôverovať certifikátu servera, aj keď je neplatný (interný server, vlastný certifikát)"
+                checked={ignoreCert}
+                onChange={(_, d) => setIgnoreCert(!!d.checked)}
+              />
+            )}
             <Field label="Názov v páse kont">
               <Input value={name} onChange={(_, d) => setName(d.value)} />
             </Field>
             <Field label="Ikonka v páse kont">
               <AccountIconPicker value={icon} color={color} fallback={initials(name || '?')} onChange={setIcon} />
             </Field>
-            <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov. Prázdne = MS365 (firemné) alebo MSO (osobné).">
-              <Input value={short} maxLength={8} placeholder={host === 'live' ? 'MSO' : 'MS365'} onChange={(_, d) => setShort(d.value.toUpperCase())} />
+            <Field label="Štítok v zbalenom páse kont" hint={web ? 'Max. 8 znakov. Prázdne = WEBMAIL.' : 'Max. 8 znakov. Prázdne = MS365 (firemné) alebo MSO (osobné).'}>
+              <Input value={short} maxLength={8} placeholder={web ? 'WEBMAIL' : host === 'live' ? 'MSO' : 'MS365'} onChange={(_, d) => setShort(d.value.toUpperCase())} />
             </Field>
             <Field label="E-mail (len na zobrazenie)">
               <Input value={email} placeholder="meno@firma.sk" onChange={(_, d) => setEmail(d.value)} />
             </Field>
-            <Field label="Typ konta">
+            {!web && <Field label="Typ konta">
               <RadioGroup value={host} onChange={(_, d) => setHost(d.value as 'office' | 'live')}>
                 <Radio value="office" label="Firemné alebo školské (Microsoft 365, outlook.office.com)" />
                 <Radio value="live" label="Osobné (Outlook.com, Hotmail, Live – outlook.live.com)" />
               </RadioGroup>
-            </Field>
+            </Field>}
             <Field label="Farba">
               <div className="row colors">
                 {ACCOUNT_COLORS.map((c) => (
@@ -146,7 +181,7 @@ export function M365Dialog(props: {
             {confirmDelete && (
               <MessageBar intent="warning">
                 <MessageBarBody>
-                  Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta v Microsoft 365 zostane nedotknutá.
+                  Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta {web ? 'na serveri' : 'v Microsoft 365'} zostane nedotknutá.
                   <div className="row gap">
                     <Button size="small" appearance="primary" onClick={() => void remove()}>Odstrániť</Button>
                     <Button size="small" onClick={() => setConfirmDelete(false)}>Nie</Button>

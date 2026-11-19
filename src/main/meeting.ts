@@ -9,7 +9,7 @@ let teamsWin: BrowserWindow | null = null;
 
 /** Otvorí Teams na webe s prihlásením zvoleného Outlook konta (rovnaká relácia ako vložený Outlook). */
 export function openTeamsForLink(accountId: string) {
-  const acc = loadAccounts().find((a) => a.id === accountId && a.kind === 'm365');
+  const acc = loadAccounts().find((a) => a.id === accountId && a.kind === 'm365' && !('host' in a && a.host === 'web'));
   if (!acc) throw new UserError('Konto Outlook pre Teams sa nenašlo. Nastav ho v udalosti → Online schôdza.');
   const personal = 'host' in acc && acc.host === 'live';
   const url = personal ? 'https://teams.live.com/v2/' : 'https://teams.microsoft.com/v2/';

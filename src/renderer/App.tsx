@@ -33,7 +33,7 @@ import { AddressBook } from './components/AddressBook';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, WEBMAIL_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
 
@@ -71,7 +71,7 @@ type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
-  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' }
+  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' | 'web' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
@@ -1053,7 +1053,7 @@ export function App() {
   const meetProps = useMemo(
     () => ({
       settings: settings.meetings ?? {},
-      outlooks: accounts.filter(isM365).map((a) => ({ id: a.id, name: a.name || a.email, personal: a.host === 'live' })),
+      outlooks: accounts.filter(isM365).filter((a) => a.host !== 'web').map((a) => ({ id: a.id, name: a.name || a.email, personal: a.host === 'live' })),
       onSettings: (m: NonNullable<AppSettings['meetings']>) => saveSettings({ ...settings, meetings: m }),
     }),
     [settings, accounts], // eslint-disable-line react-hooks/exhaustive-deps
@@ -1374,7 +1374,7 @@ export function App() {
     setTabs((t) => ({
       ...t,
       [acc.id]: {
-        tabs: exists ? st.tabs : [...st.tabs, { key, title: MODULE_TITLES[mod], url: moduleUrl(mod, acc.host), module: mod }],
+        tabs: exists ? st.tabs : [...st.tabs, { key, title: acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod], url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
         active: key,
       },
     }));
@@ -1503,7 +1503,7 @@ export function App() {
           notifications={settings.notifications !== false}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
@@ -1539,7 +1539,7 @@ export function App() {
             />
           )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1672,7 +1672,7 @@ export function App() {
               />
             )}
             {activeM365 ? (
-              <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              <ModuleRail modules={activeM365.host === 'web' ? WEBMAIL_MODULES : activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
                 modules={activeImap ? IMAP_MODULES : IMAP_MODULES.filter((m) => m.key !== 'calendar')}
