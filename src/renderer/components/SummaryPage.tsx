@@ -17,8 +17,9 @@ const TILE_LABEL: Record<SummaryTile, string> = {
   tasks: 'Úlohy',
   flagged: 'S vlajkou a pripnuté',
   notice: 'Treba si všimnúť',
+  feeds: 'Kalendár z odkazu',
 };
-const DEFAULT_TILES: { id: SummaryTile; on: boolean }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice'] as SummaryTile[]).map((id) => ({ id, on: true }));
+const DEFAULT_TILES: { id: SummaryTile; on: boolean }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' }));
 
 // Vstavané tapety – vlastné jednoduché kresby (vlny), žiadne cudzie obrázky.
 const WALLS: Record<string, { name: string; dark: boolean; bg: [string, string, string]; waves: [string, string, string] }> = {
@@ -112,9 +113,22 @@ export function SummaryPage(props: {
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [imgErr, setImgErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [feedData, setFeedData] = useState<Record<string, { list?: CalEvent[]; error?: string }>>({});
+  const [feedForm, setFeedForm] = useState({ url: '', name: '', count: 5 });
+  const feeds = s.feeds ?? [];
+  const feedKey = feeds.map((f) => `${f.url}|${f.count}`).join(',');
+  useEffect(() => {
+    if (!api || !feeds.length) return;
+    let alive = true;
+    for (const f of feeds)
+      void api.icsUpcoming(f.url, f.count).then((r) => alive && setFeedData((d) => ({ ...d, [f.id]: r.ok ? { list: r.data } : { error: r.error } })));
+    return () => {
+      alive = false;
+    };
+  }, [api, feedKey, dayKey(now)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    const t = window.setInterval(() => setNow(new Date()), 15_000);
     return () => window.clearInterval(t);
   }, []);
   const today = dayKey(now);
@@ -242,6 +256,36 @@ export function SummaryPage(props: {
             ))}
           </>
         );
+      case 'feeds':
+        return (
+          <>
+            {!feeds.length && <div className="sum-dim">Pridaj kalendár z odkazu v „Upraviť súhrn“ (napr. sviatky, rozvrh, zdieľaný kalendár).</div>}
+            {feeds.map((f) => {
+              const d = feedData[f.id];
+              return (
+                <div key={f.id} className="sum-feed">
+                  {feeds.length > 1 && <div className="sum-feed-name">{f.name}</div>}
+                  {!d && <div className="sum-dim">Načítavam…</div>}
+                  {d?.error && <div className="sum-dim">⚠ {d.error}</div>}
+                  {d?.list && !d.list.length && <div className="sum-dim">Žiadne nadchádzajúce udalosti.</div>}
+                  {d?.list?.map((e, i) => {
+                    const st = new Date(e.start);
+                    const isToday = dayKey(st) === today;
+                    return (
+                      <div key={i} className="sum-row">
+                        <b className="sum-time sum-time-wide">
+                          {isToday ? 'dnes' : st.toLocaleDateString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric' })}
+                          {!e.allDay && ` ${st.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`}
+                        </b>
+                        <span className="grow sum-ell" title={[e.summary, e.location].filter(Boolean).join(' · ')}>{e.summary}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </>
+        );
       case 'notice': {
         const items: string[] = [];
         if (failed.length) items.push(`${failed.length} ${failed.length === 1 ? 'správa sa nepodarila odoslať' : 'správy sa nepodarilo odoslať'} – skúsi sa znova (Odoslať a prijať)`);
@@ -267,7 +311,10 @@ export function SummaryPage(props: {
       <div className="sum-content">
         <div className="sum-head">
           <span className="sum-hello">{greeting(now)}</span>
-          <span className="sum-date">{now.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          <span className="sum-date">
+            {now.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{' '}
+            <b className="sum-clock">{now.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</b>
+          </span>
           <span className="grow" />
           <Button size="small" className="sum-edit-btn" style={cardStyle} onClick={() => setEdit((x) => !x)}>{edit ? 'Hotovo' : 'Upraviť súhrn'}</Button>
         </div>
@@ -331,6 +378,43 @@ export function SummaryPage(props: {
                   }}
                 />
                 {imgErr && <div className="pane-error">{imgErr}</div>}
+              </section>
+              <section>
+                <div className="sum-h">Kalendár z odkazu (iCal)</div>
+                {feeds.map((f) => (
+                  <div key={f.id} className="sum-tile-set">
+                    <span className="grow sum-ell" title={f.url}>{f.name}</span>
+                    <select className="sum-count" value={f.count} onChange={(ev) => props.onSettings({ ...s, feeds: feeds.map((x) => (x.id === f.id ? { ...x, count: Number(ev.target.value) } : x)) })} aria-label="Počet udalostí">
+                      {[3, 5, 8, 10, 15].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <Button size="small" appearance="subtle" onClick={() => props.onSettings({ ...s, feeds: feeds.filter((x) => x.id !== f.id) })} aria-label={`Odstrániť ${f.name}`}>×</Button>
+                  </div>
+                ))}
+                <input className="sum-input" placeholder="https://… alebo webcal://…" value={feedForm.url} onChange={(ev) => setFeedForm({ ...feedForm, url: ev.target.value })} />
+                <div className="sum-tile-set">
+                  <input className="sum-input grow" placeholder="Názov (napr. Sviatky)" value={feedForm.name} onChange={(ev) => setFeedForm({ ...feedForm, name: ev.target.value })} />
+                  <select className="sum-count" value={feedForm.count} onChange={(ev) => setFeedForm({ ...feedForm, count: Number(ev.target.value) })} aria-label="Počet udalostí">
+                    {[3, 5, 8, 10, 15].map((n) => <option key={n} value={n}>{n} udal.</option>)}
+                  </select>
+                  <Button
+                    size="small"
+                    disabled={!/^(https?|webcals?):\/\/\S+$/i.test(feedForm.url.trim())}
+                    onClick={() => {
+                      const url = feedForm.url.trim();
+                      let name = feedForm.name.trim();
+                      try {
+                        name ||= new URL(url.replace(/^webcals?:/i, 'https:')).hostname;
+                      } catch {
+                        name ||= 'Kalendár';
+                      }
+                      const tilesNow = tiles.map((t) => (t.id === 'feeds' ? { ...t, on: true } : t));
+                      props.onSettings({ ...s, tiles: tilesNow, feeds: [...feeds, { id: Math.random().toString(36).slice(2, 10), name, url, count: feedForm.count }] });
+                      setFeedForm({ url: '', name: '', count: 5 });
+                    }}
+                  >
+                    Pridať
+                  </Button>
+                </div>
               </section>
               <section>
                 <div className="sum-h">Čitateľnosť blokov</div>

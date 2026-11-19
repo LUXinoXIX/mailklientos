@@ -273,7 +273,7 @@ export function normalizeUrl(input: string): string | null {
   }
 }
 
-export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice';
+export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds';
 export interface SummarySettings {
   /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
   enabled?: boolean;
@@ -286,6 +286,8 @@ export interface SummarySettings {
   customImage?: string;
   /** vlastný obrázok je tmavý (zistené pri nahratí) */
   customDark?: boolean;
+  /** kalendáre z odkazu (iCal/webcal) – najbližšie udalosti */
+  feeds?: { id: string; name: string; url: string; count: number }[];
   /** nepriehľadnosť blokov 0.3–1 */
   opacity?: number;
   /** rozmazanie pozadia pod blokmi */
