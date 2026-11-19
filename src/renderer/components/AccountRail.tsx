@@ -38,6 +38,7 @@ export function AccountRail(props: {
   onToggleSummary: () => void;
   onCrypto: () => void;
   onAbout: () => void;
+  onTransfer?: (mode: 'export' | 'import') => void;
   /** krátke označenie typu konta na ikone (Z, IMAP, 365) */
   kindOf?: (a: AccountPublic) => string;
   onTestNotification: () => void;
@@ -91,6 +92,12 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>
+            {props.onTransfer && (
+              <>
+                <MenuItem onClick={() => props.onTransfer?.('export')}>Exportovať nastavenia…</MenuItem>
+                <MenuItem onClick={() => props.onTransfer?.('import')}>Importovať nastavenia…</MenuItem>
+              </>
+            )}
             <MenuItem onClick={props.onToggleSummary}>{props.showSummary ? 'Vypnúť úvodnú stránku Súhrn' : 'Zapnúť úvodnú stránku Súhrn'}</MenuItem>
             <MenuDivider />
             <MenuItem onClick={props.onToggleGpu}>
