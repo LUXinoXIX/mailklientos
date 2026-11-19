@@ -10,6 +10,26 @@ const COLORS = ['#2F6F5E', '#b45309', '#6d28d9', '#1d4ed8', '#be123c', '#0e7490'
 const COUNTS = [3, 5, 8, 10, 15, 20];
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
+function range(e: CalEvent) {
+  const st = new Date(e.start);
+  const en = new Date(e.end);
+  const date = (d: Date) => d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const time = (d: Date) => d.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
+  if (e.allDay) {
+    const last = new Date(en.getTime() - 86400000);
+    return dayKey(last) === dayKey(st) || last < st ? `${date(st)} · celý deň` : `${date(st)} – ${date(last)}`;
+  }
+  return dayKey(st) === dayKey(en) ? `${date(st)}, ${time(st)} – ${time(en)}` : `${date(st)} ${time(st)} – ${date(en)} ${time(en)}`;
+}
+
+/** Popis bez dlhých technických blokov (pozvánky Teams obsahujú čiary a ID schôdze). */
+const cleanDesc = (s: string) =>
+  s
+    .replace(/_{5,}|-{5,}|={5,}/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 function when(e: CalEvent, now: Date) {
   const st = new Date(e.start);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -23,6 +43,7 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
   const [edit, setEdit] = useState(props.feeds.length === 0);
   const [form, setForm] = useState({ url: '', name: '', count: 5 });
   const [tick, setTick] = useState(0);
+  const [open, setOpen] = useState<string | null>(null);
   const now = new Date();
   const key = props.feeds.map((f) => `${f.url}|${f.count}`).join(',');
 
@@ -108,8 +129,29 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
               {d?.list?.map((e, k) => {
                 const m = findMeeting(e);
                 const live = !e.allDay && Date.parse(e.start) <= now.getTime() && Date.parse(e.end) > now.getTime();
+                const id = `${f.id}:${e.uid}:${e.start}:${k}`;
+                const isOpen = open === id;
+                const desc = isOpen && e.description ? cleanDesc(e.description) : '';
                 return (
-                  <div key={k} className={`ics-ev ${live ? 'live' : ''}`} style={{ borderLeftColor: color }} title={[e.summary, e.location, e.description?.slice(0, 200)].filter(Boolean).join('\n')}>
+                  <div
+                    key={k}
+                    className={`ics-ev ${live ? 'live' : ''} ${isOpen ? 'open' : ''}`}
+                    style={{ borderLeftColor: color }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    title={isOpen ? undefined : 'Kliknutím zobrazíš podrobnosti'}
+                    onClick={(ev) => {
+                      if ((ev.target as HTMLElement).closest('button, a')) return;
+                      setOpen(isOpen ? null : id);
+                    }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        setOpen(isOpen ? null : id);
+                      }
+                    }}
+                  >
                     <span className="ics-when">{when(e, now)}</span>
                     <span className="ics-sum">{e.summary}</span>
                     {(e.location || m) && (
@@ -121,6 +163,21 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
                           </button>
                         )}
                       </span>
+                    )}
+                    {isOpen && (
+                      <div className="ics-detail">
+                        <div>🕒 {range(e)}</div>
+                        {e.location && <div>📍 {e.location}</div>}
+                        {e.organizer && <div>👤 {e.organizer.name || e.organizer.email}</div>}
+                        {!!e.attendees?.length && (
+                          <div className="muted">
+                            👥 {e.attendees.slice(0, 5).map((a) => a.name || a.email).join(', ')}
+                            {e.attendees.length > 5 ? ` a ďalších ${e.attendees.length - 5}` : ''}
+                          </div>
+                        )}
+                        {desc && <div className="ics-desc">{desc.length > 1500 ? desc.slice(0, 1500) + '…' : desc}</div>}
+                        {!e.location && !desc && !e.organizer && <div className="muted">Bez ďalších podrobností.</div>}
+                      </div>
                     )}
                   </div>
                 );

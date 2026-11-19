@@ -198,34 +198,6 @@ export function startFollowUps() {
 // ---------------------------------------------------------------------------
 // záloha a obnova nastavení (bez hesiel a súkromných kľúčov)
 
-export async function backupExport() {
-  const parent = win();
-  const opts = { title: 'Uložiť zálohu nastavení', defaultPath: path.join(os.homedir(), 'Documents', `universum-email-zaloha-${new Date().toISOString().slice(0, 10)}.json`), filters: [{ name: 'Záloha', extensions: ['json'] }] };
-  const r = parent ? await dialog.showSaveDialog(parent, opts) : await dialog.showSaveDialog(opts);
-  if (r.canceled || !r.filePath) return '';
-  const data = { app: 'Universum eMail', version: app.getVersion(), created: new Date().toISOString(), accounts: store.loadAccounts(), settings: loadSettings() };
-  fs.writeFileSync(r.filePath, JSON.stringify(data, null, 2), 'utf8');
-  return r.filePath;
-}
-
-export async function backupImport() {
-  const parent = win();
-  const opts = { title: 'Obnoviť nastavenia zo zálohy', properties: ['openFile'] as Array<'openFile'>, filters: [{ name: 'Záloha', extensions: ['json'] }] };
-  const r = parent ? await dialog.showOpenDialog(parent, opts) : await dialog.showOpenDialog(opts);
-  if (r.canceled || !r.filePaths[0]) return { accounts: 0, restored: false };
-  const data = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8')) as { accounts?: Parameters<typeof store.saveAccount>[0][]; settings?: ReturnType<typeof loadSettings> };
-  if (!data || (!data.accounts && !data.settings)) throw new mail.UserError('Súbor nie je záloha Universum eMail.');
-  let n = 0;
-  const existing = store.loadAccounts();
-  for (const a of data.accounts ?? []) {
-    if (existing.some((x) => x.id === a.id)) continue;
-    store.saveAccount(a);
-    n++;
-  }
-  if (data.settings) saveSettings({ ...loadSettings(), ...data.settings });
-  return { accounts: n, restored: true };
-}
-
 // ---------------------------------------------------------------------------
 // ikona v oznamovacej oblasti a počet neprečítaných
 

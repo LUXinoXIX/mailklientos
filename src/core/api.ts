@@ -9,6 +9,17 @@ export type Result<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; hint?: string; needsTrust?: boolean };
 
+export interface BackupInfo {
+  token: string;
+  file: string;
+  exported: string;
+  platform: string;
+  app: string;
+  has: { accounts: number; contacts: number; calendars: number };
+  accountsExisting: number;
+  launchers: { name: string; ok: boolean }[];
+}
+
 export interface FolderInfo {
   path: string;
   name: string;
@@ -195,8 +206,6 @@ export interface MailApi {
   /** náhľad súboru priloženého k rozpísanej správe */
   previewFile(file: string, filename?: string): Promise<Result<{ kind: 'image' | 'window' | 'external'; src?: string; filename: string }>>;
   unsubscribe(accountId: string, u: { url?: string; mailto?: string; oneClick?: boolean }): Promise<Result<string>>;
-  backupExport(): Promise<Result<string>>;
-  backupImport(): Promise<Result<{ accounts: number; restored: boolean }>>;
   setUnread(total: number, badge?: string): Promise<Result<true>>;
   openInOffice(url: string): Promise<Result<true>>;
   appInfo(): Promise<Result<{ version: string; electron: string; chrome: string; node: string; platform: string }>>;
@@ -313,6 +322,11 @@ export interface MailApi {
   pickProgram(): Promise<Result<{ target: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
+  /** Záloha/prenos nastavení (bez hesiel). */
+  settingsExport(parts: { accounts: boolean; contacts: boolean; calendars: boolean }): Promise<Result<string | null>>;
+  settingsPick(): Promise<Result<BackupInfo | null>>;
+  /** Použije zálohu a reštartuje program. */
+  settingsApply(token: string, parts: { settings: boolean; accounts: boolean; contacts: boolean; calendars: boolean }): Promise<Result<void>>;
   // stabilita vykresľovania
   gpuDisabled(): Promise<Result<boolean>>;
   /** Uloží nastavenie a reštartuje aplikáciu. */
