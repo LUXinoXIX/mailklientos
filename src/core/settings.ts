@@ -61,6 +61,8 @@ export interface RightPanelDef {
 }
 
 export interface AppSettings {
+  /** klient OAuth Google (Google Cloud, typ „Počítačová aplikácia“) pre Prihlásiť sa cez Google */
+  google?: { clientId: string; clientSecret?: string };
   /** spoločný pravý panel (pre kontá bez vlastného) */
   webs: WebItem[];
   launchers: LauncherItem[];

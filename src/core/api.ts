@@ -47,9 +47,12 @@ export interface MessageSummary {
   preview?: string;
   /** správa má skutočné prílohy (spinka v zozname; logá z podpisu sa nerátajú) */
   hasAttachments?: boolean;
+  /** Gmail: ID vlákna (X-GM-THRID) – konverzácie presne ako v Gmaile */
+  threadId?: string;
 }
 
 export interface MessageFull extends MessageSummary {
+
   to: string;
   cc: string;
   html: string | null;
@@ -163,6 +166,15 @@ export interface PickedFile {
   path: string;
   filename: string;
   size: number;
+}
+
+/** Prihlásenie cez Google: čo konto povolilo. */
+export interface GoogleGrant {
+  email: string;
+  name?: string;
+  mail: boolean;
+  calendar: boolean;
+  contacts: boolean;
 }
 
 export interface MailApi {
@@ -287,6 +299,14 @@ export interface MailApi {
   cardSave(accountId: string, bookId: string, contact: Contact): Promise<Result<Contact>>;
   cardDelete(accountId: string, href: string): Promise<Result<true>>;
   setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
+  /** Gmail: štítky správy a ich zmena */
+  gmailLabels(accountId: string, folder: string, uid: number): Promise<Result<string[]>>;
+  gmailSetLabels(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
+  /** Prihlásenie cez Google (OAuth v prehliadači) pre konto s daným id (aj ešte neuložené) */
+  googleSignIn(accountId: string, loginHint?: string): Promise<Result<GoogleGrant>>;
+  googleCancel(): Promise<Result<true>>;
+  googleSignOut(accountId: string): Promise<Result<true>>;
+  googleGrant(accountId: string): Promise<Result<GoogleGrant | null>>;
   /** správy toho istého vlákna z cache (všetky priečinky konta) */
   thread(accountId: string, messageId: string): Promise<Result<MessageSummary[]>>;
   runActions(accountId: string, folder: string, uids: number[], actions: RuleAction[]): Promise<Result<true>>;

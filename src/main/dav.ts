@@ -5,10 +5,11 @@ import https from 'node:https';
 import http from 'node:http';
 import tls from 'node:tls';
 import { DOMParser } from '@xmldom/xmldom';
-import type { AccountConfig } from '../core/account';
+import { isGmail, type AccountConfig } from '../core/account';
 import { buildEvent, buildTodo, buildVCard, expand, parseEvents, parseTodos, parseVCards, type CalEvent, type CalTodo, type Contact } from '../core/ical';
 import { buildTlsOptions, verifySocket } from '../core/tls';
 import { getPassword } from './accounts';
+import * as google from './google';
 import { log } from './diagnostics';
 import { UserError } from './mail';
 
@@ -21,9 +22,27 @@ interface DavResponse {
   headers: http.IncomingHttpHeaders;
 }
 
-function request(acc: AccountConfig, method: string, url: string, body?: string, headers: Record<string, string> = {}, redirects = 3): Promise<DavResponse> {
+/** Hlavička Authorization: heslo (Basic) alebo token Google (Bearer). */
+async function authHeader(acc: AccountConfig): Promise<string> {
+  if (acc.auth === 'oauth') return `Bearer ${await google.accessToken(acc)}`;
+  if (isGmail(acc))
+    throw new UserError('Kalendár a kontakty Google vyžadujú prihlásenie cez Google.', 'Heslo pre aplikácie platí len pre poštu. V nastaveniach konta zvoľ „Prihlásiť sa cez Google“.');
   const pass = getPassword(acc.id);
-  if (!pass) return Promise.reject(new UserError('Pre konto chýba heslo.'));
+  if (!pass) throw new UserError('Pre konto chýba heslo.');
+  return `Basic ${Buffer.from(`${acc.username}:${pass}`).toString('base64')}`;
+}
+
+async function request(acc: AccountConfig, method: string, url: string, body?: string, headers: Record<string, string> = {}, redirects = 3): Promise<DavResponse> {
+  const r = await requestOnce(acc, await authHeader(acc), method, url, body, headers, redirects);
+  // token Google mohol medzičasom vypršať: raz obnoviť a skúsiť znova
+  if (r.status === 401 && acc.auth === 'oauth') {
+    google.invalidate(acc.id);
+    return requestOnce(acc, await authHeader(acc), method, url, body, headers, redirects);
+  }
+  return r;
+}
+
+function requestOnce(acc: AccountConfig, auth: string, method: string, url: string, body: string | undefined, headers: Record<string, string>, redirects: number): Promise<DavResponse> {
   const u = new URL(url);
   const sameHost = u.hostname.toLowerCase() === acc.imap.host.toLowerCase();
   const policy = sameHost ? acc.imap.tls : { certMode: 'strict' as const, legacy: false };
@@ -35,7 +54,7 @@ function request(acc: AccountConfig, method: string, url: string, body?: string,
         method,
         ...(u.protocol === 'https:' ? buildTlsOptions(u.hostname, policy) : {}),
         headers: {
-          Authorization: `Basic ${Buffer.from(`${acc.username}:${pass}`).toString('base64')}`,
+          Authorization: auth,
           'User-Agent': 'MailKlient',
           ...(body ? { 'Content-Type': headers['Content-Type'] ?? 'application/xml; charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) } : {}),
           ...headers,
@@ -55,7 +74,7 @@ function request(acc: AccountConfig, method: string, url: string, body?: string,
         res.on('end', () => {
           const status = res.statusCode ?? 0;
           if ([301, 302, 307, 308].includes(status) && res.headers.location && redirects > 0) {
-            resolve(request(acc, method, new URL(res.headers.location, u).toString(), body, headers, redirects - 1));
+            resolve(requestOnce(acc, auth, method, new URL(res.headers.location, u).toString(), body, headers, redirects - 1));
             return;
           }
           resolve({ status, body: Buffer.concat(chunks).toString('utf8'), headers: res.headers });
@@ -99,7 +118,13 @@ const propEl = (props: El[], ns: string, name: string): El | undefined => props.
 async function propfind(acc: AccountConfig, url: string, depth: '0' | '1', props: string): Promise<ReturnType<typeof responses>> {
   const body = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="${CAL}" xmlns:cr="${CARD}" xmlns:a="${APPLE}"><d:prop>${props}</d:prop></d:propfind>`;
   const r = await request(acc, 'PROPFIND', url, body, { Depth: depth });
-  if (r.status === 401) throw new UserError('Server kalendára odmietol prihlásenie.', 'Skontroluj meno a heslo konta.');
+  if (r.status === 401 || (r.status === 403 && acc.auth === 'oauth'))
+    throw new UserError(
+      'Server kalendára odmietol prihlásenie.',
+      acc.auth === 'oauth'
+        ? 'Prihlás sa cez Google znova a povoľ kalendár aj kontakty. V Google Cloud musia byť zapnuté rozhrania CalDAV API a CardDAV API.'
+        : 'Skontroluj meno a heslo konta.',
+    );
   if (r.status >= 400) throw new UserError(`Server kalendára vrátil chybu ${r.status}.`);
   return responses(r.body);
 }
@@ -122,9 +147,36 @@ function candidates(acc: AccountConfig): string[] {
   ];
 }
 
+/** Google: kalendáre cez CalDAV v2 (principal → calendar-home-set), kontakty cez CardDAV. Záloha: pevné adresy. */
+async function discoverGoogle(acc: AccountConfig) {
+  const email = encodeURIComponent(acc.email);
+  const g = google.grant(acc.id);
+  const res: { cal?: string; card?: string; at: number } = { at: Date.now() };
+  if (g?.calendar !== false) {
+    try {
+      const p = await propfind(acc, `https://apidata.googleusercontent.com/caldav/v2/${email}/user`, '0', '<c:calendar-home-set/>');
+      const href = text(first(propEl(p[0]?.props ?? [], CAL, 'calendar-home-set'), DAV, 'href'));
+      res.cal = href ? new URL(href, 'https://apidata.googleusercontent.com/').toString() : `https://apidata.googleusercontent.com/caldav/v2/${email}/events/`;
+    } catch (e) {
+      // len hlavný kalendár (zbierka sama sa pri PROPFIND Depth 1 vráti tiež)
+      log(`kalendár Google (principal): ${String((e as Error).message)}`);
+      res.cal = `https://apidata.googleusercontent.com/caldav/v2/${email}/events/`;
+    }
+  }
+  if (g?.contacts !== false) res.card = `https://www.googleapis.com/carddav/v1/principals/${email}/lists/`;
+  if (!res.cal && !res.card) throw new UserError('Kalendár ani kontakty Google nie sú dostupné.', 'Prihlás sa cez Google znova a povoľ kalendár a kontakty.');
+  homes.set(acc.id, res);
+  log(`kalendár: ${acc.name} (Google) – ${res.cal ?? '-'} / kontakty ${res.card ?? '-'}`);
+  return res;
+}
+
 async function discover(acc: AccountConfig) {
   const cached = homes.get(acc.id);
   if (cached && Date.now() - cached.at < 3600_000) return cached;
+  if (isGmail(acc) && !acc.davUrl?.trim()) {
+    if (acc.auth !== 'oauth') await authHeader(acc); // vyhodí zrozumiteľnú chybu
+    return discoverGoogle(acc);
+  }
   let lastErr: unknown;
   for (const base of candidates(acc)) {
     try {

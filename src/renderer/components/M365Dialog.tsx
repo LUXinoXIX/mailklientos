@@ -10,7 +10,7 @@ import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
 import { MailIcon, TeamsIcon, WebmailIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -21,9 +21,18 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
               <MailIcon />
               <span>
                 <b>E-mail (IMAP / SMTP)</b>
-                <span className="muted">Zimbra, Gmail, Seznam, firemný server… Plnohodnotný poštový klient v aplikácii.</span>
+                <span className="muted">Zimbra, Seznam, firemný server… Plnohodnotný poštový klient v aplikácii.</span>
               </span>
             </button>
+            {props.onGmail && (
+              <button className="chooser-card" onClick={props.onGmail}>
+                <MailIcon />
+                <span>
+                  <b>Gmail (Google)</b>
+                  <span className="muted">Osobný Gmail aj Google Workspace. Prihlásenie cez Google (pošta, kalendár, kontakty) alebo heslom pre aplikácie. Štítky, archív a vlákna ako v Gmaile.</span>
+                </span>
+              </button>
+            )}
             <button className="chooser-card" onClick={() => props.onM365('office')}>
               <TeamsIcon />
               <span>

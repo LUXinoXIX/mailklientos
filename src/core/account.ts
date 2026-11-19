@@ -52,6 +52,10 @@ export interface AccountConfig {
   iconText?: string;
   iconPreset?: string;
   iconImage?: string;
+  /** poskytovateľ so špeciálnym správaním (Gmail: štítky, Odoslané ukladá server, archív = Všetky správy) */
+  provider?: 'gmail';
+  /** prihlásenie: heslo (aj heslo pre aplikácie Google) alebo OAuth (Prihlásiť sa cez Google) */
+  auth?: 'password' | 'oauth';
 }
 
 export interface Identity {
@@ -115,3 +119,16 @@ export const DEFAULT_PORTS: Record<'imap' | 'smtp', Record<Security, number>> = 
 };
 
 export const strictPolicy = (): TlsPolicy => ({ certMode: 'strict', legacy: false });
+
+/** Konto Gmail (aj Google Workspace) – podľa voľby pri pridaní alebo podľa servera IMAP. */
+export const isGmail = (a: { provider?: string; imap?: { host?: string } }) =>
+  a.provider === 'gmail' || /(^|\.)(imap\.gmail\.com|imap\.googlemail\.com)$/i.test(a.imap?.host ?? '');
+
+/** Pevné servery Gmailu. */
+export const GMAIL_SERVERS = {
+  imap: { host: 'imap.gmail.com', port: 993, security: 'ssl' as Security, tls: strictPolicy() },
+  smtp: { host: 'smtp.gmail.com', port: 465, security: 'ssl' as Security, tls: strictPolicy() },
+};
+
+/** Kľúč, pod ktorým je v trezore uložený obnovovací token OAuth konta. */
+export const oauthSecretKey = (id: string) => `oauth:${id}`;
