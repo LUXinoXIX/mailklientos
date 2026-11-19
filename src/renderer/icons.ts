@@ -5,6 +5,7 @@ export {
   ArrowDown16Regular as LowPriorityIcon,
   Warning16Regular as WarningSmallIcon,
   Attach12Regular as AttachTinyIcon,
+  Attach16Filled as AttachBadgeIcon,
   Eye16Regular as PreviewSmallIcon,
   ArrowDownload16Regular as SaveSmallIcon,
   Open16Regular as OpenSmallIcon,

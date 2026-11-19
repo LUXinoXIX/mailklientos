@@ -729,8 +729,12 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .prio-btn.prio-high { color: #c50f1f !important; font-weight: 600; background: #fde7e9 !important; }
 .prio-btn.prio-low { color: var(--colorBrandForeground1) !important; background: var(--colorBrandBackground2) !important; }
 /* spinka v zozname správ */
-.msg-att { flex: none; width: 13px; height: 13px; margin-left: 4px; color: var(--colorNeutralForeground3); }
-.msg-item:not(.seen) .msg-att { color: var(--colorNeutralForeground2); }
+.msg-attcol { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; align-self: center; }
+.msg-att-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 22px; border-radius: 11px; background: var(--colorBrandBackground2); color: var(--colorBrandForeground2); }
+.msg-att-badge svg { width: 16px; height: 16px; }
+.list.compact .msg-attcol { width: 24px; }
+.list.compact .msg-att-badge { width: 22px; height: 18px; }
+.list.compact .msg-att-badge svg { width: 14px; height: 14px; }
 
 /* príloha: názov nie je odkaz – otvára sa len tlačidlom Náhľad (s varovaním) */
 .attachment-name { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; min-width: 0; cursor: default; user-select: text; }

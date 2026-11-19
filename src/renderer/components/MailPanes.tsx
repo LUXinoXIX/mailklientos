@@ -7,7 +7,7 @@ import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, AttachBadgeIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -412,7 +412,6 @@ export function MessageList(props: {
               {m.fromName || m.fromAddress}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
-            {m.hasAttachments && <AttachTinyIcon className="msg-att" aria-label="Má prílohu" title="Správa má prílohu" />}
             <span className="msg-date">{fmtDate(m.date)}</span>
           </div>
           <div className="msg-row">
@@ -452,6 +451,14 @@ export function MessageList(props: {
             </div>
           )}
         </div>
+        {/* príloha: vlastný stĺpec vpravo, zvislo v strede (stĺpec je vždy, aby dátumy ostali pod sebou) */}
+        <span className="msg-attcol">
+          {m.hasAttachments && (
+            <span className="msg-att-badge" role="img" aria-label="Má prílohu" title="Správa má prílohu">
+              <AttachBadgeIcon />
+            </span>
+          )}
+        </span>
       </button>
     );
   };
