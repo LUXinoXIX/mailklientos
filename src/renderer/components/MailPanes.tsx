@@ -3,6 +3,7 @@ import { useAttachmentGuard } from './AttachmentGuard';
 import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
@@ -282,6 +283,35 @@ export function MessageList(props: {
   const order = useMemo(() => groups.flatMap((g) => g), [groups]);
   const multiMsgs = useMemo(() => order.filter((m) => multi.includes(keyOf(m))), [order, multi]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => props.onMulti?.(multiMsgs), [multiMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // klávesnica: ↑/↓ = predchádzajúca/ďalšia správa, Shift+↑/↓ = rozšíriť výber (ako v Outlooku), Home/End
+  const cursor = useRef<string | null>(null);
+  const keyNav = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) || e.altKey) return false;
+    const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('.msg[data-k]')];
+    if (!rows.length) return false;
+    const keys = rows.map((r) => r.dataset.k!);
+    const curKey = (e.shiftKey && cursor.current) || (props.selected ? keyOf(props.selected) : null);
+    const i = curKey ? keys.indexOf(curKey) : -1;
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : Math.max(0, Math.min(keys.length - 1, i < 0 ? 0 : i + (e.key === 'ArrowDown' ? 1 : -1)));
+    e.preventDefault();
+    const target = order.find((x) => keyOf(x) === keys[j]);
+    if (!target) return true;
+    rows[j]!.focus({ preventScroll: true });
+    rows[j]!.scrollIntoView({ block: 'nearest' });
+    if (e.shiftKey) {
+      const from = anchor.current && keys.includes(anchor.current) ? anchor.current : curKey ?? keys[j]!;
+      if (!anchor.current || !keys.includes(anchor.current)) anchor.current = from;
+      const a = keys.indexOf(from);
+      setMulti(keys.slice(Math.min(a, j), Math.max(a, j) + 1));
+      cursor.current = keys[j]!;
+    } else {
+      setMulti([]);
+      anchor.current = keys[j]!;
+      cursor.current = null;
+      props.onOpen(target);
+    }
+    return true;
+  };
   const clickRow = (m: MessageSummary, e: React.MouseEvent) => {
     const k = keyOf(m);
     if (e.ctrlKey || e.metaKey) {
@@ -296,11 +326,13 @@ export function MessageList(props: {
       const j = order.findIndex((x) => keyOf(x) === k);
       if (i >= 0 && j >= 0) {
         setMulti(order.slice(Math.min(i, j), Math.max(i, j) + 1).map(keyOf));
+        cursor.current = k;
         return true;
       }
     }
     setMulti([]);
     anchor.current = k;
+    cursor.current = null;
     return false;
   };
   const row = (m: MessageSummary, opts: { count?: number; unreadInThread?: boolean; child?: boolean; gk?: string } = {}) => {
@@ -310,6 +342,7 @@ export function MessageList(props: {
     return (
       <button
         key={`${m.accountId}/${m.folder}/${m.uid}`}
+        data-k={keyOf(m)}
         className={`msg ${sel ? 'selected' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
         draggable
         onDragStart={(e) => {
@@ -444,10 +477,29 @@ export function MessageList(props: {
         className="list-body"
         tabIndex={-1}
         onKeyDown={(e) => {
-          if (e.key === 'Delete' && multiMsgs.length > 1 && props.onDeleteMany) {
-            props.onDeleteMany(multiMsgs);
+          if (keyNav(e)) return;
+          if (e.key === 'Delete') {
+            // Delete: vybrané správy (aj viac naraz) do Odstránených a hneď vybrať ďalšiu, ako v Outlooku
+            e.preventDefault();
+            e.stopPropagation(); // nespúšťať aj globálnu skratku (inak by sa mazalo dvakrát)
+            const del = multiMsgs.length > 1 ? multiMsgs : props.selected ? [props.selected] : [];
+            if (!del.length) return;
+            const list = e.currentTarget;
+            const keys = [...list.querySelectorAll<HTMLElement>('.msg[data-k]')].map((r) => r.dataset.k!);
+            const dk = new Set(del.map(keyOf));
+            const idx = keys.flatMap((k, i) => (dk.has(k) ? [i] : []));
+            const nextKey = idx.length ? keys.slice(Math.min(...idx) + 1).find((k) => !dk.has(k)) ?? keys.slice(0, Math.min(...idx)).reverse().find((k) => !dk.has(k)) : undefined;
+            const next = nextKey ? order.find((x) => keyOf(x) === nextKey) : undefined;
+            if (del.length > 1) props.onDeleteMany?.(del);
+            else props.onDeleteKey?.();
             setMulti([]);
-          } else if (e.key === 'Delete' && props.onDeleteKey) props.onDeleteKey();
+            cursor.current = null;
+            if (next && nextKey) {
+              anchor.current = nextKey;
+              props.onOpen(next);
+              window.setTimeout(() => list.querySelector<HTMLElement>(`.msg[data-k="${CSS.escape(nextKey)}"]`)?.focus({ preventScroll: true }), 50);
+            }
+          }
           if (e.key === 'Escape') setMulti([]);
           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
             e.preventDefault();
@@ -503,12 +555,20 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
   const head =
     method === 'CANCEL' ? 'Udalosť bola zrušená' : method === 'REPLY' ? 'Odpoveď na pozvánku' : method === 'REQUEST' ? 'Pozvánka na udalosť' : 'Udalosť';
   const reply = method === 'REPLY' ? e.attendees?.[0] : undefined;
+  const meet = findMeeting(e);
   return (
     <div className={`invite ${method === 'CANCEL' ? 'cancel' : ''}`}>
       <div className="invite-head">{head}</div>
       <div className="invite-title">{e.summary}</div>
       <div className="muted">{when}{e.rrule ? ' · opakuje sa' : ''}</div>
       {e.location && <div className="muted">{e.location}</div>}
+      {meet && method !== 'CANCEL' && (
+        <div style={{ margin: '6px 0' }}>
+          <Button size="small" appearance="primary" onClick={() => (meet.kind === 'jitsi' ? void window.mailApi?.meetJitsi(meet.url) : void window.mailApi?.openExternal(meet.url))} title={meet.url}>
+            Pripojiť sa – {MEETING_LABEL[meet.kind]}
+          </Button>
+        </div>
+      )}
       {e.organizer && <div className="muted small">Organizátor: {e.organizer.name || e.organizer.email}</div>}
       {reply && (
         <div className="small">
@@ -631,7 +691,8 @@ export function ReadingPane(props: {
               </span>
             )}
           </div>
-          <div className="muted">Komu: {m.to}{m.cc ? ` · Kópia: ${m.cc}` : ''}</div>
+          <Recipients label="Komu" value={m.to} />
+          {m.cc && <Recipients label="Kópia" value={m.cc} />}
           <div className="muted read-date">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
         </div>
       </div>
@@ -771,5 +832,63 @@ export function ReadingPane(props: {
       )}
       <div className="read-body">{m.html ? <HtmlBody html={m.html} showImages={showImages} /> : <pre className="plain">{m.text}</pre>}</div>
     </section>
+  );
+}
+
+/** „Meno" <adresa>, adresa, … → zoznam (čiarky v úvodzovkách sa nedelia) */
+export function splitAddresses(s: string): { name: string; email: string }[] {
+  const out: { name: string; email: string }[] = [];
+  let cur = '';
+  let q = false;
+  let angle = false;
+  for (const ch of s + ',') {
+    if (ch === '"') q = !q;
+    else if (ch === '<' && !q) angle = true;
+    else if (ch === '>' && !q) angle = false;
+    if ((ch === ',' || ch === ';') && !q && !angle) {
+      const t = cur.trim();
+      cur = '';
+      if (!t) continue;
+      const m = /^(.*?)\s*<([^>]+)>$/.exec(t);
+      const name = (m ? m[1]! : '').replace(/^"|"$/g, '').trim();
+      const email = (m ? m[2]! : t).trim();
+      out.push({ name: name && name !== email ? name : '', email });
+    } else cur += ch;
+  }
+  return out;
+}
+
+/** Príjemcovia v hlavičke otvorenej správy: pri veľa adresátoch (hromadné pozvánky na Teams a pod.)
+    len prví traja menom + „a ďalších N“, po rozbalení všetci v obmedzenej výške s posuvníkom. */
+function Recipients(props: { label: string; value: string }) {
+  const [open, setOpen] = useState(false);
+  const list = useMemo(() => splitAddresses(props.value), [props.value]);
+  const LIMIT = 3;
+  if (!list.length) return null;
+  const many = list.length > LIMIT + 2; // pri 4–5 adresátoch sa ukážu všetci
+  const shown = open || !many ? list : list.slice(0, LIMIT);
+  const rest = list.length - LIMIT;
+  return (
+    <div className={`muted read-rcpt ${open && many ? 'open' : ''}`}>
+      <span className="read-rcpt-label">{props.label}:</span>{' '}
+      {open && many && (
+        <button className="link read-rcpt-more" onClick={() => setOpen(false)}>
+          skryť ({list.length})
+        </button>
+      )}
+      <span className="read-rcpt-list">
+        {shown.map((a, i) => (
+          <span key={i} className="read-rcpt-item" title={a.name ? `${a.name} <${a.email}>` : a.email}>
+            {open && a.name ? `${a.name} <${a.email}>` : a.name || a.email}
+            {i < shown.length - 1 ? '; ' : ''}
+          </span>
+        ))}
+        {many && !open && (
+          <button className="link read-rcpt-more" onClick={() => setOpen(true)} title="Zobraziť všetkých adresátov">
+            {` a ${rest < 5 ? 'ďalší' : 'ďalších'} ${rest}`}
+          </button>
+        )}
+      </span>
+    </div>
   );
 }

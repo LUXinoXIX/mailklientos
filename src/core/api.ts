@@ -243,6 +243,25 @@ export interface MailApi {
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
   calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
   cardList(accountId: string): Promise<Result<Contact[]>>;
+  /** otvorí Teams na webe s prihlásením Outlook konta – na vytvorenie odkazu na schôdzu */
+  meetTeams(accountId: string): Promise<Result<true>>;
+  meetTeamsClose(): Promise<Result<true>>;
+  /** Jitsi schôdza v okne programu */
+  meetJitsi(url: string): Promise<Result<true>>;
+  /** text v schránke (zachytenie skopírovaného odkazu na Teams) */
+  clipboardRead(): Promise<Result<string>>;
+  /** naposledy použité adresy príjemcov (userData/recent.json, spoločné pre všetky okná) */
+  recentList(): Promise<Result<{ name: string; email: string; count: number; last: string }[]>>;
+  recentAdd(items: { name?: string; email: string }[], migrate?: boolean): Promise<Result<true>>;
+  recentRemove(emails: string[]): Promise<Result<true>>;
+  /** lokálny adresár v programe (userData/contacts.json) */
+  localContacts(): Promise<Result<Contact[]>>;
+  localPut(items: Contact[]): Promise<Result<Contact[]>>;
+  localRemove(uids: string[]): Promise<Result<true>>;
+  /** výber súboru .vcf/.csv na import kontaktov; text už dekódovaný; null = zrušené */
+  contactsPickImport(): Promise<Result<{ filename: string; text: string } | null>>;
+  /** uloženie exportu kontaktov; '' = zrušené */
+  contactsSaveExport(name: string, text: string): Promise<Result<string>>;
   cardSave(accountId: string, bookId: string, contact: Contact): Promise<Result<Contact>>;
   cardDelete(accountId: string, href: string): Promise<Result<true>>;
   setKeywords(accountId: string, folder: string, uids: number[], add: string[], remove: string[]): Promise<Result<true>>;
@@ -254,6 +273,8 @@ export interface MailApi {
   runRules(accountId: string, folder: string): Promise<Result<number>>;
   /** fulltext v lokálnej cache */
   searchLocal(q: string, accountId?: string, folder?: string, field?: string): Promise<Result<MessageSummary[]>>;
+  /** správy s vlajkou alebo pripnuté zo všetkých kont (z lokálnej cache) */
+  flaggedAll(limit?: number): Promise<Result<MessageSummary[]>>;
   /** hľadanie na serveri (IMAP SEARCH) */
   searchServer(accountId: string, folder: string, q: string, field?: string): Promise<Result<MessageSummary[]>>;
   send(accountId: string, msg: SendInput): Promise<Result<{ messageId: string; savedToSent: boolean }>>;
@@ -302,6 +323,8 @@ export type AppEvent =
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }
   | { type: 'outbox-changed' }
+  | { type: 'outbox-queued'; item: OutboxItem }
+  | { type: 'contacts-changed' }
   | { type: 'followup'; subject: string; to: string; accountId: string }
   | { type: 'progress'; text: string }
   | { type: 'update'; state: 'downloading' | 'none' | 'ready'; version?: string }

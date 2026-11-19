@@ -89,6 +89,10 @@ export interface AppSettings {
   accountListPinned?: boolean;
   /** náhľad kalendára / úloh vedľa čítacieho panela v pošte */
   myDay?: { calendar: boolean; tasks: boolean };
+  /** online schôdze v udalostiach (Teams cez zvolené Outlook konto, Jitsi server) */
+  meetings?: import('./meeting').MeetingSettings;
+  /** úvodná stránka Súhrn */
+  summary?: SummarySettings;
   /** zoradenie zoznamu správ */
   listSort?: { by: 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category'; dir: 'desc' | 'asc' };
   /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
@@ -267,4 +271,25 @@ export function normalizeUrl(input: string): string | null {
   } catch {
     return null;
   }
+}
+
+export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice';
+export interface SummarySettings {
+  /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
+  enabled?: boolean;
+  /** čo otvoriť po spustení (predvolene Súhrn) */
+  startup?: 'summary' | 'all' | 'last';
+  /** poradie a viditeľnosť dlaždíc */
+  tiles?: { id: SummaryTile; on: boolean }[];
+  /** vstavaná tapeta (id) alebo vlastný obrázok (data URL, zmenšený) */
+  wallpaper?: string;
+  customImage?: string;
+  /** vlastný obrázok je tmavý (zistené pri nahratí) */
+  customDark?: boolean;
+  /** nepriehľadnosť blokov 0.3–1 */
+  opacity?: number;
+  /** rozmazanie pozadia pod blokmi */
+  blur?: boolean;
+  /** tmavé bloky (undefined = podľa tapety) */
+  dark?: boolean;
 }

@@ -167,6 +167,15 @@ export function cachedList(account: string, folder: string, limit = 50): Message
   );
 }
 
+/** Správy s vlajkou alebo pripnuté naprieč kontami (úvodná stránka Súhrn). */
+export function flaggedAll(limit = 12): MessageSummary[] {
+  return safe(
+    (d) =>
+      (d.prepare("SELECT * FROM messages WHERE flagged = 1 OR keywords LIKE '%$Pinned%' ORDER BY date DESC LIMIT ?").all(limit) as Row[]).map(toSummary),
+    [],
+  );
+}
+
 export function cachedSummary(account: string, folder: string, uid: number): MessageSummary | null {
   return safe((d) => {
     const r = d.prepare('SELECT * FROM messages WHERE account = ? AND folder = ? AND uid = ?').get(account, folder, uid) as Row;

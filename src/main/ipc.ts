@@ -26,6 +26,9 @@ import * as tasksync from './tasksync';
 import * as extras from './extras';
 import * as cal from './calendar';
 import * as dav from './dav';
+import * as localbook from './localcontacts';
+import * as recent from './recent';
+import * as meeting from './meeting';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -99,6 +102,7 @@ export function registerIpc() {
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));
   handle('mail:list', (id: string, folder: string, limit?: number, preview?: boolean) => mail.listMessages(store.getImap(id), folder, limit, preview));
   handle('mail:listCached', (id: string, folder: string, limit?: number) => mail.listCached(id, folder, limit));
+  handle('mail:flaggedAll', (limit?: number) => cache.flaggedAll(limit ?? 12));
   handle('mail:search', (q: string, accountId?: string, folder?: string, field?: string) => cache.search(q, { account: accountId, folder, field }));
   handle('mail:searchServer', (id: string, folder: string, q: string, field?: string) => mail.searchServer(store.getImap(id), folder, q, 200, field));
   handle('mail:keywords', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
@@ -144,6 +148,18 @@ export function registerIpc() {
   handle('cal:save', (id: string, calendarId: string, e: CalEvent, invite: boolean) => cal.save(store.getImap(id), calendarId, e, invite));
   handle('cal:delete', (id: string, e: CalEvent, notify: boolean) => cal.remove(store.getImap(id), e, notify));
   handle('cal:respond', (id: string, folder: string, uid: number, ps: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => cal.respond(store.getImap(id), folder, uid, ps));
+  handle('meet:teams', (accountId: string) => meeting.openTeamsForLink(accountId));
+  handle('meet:teamsClose', () => meeting.closeTeamsWindow());
+  handle('meet:jitsi', (url: string) => meeting.openJitsi(url));
+  handle('clipboard:read', () => meeting.readClipboardText());
+  handle('recent:list', () => recent.list());
+  handle('recent:add', (items: { name?: string; email: string }[], migrate?: boolean) => recent.add(items, !!migrate));
+  handle('recent:remove', (emails: string[]) => recent.remove(emails));
+  handle('local:list', () => localbook.list());
+  handle('local:put', (items: Contact[]) => localbook.put(items));
+  handle('local:remove', (uids: string[]) => localbook.remove(uids));
+  handle('contacts:pickImport', () => localbook.pickImport(winOf()));
+  handle('contacts:saveExport', (name: string, text: string) => localbook.saveExport(winOf(), name, text));
   handle('card:list', (id: string) => cal.contactList(store.getImap(id)));
   handle('card:save', (id: string, bookId: string, c: Contact) => cal.contactSave(store.getImap(id), bookId, c));
   handle('card:delete', async (id: string, href: string) => {

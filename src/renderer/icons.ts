@@ -32,6 +32,8 @@ export {
   ArrowRepeatAll24Regular as LoopIcon,
   Sparkle24Regular as CopilotIcon,
   Board24Regular as PlannerIcon,
+  Home24Regular as HomeIcon,
+  Globe24Regular as WebmailIcon,
   Notebook24Regular as OneNoteIcon,
   Organization24Regular as SharePointIcon,
   Form24Regular as FormsIcon,

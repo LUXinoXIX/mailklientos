@@ -1,7 +1,7 @@
 // Horný pruh (vo farbe konta), ribbon pre IMAP kontá a pás modulov podľa typu konta.
 import { kb } from '../platform';
 import {
-  Button, Menu, MenuDivider, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
+  Button, Menu, MenuDivider, MenuGroupHeader, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, SearchBox, Select, Tab, TabList, Toolbar, ToolbarButton,
   ToolbarDivider, Tooltip,
 } from '@fluentui/react-components';
 import { useState, type ReactNode } from 'react';
@@ -460,23 +460,6 @@ export function Ribbon(props: {
               </MenuPopover>
             </Menu>
             <ToolbarButton icon={<RulesIcon />} onClick={() => p.onOrganize('rules')}>Pravidlá</ToolbarButton>
-            {p.onZimbra && (
-              <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                  <ToolbarButton icon={<ServerIcon />}>Zimbra</ToolbarButton>
-                </MenuTrigger>
-                <MenuPopover>
-                  <MenuList>
-                    <MenuItem onClick={() => p.onZimbra!('ooo')}>Neprítomnosť (automatická odpoveď)</MenuItem>
-                    <MenuItem onClick={() => p.onZimbra!('filters')}>Filtre na serveri</MenuItem>
-                    <MenuItem onClick={() => p.onZimbra!('shares')}>Zdieľané od kolegov</MenuItem>
-                    <MenuItem onClick={() => p.onZimbra!('spam')}>Spam: dôveryhodní a blokovaní</MenuItem>
-                    <MenuItem onClick={() => p.onZimbra!('sync')}>Podpisy, identity a značky</MenuItem>
-                    <MenuItem onClick={() => p.onZimbra!('password')}>Zmeniť heslo</MenuItem>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
-            )}
             <ToolbarDivider />
             <ToolbarButton icon={<SyncIcon />} onClick={p.onRefresh}>Obnoviť</ToolbarButton>
             <ToolbarButton icon={<SignatureIcon />} onClick={p.onSignatures}>Podpisy</ToolbarButton>
@@ -596,6 +579,9 @@ export const M365_WORK_MODULES: ModuleDef<M365Module>[] = [
 ];
 
 /** Osobný Outlook (Outlook.com, Hotmail, Live): pošta + osobné aplikácie. */
+/** Vložený webmail (Zimbra, Roundcube, SOGo, Horde…): len samotná stránka. */
+export const WEBMAIL_MODULES: ModuleDef<M365Module>[] = [{ key: 'mail', label: 'Webmail', icon: <MailIcon /> }];
+
 export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
   { key: 'mail', label: 'Pošta', icon: <MailIcon />, section: 'Outlook' },
   { key: 'calendar', label: 'Kalendár', icon: <CalendarIcon /> },
@@ -611,7 +597,7 @@ export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
   { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
 ];
 
-export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void }) {
+export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void; footer?: React.ReactNode }) {
   return (
     <nav className="rail" aria-label="Moduly konta">
       {props.modules.map((m) => {
@@ -634,6 +620,44 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
           </div>
         );
       })}
+      {props.footer && <div className="rail-footer">{props.footer}</div>}
     </nav>
+  );
+}
+
+/** Spodok pásu modulov IMAP konta: nastavenia Zimbry a nastavenia tohto konta (nie globálne v ozubenom kolieske). */
+export function AccountRailFooter(props: { accountName: string; onZimbra?: (tab?: 'ooo' | 'filters' | 'shares' | 'spam' | 'sync' | 'password') => void; onAccount: () => void }) {
+  return (
+    <>
+      {props.onZimbra && (
+        <Menu positioning="after-bottom">
+          <MenuTrigger disableButtonEnhancement>
+            <Tooltip content={`Zimbra – ${props.accountName}: neprítomnosť, filtre, zdieľania, heslo…`} relationship="label" positioning="after">
+              <button className="rail-btn">
+                <ServerIcon />
+                <span className="rail-label">Zimbra</span>
+              </button>
+            </Tooltip>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuGroupHeader>Zimbra – {props.accountName}</MenuGroupHeader>
+              <MenuItem onClick={() => props.onZimbra!('ooo')}>Neprítomnosť (automatická odpoveď)</MenuItem>
+              <MenuItem onClick={() => props.onZimbra!('filters')}>Filtre na serveri</MenuItem>
+              <MenuItem onClick={() => props.onZimbra!('shares')}>Zdieľané od kolegov</MenuItem>
+              <MenuItem onClick={() => props.onZimbra!('spam')}>Spam: dôveryhodní a blokovaní</MenuItem>
+              <MenuItem onClick={() => props.onZimbra!('sync')}>Podpisy, identity a značky</MenuItem>
+              <MenuItem onClick={() => props.onZimbra!('password')}>Zmeniť heslo</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      )}
+      <Tooltip content={`Nastavenia konta ${props.accountName}`} relationship="label" positioning="after">
+        <button className="rail-btn" onClick={props.onAccount}>
+          <SettingsIcon />
+          <span className="rail-label">Konto</span>
+        </button>
+      </Tooltip>
+    </>
   );
 }
