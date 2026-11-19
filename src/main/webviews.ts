@@ -4,7 +4,8 @@
 // Každý web má vlastnú trvalú reláciu (partition): oddelené prihlásenie a cookies.
 import { attachContextMenu } from './contextmenu';
 import path from 'node:path';
-import { BrowserWindow, session, shell, type Session, type WebContents } from 'electron';
+import { app, BrowserWindow, session, shell, type Session, type WebContents } from 'electron';
+import { loadAccounts } from './accounts';
 import type { WebEvent } from '../core/api';
 import { log } from './diagnostics';
 
@@ -47,7 +48,7 @@ const isMs = (url: string) => {
 /** User-agent bez „Electron/…“ a názvu aplikácie, aby weby (Outlook, WhatsApp) videli bežný Chrome. */
 const chromeUserAgent = (ua: string) => ua.replace(/\s(MailKlient|mailklient)\/\S+/g, '').replace(/\sElectron\/\S+/g, '');
 
-function prepareSession(partition: string) {
+export function prepareSession(partition: string) {
   const ses = session.fromPartition(partition);
   if (prepared.has(ses)) return ses;
   prepared.add(ses);
@@ -60,6 +61,42 @@ function prepareSession(partition: string) {
   ses.setPermissionCheckHandler((_wc, perm) => allowed.has(perm));
   ses.setPermissionCheckHandler((_wc, perm) => allowed.has(perm));
   return ses;
+}
+
+/** Rovnaký server/doména (mail.firma.sk a webmail.firma.sk sú tá istá stránka). */
+const siteOf = (u: string) => {
+  try {
+    const h = new URL(u).hostname.toLowerCase();
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) return h;
+    return h.split('.').slice(-2).join('.');
+  } catch {
+    return '';
+  }
+};
+const sameSite = (a: string, b: string) => !!siteOf(a) && siteOf(a) === siteOf(b);
+
+/** Vložený webmail s neplatným certifikátom (interný server): dôverovať, len ak to konto povolí, len pre jeho server. */
+let certHandler = false;
+function installCertHandler() {
+  if (certHandler) return;
+  certHandler = true;
+  app.on('certificate-error', (event, wc, url, error, _cert, callback) => {
+    try {
+      const host = new URL(url).hostname;
+      const acc = loadAccounts().find(
+        (a) => a.kind === 'm365' && 'host' in a && a.host === 'web' && a.webIgnoreCert && a.webUrl && new URL(a.webUrl).hostname === host && wc.session === session.fromPartition(`persist:acc-${a.id}`),
+      );
+      if (acc) {
+        event.preventDefault();
+        log('webmail: neplatný certifikát prijatý', { host, error });
+        callback(true);
+        return;
+      }
+    } catch {
+      /* nič */
+    }
+    callback(false);
+  });
 }
 
 /** Skupina kariet podľa relácie: „acc-<id>“ pre kontá M365, „web-<id>“ pre pravý panel. */
@@ -79,6 +116,11 @@ function setupGuest(guest: WebContents) {
       emit({ type: 'tab-opened', group, key: `${group}~${++tabSeq}`, url });
       return { action: 'deny' };
     }
+    // 2b) vložený webmail (Zimbra, Roundcube…): odkazy na ten istý server (nové okno správy, písanie) ako karta
+    if (group.startsWith('acc-') && sameSite(url, guest.getURL())) {
+      emit({ type: 'tab-opened', group, key: `${group}~${++tabSeq}`, url });
+      return { action: 'deny' };
+    }
     // 3) ostatné odkazy: bežný prehliadač
     if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
@@ -88,6 +130,7 @@ function setupGuest(guest: WebContents) {
 /** Prepojí hlavné okno: bezpečnostné nastavenia pre <webview> a obsluha nových okien. */
 export function attachWindow(w: BrowserWindow) {
   win = w;
+  installCertHandler();
   w.on('closed', () => {
     win = null;
   });

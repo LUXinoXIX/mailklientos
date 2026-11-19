@@ -29,12 +29,16 @@ import { MyDayPane, type MyDayEvent } from './components/MyDayPane';
 import { useAttachmentGuard } from './components/AttachmentGuard';
 import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
-import { ContactsView } from './components/ContactsView';
+import { AddressBook } from './components/AddressBook';
+import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
-  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
+  IMAP_MODULES, M365_PERSONAL_MODULES, M365_WORK_MODULES, WEBMAIL_MODULES, AccountRailFooter, ModuleRail, Ribbon, TopBar, type ImapModule, type M365Module, type RibbonTab,
 } from './components/Shell';
 import { DEMO_ID, demoAccount, demoFolders, demoMessages } from './mock';
+
+/** kľúč modulu pri voľbe „Všetky“ kontá (Pošta / Úlohy / Kontakty) */
+const ALL_MODULES = '__all__';
 import { accountColor, getTheme, themeById, themeVars, type ThemeKey } from './theme';
 
 declare global {
@@ -67,7 +71,7 @@ type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
   | { kind: 'imap'; edit?: ImapAccountPublic }
-  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' }
+  | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' | 'web' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
   | { kind: 'templates' }
@@ -228,6 +232,13 @@ export function App() {
         setStatus(ev.text);
       } else if (ev.type === 'outbox-changed') {
         setOutboxTick((t) => t + 1);
+      } else if (ev.type === 'outbox-queued') {
+        // odoslané zo samostatného okna (to sa hneď zavrie) → „Odosiela sa… Späť“ v hlavnom okne
+        if (POP_COMPOSE || POP_VIEW) return;
+        if (ev.item.kind === 'undo') setUndo((u) => (u?.id === ev.item.id ? u : ev.item));
+        else setStatus(`Správa „${ev.item.subject || '(bez predmetu)'}“ sa odošle ${new Date(ev.item.sendAt).toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}.`);
+      } else if (ev.type === 'contacts-changed') {
+        setRecentTick((t) => t + 1);
       } else if (ev.type === 'open-message') {
         pendingOpen.current = { accountId: ev.accountId, uid: ev.uid };
         setActiveId(ev.accountId);
@@ -287,8 +298,25 @@ export function App() {
   }, [api]);
   useEffect(() => {
     void loadAccounts();
-    void api?.getSettings().then((r) => r.ok && setSettings(r.data));
-  }, [loadAccounts, api]);
+    void api?.getSettings().then((r) => {
+      if (!r.ok) return;
+      setSettings(r.data);
+      // úvodná stránka po spustení (len hlavné okno)
+      if (!POP_COMPOSE && !POP_VIEW && !startupDone.current) {
+        startupDone.current = true;
+        const st = r.data.summary?.startup ?? 'summary';
+        if (st === 'summary' && r.data.summary?.enabled !== false) setActiveId(SUMMARY);
+        else if (st === 'all') setActiveId(ALL);
+        else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
+      }
+    });
+  }, [loadAccounts, api]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startupDone = useRef(false);
+  const summaryEnabled = settings.summary?.enabled !== false;
+  const summaryOn = summaryEnabled && activeId === SUMMARY && !POP_COMPOSE && !POP_VIEW;
+  useEffect(() => {
+    if (activeId && activeId !== SUMMARY) localStorage.setItem('lastAccount', activeId);
+  }, [activeId]);
 
   const saveSettings = (s: AppSettings) => {
     setSettings(s);
@@ -376,7 +404,7 @@ export function App() {
   }, [activeImap?.id, demo, api, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // správy
-  const showMail = !activeM365 && (activeImap ? (imapModule[activeImap.id] ?? 'mail') === 'mail' : true);
+  const showMail = !activeM365 && (imapModule[activeImap?.id ?? ALL_MODULES] ?? 'mail') === 'mail';
   useEffect(() => {
     if (!showMail || POP_VIEW || POP_COMPOSE) return;
     let cancelled = false;
@@ -517,10 +545,14 @@ export function App() {
   }
 
   // operácie so správou
+  // viac vybraných správ v zozname (Ctrl/Shift + klik alebo Shift+šípky)
+  const [multiSel, setMultiSel] = useState<MessageSummary[]>([]);
   const removeFromList = (m: MessageSummary) => {
-    setMessages((list) => list.filter((x) => !(x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder)));
-    setCurrent(undefined);
-    setFull({ loading: false });
+    const same = (x?: MessageSummary) => !!x && x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder;
+    setMessages((list) => list.filter((x) => !same(x)));
+    // výber zrušiť len vtedy, keď ukazuje odstránenú správu (po Delete v zozname sa medzitým vybrala ďalšia)
+    setCurrent((c) => (same(c) ? undefined : c));
+    setFull((f) => (f.msg && same(f.msg) ? { loading: false } : f));
   };
   // ---- menu na pravý klik a hromadné akcie ----
   const [ctx, setCtx] = useState<CtxState | null>(null);
@@ -1018,6 +1050,15 @@ export function App() {
   };
 
   // náhľad kalendára a úloh vedľa čítacieho panela (len pošta IMAP/Zimbra)
+  // online schôdze v udalostiach: Teams cez Outlook kontá, Jitsi
+  const meetProps = useMemo(
+    () => ({
+      settings: settings.meetings ?? {},
+      outlooks: accounts.filter(isM365).filter((a) => a.host !== 'web').map((a) => ({ id: a.id, name: a.name || a.email, personal: a.host === 'live' })),
+      onSettings: (m: NonNullable<AppSettings['meetings']>) => saveSettings({ ...settings, meetings: m }),
+    }),
+    [settings, accounts], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const myDay = settings.myDay ?? { calendar: false, tasks: false };
   const myDayOn = myDay.calendar || myDay.tasks;
   const [myMonth, setMyMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -1104,13 +1145,15 @@ export function App() {
     if (ctrl && k === 'u') return e.preventDefault(), current && current.seen && void toggleSeen();
     if (ctrl && k === 'p') return e.preventDefault(), current && void api?.printMessage(current.accountId, current.folder, current.uid, false);
     if (e.key === 'Insert') return e.preventDefault(), current && void toggleFlag();
+    if (e.key === 'Delete' && multiSel.length > 1) return e.preventDefault(), void bulk(multiSel, 'delete');
     if (e.key === 'Delete' && current) return e.preventDefault(), void del();
     if (ctrl && e.shiftKey && k === 'v') return e.preventDefault(), setStatus('Presun: použite Domov → Presunúť alebo pretiahnite správu na priečinok.');
     if (e.key === 'F9') return e.preventDefault(), void sendReceive();
-    if (ctrl && ['1', '2', '3', '4'].includes(e.key) && activeImap) {
+    if (ctrl && ['1', '2', '3', '4'].includes(e.key) && !activeM365) {
       e.preventDefault();
       const mod = (['mail', 'calendar', 'contacts', 'tasks'] as ImapModule[])[Number(e.key) - 1]!;
-      setImapModule((x) => ({ ...x, [activeImap.id]: mod }));
+      if (mod === 'calendar' && !activeImap) return;
+      setImapModule((x) => ({ ...x, [activeImap?.id ?? ALL_MODULES]: mod }));
     }
   };
   useEffect(() => {
@@ -1223,16 +1266,40 @@ export function App() {
       void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
   }, [api, accounts, demo]);
 
+  // lokálny adresár (v programe) a naposledy použité adresy – na dopĺňanie aj do modulu Kontakty
+  const [bookTick, setBookTick] = useState(0);
+  const [localBook, setLocalBook] = useState<Contact[]>([]);
+  useEffect(() => {
+    if (!api) return;
+    void api.localContacts().then((r) => r.ok && setLocalBook(r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email })))));
+    if (bookTick && !demo) for (const a of accounts.filter(isImap)) void api.cardList(a.id).then((r) => r.ok && setDavContacts((x) => ({ ...x, [a.id]: r.data.flatMap((c) => c.emails.map((email) => ({ name: c.name, email }))) })));
+  }, [api, bookTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bookAccounts = useMemo(() => imapAccounts.filter((a) => a.id !== DEMO_ID), [imapAccounts]);
+  // naposledy použité adresy príjemcov – v hlavnom procese (spoločné pre všetky okná); starý zoznam z localStorage sa raz prevezme
+  const [recentContacts, setRecentContacts] = useState<Contact[]>([]);
+  const [recentTick, setRecentTick] = useState(0);
+  useEffect(() => {
+    if (!api) return;
+    void (async () => {
+      try {
+        const old = localStorage.getItem('contacts');
+        if (old) {
+          const r = await api.recentAdd(JSON.parse(old) as Contact[], true);
+          if (r.ok) localStorage.removeItem('contacts');
+        }
+      } catch {
+        /* poškodený starý zoznam – ignorovať */
+      }
+      const r = await api.recentList();
+      if (r.ok) setRecentContacts(r.data.map((x) => ({ name: x.name, email: x.email })));
+    })();
+  }, [api, recentTick]);
+
   const contacts = useMemo<Contact[]>(() => {
-    let known: Contact[] = [...Object.values(davContacts).flat()];
-    try {
-      known = [...(JSON.parse(localStorage.getItem('contacts') ?? '[]') as Contact[]), ...known];
-    } catch {
-      /* nič */
-    }
+    const known: Contact[] = [...recentContacts, ...localBook, ...Object.values(davContacts).flat()];
     const all = [...known, ...messages.map((m) => ({ name: m.fromName, email: m.fromAddress }))].filter((c) => c.email);
     return all.filter((c, i) => all.findIndex((x) => x.email.toLowerCase() === c.email.toLowerCase()) === i);
-  }, [messages, composeView, davContacts]);
+  }, [messages, davContacts, localBook, recentContacts]);
 
   // hľadanie: fulltext v lokálnej cache (všetky uložené priečinky konta), na požiadanie aj na serveri
   const [found, setFound] = useState<{ q: string; list: MessageSummary[]; server?: 'loading' | 'done' } | null>(null);
@@ -1308,7 +1375,7 @@ export function App() {
     setTabs((t) => ({
       ...t,
       [acc.id]: {
-        tabs: exists ? st.tabs : [...st.tabs, { key, title: MODULE_TITLES[mod], url: moduleUrl(mod, acc.host), module: mod }],
+        tabs: exists ? st.tabs : [...st.tabs, { key, title: acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod], url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
         active: key,
       },
     }));
@@ -1338,13 +1405,13 @@ export function App() {
       ? `${activeImap.email} · IMAP${activeImap.imap.host ? ` · ${activeImap.imap.host}` : ''}`
       : `${imapAccounts.length} IMAP ${imapAccounts.length === 1 ? 'konto' : imapAccounts.length < 5 ? 'kontá' : 'kont'}`;
 
-  const curImapModule: ImapModule = activeImap ? imapModule[activeImap.id] ?? 'mail' : 'mail';
+  const curImapModule: ImapModule = imapModule[activeImap?.id ?? ALL_MODULES] ?? 'mail';
   // samostatné okno písania: načítať koncept a zobraziť len editor
   const [popInit, setPopInit] = useState<ComposeInit | null>(null);
   const [popDone, setPopDone] = useState(false);
   const popStarted = useRef(false);
   useEffect(() => {
-    if (POP_COMPOSE && popDone && !undo && !composeView) window.setTimeout(() => window.close(), 300);
+    if (POP_COMPOSE && popDone && !undo && !composeView) window.close();
   }, [popDone, undo, composeView]);
   useEffect(() => {
     if (!POP_COMPOSE || !api || popStarted.current) return;
@@ -1378,7 +1445,7 @@ export function App() {
               zimbra={zimbraOk}
               standalone
               onState={() => undefined}
-              onQueued={(it) => it.kind === 'undo' && setUndo(it)}
+              onQueued={() => undefined /* stav odosielania a „Späť“ ukáže hlavné okno */}
               onSaveTemplate={saveTemplate}
               onClose={(st) => {
                 if (st) setStatus(st);
@@ -1421,7 +1488,7 @@ export function App() {
       <div className="shell">
         <AccountRail
           accounts={railAccounts}
-          active={activeKey}
+          active={summaryOn ? SUMMARY : activeKey}
           unread={unread}
           showAll={imapAccounts.length > 1}
           onSelect={setActiveId}
@@ -1435,11 +1502,17 @@ export function App() {
           onSignatures={() => openDialog({ kind: 'signatures' })}
           gpuOff={gpuOff}
           notifications={settings.notifications !== false}
+          showSummary={summaryEnabled}
+          onToggleSummary={() => {
+            const on = !summaryEnabled;
+            saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: on } });
+            if (on) setActiveId(SUMMARY);
+            else if (activeId === SUMMARY) setActiveId(localStorage.getItem('lastAccount') ?? '');
+          }}
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
-          onZimbra={activeImap && zimbraOk[activeImap.id] ? () => openDialog({ kind: 'zimbra' }) : undefined}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
           gpuForced={gpuForced}
@@ -1449,9 +1522,37 @@ export function App() {
           onPin={(v) => saveSettings({ ...settings, accountListPinned: v })}
           onMenuOpen={setMenuOverlay}
         />
-        <div className="workspace">
+        <div className={`workspace ${summaryOn ? 'with-summary' : ''}`}>
+          {summaryOn && (
+            <SummaryPage
+              accounts={railAccounts.filter((a) => a.id !== DEMO_ID)}
+              unread={unread}
+              colorOf={colorOf}
+              calendarAccounts={imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, name: a.name }))}
+              tasks={settings.tasks ?? []}
+              quota={quota}
+              settings={settings.summary ?? {}}
+              onSettings={(sm) => saveSettings({ ...settings, summary: sm })}
+              onOpenAccount={(id) => setActiveId(id)}
+              onOpenMessage={(m) => openTaskMessage({ accountId: m.accountId, folder: m.folder, uid: m.uid, subject: m.subject, from: m.fromName || m.fromAddress })}
+              onOpenTasks={() => {
+                setActiveId(ALL);
+                setImapModule((x) => ({ ...x, [ALL_MODULES]: 'tasks' }));
+              }}
+              onToggleTask={(t) => saveSettings({ ...settings, tasks: (settings.tasks ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done, dirty: true } : x)) })}
+              onOpenCalendar={(id) => {
+                setActiveId(id);
+                setImapModule((x) => ({ ...x, [id]: 'calendar' }));
+              }}
+              onDisable={() => {
+                saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: false } });
+                setActiveId(localStorage.getItem('lastAccount') ?? '');
+                setStatus('Súhrn je vypnutý. Zapneš ho v ozubenom kolieske dole vľavo.');
+              }}
+            />
+          )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1495,7 +1596,6 @@ export function App() {
               onTogglePin={() => void togglePin()}
               onTask={(due) => void taskFromMessage(due)}
               onIo={(k) => void runIo(k)}
-              onZimbra={activeImap && zimbraOk[activeImap.id] ? (tab) => openDialog({ kind: 'zimbra', tab }) : undefined}
               onSnooze={(d) => void snoozeCurrent(d)}
               quickSteps={settings.quickSteps ?? []}
               onQuickStep={(q) => void runQuickStep(q)}
@@ -1585,13 +1685,22 @@ export function App() {
               />
             )}
             {activeM365 ? (
-              <ModuleRail modules={activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
+              <ModuleRail modules={activeM365.host === 'web' ? WEBMAIL_MODULES : activeM365.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES} active={m365ActiveModule} color={topColor} onSelect={(k) => selectM365Module(activeM365, k)} />
             ) : (
               <ModuleRail
-                modules={IMAP_MODULES}
+                modules={activeImap ? IMAP_MODULES : IMAP_MODULES.filter((m) => m.key !== 'calendar')}
                 active={curImapModule}
                 color={topColor}
-                onSelect={(k) => activeImap && setImapModule((m) => ({ ...m, [activeImap.id]: k }))}
+                onSelect={(k) => setImapModule((m) => ({ ...m, [activeImap?.id ?? ALL_MODULES]: k }))}
+                footer={
+                  activeImap && activeImap.id !== DEMO_ID ? (
+                    <AccountRailFooter
+                      accountName={activeImap.name || activeImap.email}
+                      onZimbra={zimbraOk[activeImap.id] ? (tab) => openDialog({ kind: 'zimbra', tab }) : undefined}
+                      onAccount={() => editAccount(activeImap)}
+                    />
+                  ) : undefined
+                }
               />
             )}
             <div className="content">
@@ -1750,6 +1859,7 @@ export function App() {
                     onOpenFull={(m, alt) => openFull(m, alt)}
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
+                    onMulti={setMultiSel}
                     onQuick={(m, a) =>
                       void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }
@@ -1919,16 +2029,19 @@ export function App() {
                 curImapModule === 'tasks' ? (
                   <TasksView settings={settings} onSettings={saveSettings} onOpenMessage={openTaskMessage} />
                 ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'calendar' ? (
-                  <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} />
-                ) : activeImap && activeImap.id !== DEMO_ID && curImapModule === 'contacts' ? (
-                  <ContactsView
-                    key={activeImap.id}
-                    account={activeImap}
-                    zimbra={!!zimbraOk[activeImap.id]}
+                  <CalendarView key={activeImap.id} account={activeImap} zimbra={!!zimbraOk[activeImap.id]} onStatus={setStatus} onSettings={() => editAccount(activeImap)} meet={meetProps} />
+                ) : curImapModule === 'contacts' ? (
+                  <AddressBook
+                    accounts={bookAccounts}
+                    zimbraOk={zimbraOk}
+                    recent={recentContacts}
+                    defaultAccountId={activeImap?.id ?? imapAccounts.find((a) => a.id !== DEMO_ID)?.id}
                     onStatus={setStatus}
-                    onCompose={(to) => {
-                      setImapModule((m) => ({ ...m, [activeImap.id]: 'mail' }));
-                      setCompose({ init: { kind: 'new', accountId: activeImap.id, to }, key: Date.now() });
+                    onChanged={() => setBookTick((t) => t + 1)}
+                    onCompose={(to, accId) => {
+                      const acc = accId ?? activeImap?.id ?? imapAccounts[0]?.id;
+                      setImapModule((m) => ({ ...m, [activeImap?.id ?? ALL_MODULES]: 'mail' }));
+                      setCompose({ init: { kind: 'new', accountId: acc, to }, key: Date.now() });
                       setRibbonTab('message');
                     }}
                   />

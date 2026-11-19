@@ -27,6 +27,8 @@ export function queue(accountId: string, input: SendInput, sendAt: Date, kind: '
   const item: OutboxItem = { id: crypto.randomUUID(), accountId, input, sendAt: sendAt.toISOString(), subject: input.subject, to: input.to, kind };
   save([...load(), item]);
   emit({ type: 'outbox-changed' });
+  // hlavné okno ukáže „Odosiela sa… Späť“ aj vtedy, keď sa správa odoslala zo samostatného okna (to sa hneď zavrie)
+  emit({ type: 'outbox-queued', item });
   return item;
 }
 

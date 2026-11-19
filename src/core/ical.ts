@@ -19,6 +19,8 @@ export interface CalEvent {
   allDay: boolean;
   location?: string;
   description?: string;
+  /** odkaz na online schôdzu (Teams, Jitsi, …) */
+  onlineUrl?: string;
   organizer?: { email: string; name?: string };
   attendees?: CalAttendee[];
   status?: string;
@@ -40,6 +42,7 @@ export interface Contact {
   phones: string[];
   org?: string;
   title?: string;
+  note?: string;
   href?: string;
   etag?: string;
   bookId?: string;
@@ -71,7 +74,8 @@ function parseLines(text: string): Prop[] {
     const head = line.slice(0, i);
     const value = line.slice(i + 1);
     const parts = head.match(/(?:[^;"]|"[^"]*")+/g) ?? [head];
-    const name = (parts[0] ?? '').toUpperCase();
+    // skupina pred názvom (item1.EMAIL z Apple) sa ignoruje
+    const name = (parts[0] ?? '').toUpperCase().replace(/^[A-Z0-9-]+\./, '');
     const params: Record<string, string> = {};
     for (const p of parts.slice(1)) {
       const eq = p.indexOf('=');
@@ -199,6 +203,10 @@ function eventFrom(c: Comp): CalEvent | null {
     allDay: start.allDay,
     location: get(c, 'LOCATION') ? unescapeText(get(c, 'LOCATION')!.value) : undefined,
     description: get(c, 'DESCRIPTION') ? unescapeText(get(c, 'DESCRIPTION')!.value) : undefined,
+    onlineUrl: (() => {
+      const v = (get(c, 'X-MICROSOFT-SKYPETEAMSMEETINGURL') ?? get(c, 'X-GOOGLE-CONFERENCE') ?? get(c, 'URL'))?.value;
+      return v && /^https:\/\//i.test(v) ? v : undefined;
+    })(),
     organizer: org ? { email: mailto(org.value), name: org.params.CN } : undefined,
     attendees: c.props
       .filter((p) => p.name === 'ATTENDEE')
@@ -347,6 +355,11 @@ function eventLines(e: CalEvent, extra: string[] = []): string[] {
   ];
   if (e.location) L.push(`LOCATION:${escapeText(e.location)}`);
   if (e.description) L.push(`DESCRIPTION:${escapeText(e.description)}`);
+  if (e.onlineUrl) {
+    L.push(`URL:${e.onlineUrl}`);
+    // Outlook a Teams podľa tejto vlastnosti ukážu tlačidlo „Pripojiť sa“
+    if (/teams\.(microsoft|live)\.com/i.test(e.onlineUrl)) L.push(`X-MICROSOFT-SKYPETEAMSMEETINGURL:${e.onlineUrl}`);
+  }
   if (e.rrule) L.push(`RRULE:${e.rrule}`);
   if (e.sequence) L.push(`SEQUENCE:${e.sequence}`);
   if (e.status) L.push(`STATUS:${e.status}`);
@@ -410,6 +423,7 @@ export function parseVCards(text: string): Contact[] {
         phones: c.props.filter((p) => p.name === 'TEL').map((p) => p.value.replace(/^tel:/i, '').trim()).filter(Boolean),
         org: get(c, 'ORG') ? unescapeText(get(c, 'ORG')!.value.split(';')[0] ?? '') : undefined,
         title: get(c, 'TITLE') ? unescapeText(get(c, 'TITLE')!.value) : undefined,
+        note: get(c, 'NOTE') ? unescapeText(get(c, 'NOTE')!.value) : undefined,
       };
     });
 }
@@ -422,6 +436,7 @@ export function buildVCard(c: Contact): string {
   for (const p of c.phones) L.push(`TEL:${p}`);
   if (c.org) L.push(`ORG:${escapeText(c.org)}`);
   if (c.title) L.push(`TITLE:${escapeText(c.title)}`);
+  if (c.note) L.push(`NOTE:${escapeText(c.note)}`);
   L.push('END:VCARD');
   return L.map(fold).join('\r\n') + '\r\n';
 }
