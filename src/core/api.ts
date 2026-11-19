@@ -243,6 +243,10 @@ export interface MailApi {
   calDelete(accountId: string, event: CalEvent, notify: boolean): Promise<Result<true>>;
   calRespond(accountId: string, folder: string, uid: number, partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'): Promise<Result<string>>;
   cardList(accountId: string): Promise<Result<Contact[]>>;
+  /** naposledy použité adresy príjemcov (userData/recent.json, spoločné pre všetky okná) */
+  recentList(): Promise<Result<{ name: string; email: string; count: number; last: string }[]>>;
+  recentAdd(items: { name?: string; email: string }[], migrate?: boolean): Promise<Result<true>>;
+  recentRemove(emails: string[]): Promise<Result<true>>;
   /** lokálny adresár v programe (userData/contacts.json) */
   localContacts(): Promise<Result<Contact[]>>;
   localPut(items: Contact[]): Promise<Result<Contact[]>>;
@@ -310,6 +314,8 @@ export type AppEvent =
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }
   | { type: 'outbox-changed' }
+  | { type: 'outbox-queued'; item: OutboxItem }
+  | { type: 'contacts-changed' }
   | { type: 'followup'; subject: string; to: string; accountId: string }
   | { type: 'progress'; text: string }
   | { type: 'update'; state: 'downloading' | 'none' | 'ready'; version?: string }

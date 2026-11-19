@@ -798,3 +798,4 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .ci-prev-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; padding: 3px 0; font-size: 13px; }
 .ci-prev-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ci-sum { padding: 8px 10px; border-radius: 6px; background: var(--colorNeutralBackground2); }
+.ab-hint { padding: 8px 12px; line-height: 1.45; border-bottom: 1px solid var(--colorNeutralStroke3); }
