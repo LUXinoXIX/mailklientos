@@ -41,11 +41,23 @@ export interface SignatureDefaults {
 }
 
 /** vlastný pravý panel (weby + programy), ktorý môže používať jedno alebo viac kont */
+/** Kalendár z odkazu (ICS/webcal) v karte pravého panela – poradie = poradie v zozname. */
+export interface IcsFeed {
+  id: string;
+  name: string;
+  url: string;
+  /** počet zobrazených najbližších udalostí */
+  count: number;
+  color?: string;
+}
+
 export interface RightPanelDef {
   id: string;
   name: string;
   webs: WebItem[];
   launchers: LauncherItem[];
+  /** karta „Kalendáre (ICS)“ v tomto paneli */
+  icsFeeds?: IcsFeed[];
 }
 
 export interface AppSettings {
@@ -91,6 +103,8 @@ export interface AppSettings {
   myDay?: { calendar: boolean; tasks: boolean };
   /** online schôdze v udalostiach (Teams cez zvolené Outlook konto, Jitsi server) */
   meetings?: import('./meeting').MeetingSettings;
+  /** karta „Kalendáre (ICS)“ v spoločnom pravom paneli */
+  icsFeeds?: IcsFeed[];
   /** úvodná stránka Súhrn */
   summary?: SummarySettings;
   /** zoradenie zoznamu správ */
@@ -273,7 +287,7 @@ export function normalizeUrl(input: string): string | null {
   }
 }
 
-export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds';
+export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds' | 'news';
 export interface SummarySettings {
   /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
   enabled?: boolean;
@@ -288,6 +302,10 @@ export interface SummarySettings {
   customDark?: boolean;
   /** kalendáre z odkazu (iCal/webcal) – najbližšie udalosti */
   feeds?: { id: string; name: string; url: string; count: number }[];
+  /** správy z RSS/Atom kanálov (dlaždica Správy) */
+  news?: { id: string; name: string; url: string; count: number }[];
+  /** kalendáre z odkazu na celú šírku (stĺpec pre každý), pod ostatnými dlaždicami */
+  feedsWide?: boolean;
   /** nepriehľadnosť blokov 0.3–1 */
   opacity?: number;
   /** rozmazanie pozadia pod blokmi */

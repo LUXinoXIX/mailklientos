@@ -369,7 +369,7 @@ export function MessageList(props: {
       <button
         key={`${m.accountId}/${m.folder}/${m.uid}`}
         data-k={keyOf(m)}
-        className={`msg ${sel ? 'selected' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
+        className={`msg ${sel ? 'selected' : ''} ${sel && multi.length > 1 ? 'multi-sel' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
         draggable
         onDragStart={(e) => {
           const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid] };

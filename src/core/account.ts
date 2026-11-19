@@ -80,6 +80,11 @@ export interface M365Account {
   webUser?: string;
   /** webmail: po vyplnení aj odoslať prihlásenie */
   webAutoLogin?: boolean;
+  /** pás aplikácií Office (moduly) vľavo: poradie kľúčov, skryté, vlastné odkazy, celý pás vypnutý */
+  railOrder?: string[];
+  railHidden?: string[];
+  railCustom?: { key: string; label: string; url: string }[];
+  railOff?: boolean;
   /** krátky štítok v zbalenom páse kont (prázdne = MS365 / MSO) */
   short?: string;
   /** ikonka v páse kont */
