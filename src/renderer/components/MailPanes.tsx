@@ -235,6 +235,10 @@ export function MessageList(props: {
   onDeleteMany?: (msgs: MessageSummary[]) => void;
   /** zmena výberu viacerých správ (počet) */
   onMulti?: (msgs: MessageSummary[]) => void;
+  /** karta Označené: správy s vlajkou zo servera (aj staršie ako načítaný zoznam) */
+  onFlaggedServer?: () => Promise<MessageSummary[]>;
+  /** identifikácia zobrazeného priečinka (na obnovenie výsledku zo servera) */
+  listKey?: string;
   /** rýchle akcie priamo v riadku (pri prejdení myšou) */
   onQuick?: (m: MessageSummary, a: 'flag' | 'pin' | 'delete' | 'seen') => void;
   sort?: { by: SortBy; dir: 'desc' | 'asc' };
@@ -250,9 +254,31 @@ export function MessageList(props: {
   onLoadMore?: () => void;
   loadingMore?: boolean;
 }) {
-  const [tab, setTab] = useState<'all' | 'unread'>('all');
+  const [tab, setTab] = useState<'all' | 'unread' | 'flagged'>('all');
+  // karta Označené: okrem načítaných správ aj staršie s vlajkou zo servera
+  const [srvFlagged, setSrvFlagged] = useState<{ key: string; list: MessageSummary[]; loading: boolean } | null>(null);
+  const listKey = props.listKey ?? '';
+  useEffect(() => {
+    if (tab !== 'flagged' || !props.onFlaggedServer) return;
+    if (srvFlagged?.key === listKey) return;
+    let alive = true;
+    setSrvFlagged({ key: listKey, list: [], loading: true });
+    void props.onFlaggedServer().then((list) => alive && setSrvFlagged({ key: listKey, list, loading: false }));
+    return () => {
+      alive = false;
+    };
+  }, [tab, listKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [open, setOpen] = useState<string | null>(null);
-  const base = tab === 'unread' ? props.messages.filter((m) => !m.seen) : props.messages;
+  const base = useMemo(() => {
+    if (tab === 'unread') return props.messages.filter((m) => !m.seen);
+    if (tab !== 'flagged') return props.messages;
+    const loaded = props.messages.filter((m) => m.flagged);
+    const k = (m: MessageSummary) => `${m.accountId}/${m.folder}/${m.uid}`;
+    const have = new Set(props.messages.map(k));
+    // zo servera len tie, ktoré v načítanom zozname nie sú (a nemajú medzitým zrušenú vlajku)
+    const extra = srvFlagged?.key === listKey ? srvFlagged.list.filter((m) => m.flagged && !have.has(k(m))) : [];
+    return [...loaded, ...extra];
+  }, [tab, props.messages, srvFlagged, listKey]);
   const isPinned = (m: MessageSummary) => !!m.keywords?.includes(PIN_KEYWORD);
   // pripnuté hore, potom podľa dátumu
   const groups = useMemo(() => {
@@ -435,9 +461,10 @@ export function MessageList(props: {
         <div className="list-title">{props.title}</div>
         {props.headerExtra}
         <div className="list-tabsrow">
-        <TabList size="small" selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as 'all' | 'unread')}>
+        <TabList size="small" selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as 'all' | 'unread' | 'flagged')}>
           <Tab value="all">Všetky</Tab>
           <Tab value="unread">Neprečítané</Tab>
+          <Tab value="flagged" title="Správy s vlajkou">Označené</Tab>
         </TabList>
         {props.onSort && (
           <Menu
@@ -515,7 +542,8 @@ export function MessageList(props: {
         {props.loading && <div className="progress" role="progressbar" aria-label="Načítavam" />}
         {props.error && <div className="pane-error pad">⚠ {props.error}</div>}
         {props.loading && base.length === 0 && <div className="empty">Načítavam…</div>}
-        {!props.loading && !props.error && base.length === 0 && <div className="empty">Žiadne správy</div>}
+        {tab === 'flagged' && srvFlagged?.loading && <div className="muted small pad">Hľadám ďalšie správy s vlajkou na serveri…</div>}
+        {!props.loading && !props.error && base.length === 0 && !(tab === 'flagged' && srvFlagged?.loading) && <div className="empty">{tab === 'flagged' ? 'Žiadne správy s vlajkou' : tab === 'unread' ? 'Žiadne neprečítané správy' : 'Žiadne správy'}</div>}
         {groups.map((g, i) => {
           const head = g[0]!;
           const gk = `${head.accountId}/${head.folder}/${head.uid}`;

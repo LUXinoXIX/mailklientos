@@ -1864,6 +1864,13 @@ export function App() {
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
                     onMulti={setMultiSel}
+                    listKey={`${selection.accountId}/${selection.folder}/${mailTick}`}
+                    onFlaggedServer={async () => {
+                      if (!api || demo) return [];
+                      const targets = selection.accountId === ALL ? imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, folder: 'INBOX' })) : [{ id: selection.accountId, folder: selection.folder }];
+                      const rs = await Promise.all(targets.map((t) => api.searchServer(t.id, t.folder, '', 'flagged')));
+                      return rs.flatMap((r) => (r.ok ? r.data : [])).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+                    }}
                     onQuick={(m, a) =>
                       void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }
