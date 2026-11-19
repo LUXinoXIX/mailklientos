@@ -882,3 +882,10 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 /* Súhrn: tenká deliaca čiara pod pozdravom, dlaždice nie sú nalepené na nadpis */
 .sum-head { padding-bottom: 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .45); box-shadow: 0 1px 0 rgba(0, 0, 0, .06); }
 .dialog-content > .fui-MessageBar { flex-shrink: 0; }
+/* výber správ: výraznejšia (tmavšia) modrá a orámovanie, pri viacerých vybraných ešte zreteľnejšie */
+.msg.selected { background: color-mix(in srgb, var(--colorBrandBackground) 16%, var(--colorNeutralBackground1)) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--colorBrandBackground) 45%, transparent); }
+.msg.selected.unread { box-shadow: inset 6px 0 0 var(--colorBrandBackground), inset 0 0 0 1px color-mix(in srgb, var(--colorBrandBackground) 45%, transparent); }
+.msg.multi-sel { background: color-mix(in srgb, var(--colorBrandBackground) 26%, var(--colorNeutralBackground1)) !important; box-shadow: inset 0 0 0 1.5px var(--colorBrandBackground); }
+.msg.multi-sel.unread { box-shadow: inset 6px 0 0 var(--colorBrandBackground), inset 0 0 0 1.5px var(--colorBrandBackground); }
+.msg.multi-sel + .msg.multi-sel { box-shadow: inset 0 0 0 1.5px var(--colorBrandBackground), inset 0 1px 0 color-mix(in srgb, var(--colorBrandBackground) 26%, var(--colorNeutralBackground1)); }
+.msg.multi-sel .msg-from, .msg.multi-sel .msg-subject { color: var(--colorNeutralForeground1); }
