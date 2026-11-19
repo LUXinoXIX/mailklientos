@@ -294,7 +294,7 @@ export interface SummarySettings {
   /** čo otvoriť po spustení (predvolene Súhrn) */
   startup?: 'summary' | 'all' | 'last';
   /** poradie a viditeľnosť dlaždíc */
-  tiles?: { id: SummaryTile; on: boolean }[];
+  tiles?: { id: SummaryTile; on: boolean; /** vlastný názov dlaždice */ title?: string }[];
   /** vstavaná tapeta (id) alebo vlastný obrázok (data URL, zmenšený) */
   wallpaper?: string;
   customImage?: string;
