@@ -68,6 +68,7 @@ export function M365Dialog(props: {
   const [name, setName] = useState(e?.name ?? (props.host === 'web' ? 'Webmail' : props.host === 'live' ? 'Outlook osobný' : 'Outlook firemný'));
   const [webUrl, setWebUrl] = useState(e?.webUrl ?? '');
   const [ignoreCert, setIgnoreCert] = useState(!!e?.webIgnoreCert);
+  const [railOff, setRailOff] = useState(!!e?.railOff);
   const [webUser, setWebUser] = useState(e?.webUser ?? '');
   const [webPass, setWebPass] = useState('');
   const [autoLogin, setAutoLogin] = useState(!!e?.webAutoLogin);
@@ -107,6 +108,11 @@ export function M365Dialog(props: {
       webAutoLogin: web && webUser.trim() && autoLogin ? true : undefined,
       short: short.trim() || undefined,
       ...icon,
+      // pás aplikácií (upravuje sa ceruzkou dole v páse); tu len zapnúť/vypnúť
+      railOrder: e?.railOrder,
+      railHidden: e?.railHidden,
+      railCustom: e?.railCustom,
+      railOff: railOff || undefined,
     };
     setBusy(true);
     if (web && webUser.trim() && !webPass && !hasStored) {
@@ -151,6 +157,13 @@ export function M365Dialog(props: {
               <Field label="Adresa webmailu" required>
                 <Input value={webUrl} placeholder="https://mail.pdg.sk" onChange={(_, d) => setWebUrl(d.value)} />
               </Field>
+            )}
+            {!web && (
+              <Checkbox
+                label="Zobraziť pás aplikácií vľavo (Pošta, Kalendár, Teams, Word…). Poradie a výber upravíš ceruzkou dole v páse."
+                checked={!railOff}
+                onChange={(_, d) => setRailOff(!d.checked)}
+              />
             )}
             {web && (
               <div className="webmail-cred">
