@@ -136,6 +136,13 @@ body { overflow: hidden; }
 .m365-tab.on .m365-tab-btn { font-weight: 600; }
 .m365-tab-x { border: 0; background: none; cursor: pointer; padding: 4px; margin-right: 4px; border-radius: 4px; display: grid; place-items: center; color: var(--colorNeutralForeground3); }
 .m365-tab-x:hover { background: var(--colorNeutralBackground3); }
+.m365-tab[draggable='true'] { cursor: grab; }
+.m365-tab.dragging { opacity: .45; }
+.m365-tab.drop-before { box-shadow: inset 3px 0 0 var(--colorBrandStroke1) !important; }
+.m365-tab.drop-after { box-shadow: inset -3px 0 0 var(--colorBrandStroke1) !important; }
+.m365-tabmenu { position: fixed; z-index: 1000; display: flex; flex-direction: column; min-width: 190px; padding: 4px; background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; box-shadow: var(--shadow16); }
+.m365-tabmenu button { text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+.m365-tabmenu button:hover { background: var(--colorNeutralBackground1Hover); }
 .m365-tools { display: flex; align-items: center; gap: 2px; flex: none; }
 
 /* pravý panel */
