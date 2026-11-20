@@ -31,6 +31,7 @@ import * as recent from './recent';
 import * as meeting from './meeting';
 import * as localcal from './localcal';
 import * as backup from './backup';
+import * as google from './google';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -84,11 +85,20 @@ export function registerIpc() {
   });
   handle('accounts:delete', async (id: string) => {
     const acc = store.loadAccounts().find((a) => a.id === id);
-    mail.closeAllConnections(id);
+    if (acc?.kind === 'imap' && acc.auth === 'oauth') await google.signOut(id).catch((): void => undefined);
     store.deleteAccount(id);
-    cache.removeFolder(id);
-    localcal.forgetAccount(id);
-    syncWatchers();
+    // upratovanie nesmie zabrániť odstráneniu (pri vloženom Outlooku nie je IMAP spojenie ani cache)
+    const tidy = (what: string, f: () => unknown) => {
+      try {
+        f();
+      } catch (err) {
+        diag.log(`odstránenie konta – ${what}:`, String(err));
+      }
+    };
+    tidy('spojenia', () => mail.closeAllConnections(id));
+    tidy('cache', () => cache.removeFolder(id));
+    tidy('kalendáre', () => localcal.forgetAccount(id));
+    tidy('sledovanie', () => syncWatchers());
     if (acc?.kind === 'm365') await web.clearPartition(accountPartition(id));
     return true as const;
   });
@@ -100,6 +110,32 @@ export function registerIpc() {
   handle('server:autodetect', (host: string, proto: Protocol) => autodetect(host, proto));
   handle('server:autoconfig', (email: string) => autoconfig(email));
   handle('account:test', (acc: AccountConfig, password?: string) => mail.testAccount(acc, password));
+  // Google (Gmail): prihlásenie OAuth, štítky
+  handle('google:signIn', async (id: string, hint?: string) => {
+    const g = await google.signIn(id, hint);
+    mail.closeAllConnections(id);
+    cal.forget(id);
+    dav.forgetDiscovery(id);
+    syncWatchers();
+    return g;
+  });
+  handle('google:cancel', () => {
+    google.cancelSignIn();
+    return true as const;
+  });
+  handle('google:signOut', async (id: string) => {
+    await google.signOut(id);
+    mail.closeAllConnections(id);
+    syncWatchers();
+    return true as const;
+  });
+  handle('google:grant', (id: string) => google.grant(id));
+  handle('gmail:labels', (id: string, folder: string, uid: number) => mail.gmailLabels(store.getImap(id), folder, uid));
+  handle('gmail:setLabels', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
+    mail.gmailSetLabels(store.getImap(id), folder, uids, add, remove).then((r) => {
+      if (remove.some((l) => l.toLowerCase() === folder.toLowerCase() || (l === '\\Inbox' && folder.toUpperCase() === 'INBOX'))) cache.removeMessages(id, folder, uids);
+      return r;
+    }));
 
   // pošta
   handle('mail:folders', (id: string) => mail.listFolders(store.getImap(id)));

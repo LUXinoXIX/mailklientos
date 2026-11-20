@@ -1,7 +1,7 @@
 // Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, FluentProvider, Input, Tooltip } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
+import { isGmail, isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
 import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, SEARCH_FIELDS, type SearchField, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
@@ -71,7 +71,7 @@ type FolderState = FolderInfo[] | 'loading' | { error: string };
 type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
-  | { kind: 'imap'; edit?: ImapAccountPublic }
+  | { kind: 'imap'; edit?: ImapAccountPublic; preset?: 'gmail' }
   | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' | 'web' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
@@ -766,6 +766,7 @@ export function App() {
     return false;
   };
   async function del() {
+    if (multiSel.length > 1) return bulk(multiSel, 'delete');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.deleteMessages(m.accountId, m.folder, [m.uid]);
@@ -774,6 +775,7 @@ export function App() {
     setStatus(r.data.movedTo ? 'Správa presunutá do Odstránených.' : 'Správa natrvalo odstránená.');
   }
   async function archive() {
+    if (multiSel.length > 1) return bulk(multiSel, 'archive');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.archiveMessages(m.accountId, m.folder, [m.uid]);
@@ -782,6 +784,7 @@ export function App() {
     setStatus(`Správa archivovaná (${r.data.movedTo}).`);
   }
   async function move(dest: string) {
+    if (multiSel.length > 1) return bulk(multiSel, { move: dest });
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.moveMessages(m.accountId, m.folder, [m.uid], dest);
@@ -790,6 +793,8 @@ export function App() {
     setStatus('Správa presunutá.');
   }
   async function toggleSeen() {
+    // viac správ: ak je niektorá neprečítaná, všetky označiť ako prečítané, inak ako neprečítané
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.seen) ? 'seen' : 'unseen');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const seen = !m.seen;
@@ -799,6 +804,7 @@ export function App() {
     setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 0) + (seen ? -1 : 1)) }));
   }
   async function toggleFlag() {
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.flagged) ? 'flag' : 'unflag');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const flagged = !m.flagged;
@@ -808,6 +814,7 @@ export function App() {
   }
 
   async function setCategory(id: string, on: boolean) {
+    if (multiSel.length > 1) return bulk(multiSel, { cat: id, on });
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.setKeywords(m.accountId, m.folder, [m.uid], on ? [id] : [], on ? [] : [id]);
@@ -818,6 +825,7 @@ export function App() {
     patchMsg(m, { keywords: [...kw] });
   }
   async function togglePin() {
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.keywords?.includes(PIN_KEYWORD)) ? 'pin' : 'unpin');
     const m = current;
     if (!m) return;
     await setCategory(PIN_KEYWORD, !m.keywords?.includes(PIN_KEYWORD));
@@ -849,7 +857,7 @@ export function App() {
       setCurrent(undefined);
       setFull({ loading: false });
     }
-    setStatus('Správa presunutá.');
+    setStatus(d.uids.length > 1 ? `Presunuté: ${d.uids.length} ${d.uids.length < 5 ? 'správy' : 'správ'}.` : 'Správa presunutá.');
   }
   function saveCurrentSearch() {
     const q = search.trim();
@@ -1515,7 +1523,7 @@ export function App() {
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
           onTransfer={(m) => setTransfer(m)}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : isGmail(a as ImapAccountPublic) ? 'GMAIL' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
@@ -1556,7 +1564,7 @@ export function App() {
             />
           )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1891,7 +1899,8 @@ export function App() {
                       return rs.flatMap((r) => (r.ok ? r.data : [])).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
                     }}
                     onQuick={(m, a) =>
-                      void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
+                      // ikona na riadku, ktorý je súčasťou výberu viacerých správ → platí pre celý výber
+                      void bulk(multiSel.length > 1 && multiSel.some((x) => x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder) ? multiSel : [m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }
                     sort={settings.listSort}
                     onSort={(s) => saveSettings({ ...settings, listSort: s })}
@@ -1935,6 +1944,19 @@ export function App() {
                     onOpenThread={(t) => void open(t)}
                     categories={categoriesOf(settings)}
                     onRemoveCategory={(id) => void setCategory(id, false)}
+                    gmail={(() => {
+                      const m = full.msg;
+                      const acc = m && accounts.find((a) => a.id === m.accountId);
+                      if (!m || !acc || !isImap(acc) || !isGmail(acc)) return undefined;
+                      const fl = folders[acc.id];
+                      return {
+                        folders: Array.isArray(fl) ? fl : [],
+                        onChanged: (removedCurrent: boolean) => {
+                          if (removedCurrent) setRefreshKey((k) => k + 1);
+                          void api?.notifyChanged(m.accountId, m.folder);
+                        },
+                      };
+                    })()}
                     onBlockSender={
                       full.msg && zimbraOk[full.msg.accountId]
                         ? async () => {
@@ -2243,6 +2265,7 @@ export function App() {
         <AddAccountChooser
           onClose={closeDialog}
           onImap={() => openDialog({ kind: 'imap' })}
+          onGmail={() => openDialog({ kind: 'imap', preset: 'gmail' })}
           onM365={(host) => openDialog({ kind: 'm365', host })}
         />
       )}
@@ -2251,6 +2274,9 @@ export function App() {
           key={dialogKey}
           open
           edit={dialog.edit}
+          preset={dialog.preset}
+          google={settings.google}
+          onSaveGoogle={(g) => saveSettings({ ...settings, google: g })}
           usedColors={accounts.map((a) => accountColor(a.color))}
           onClose={closeDialog}
           onSaved={(a) => {

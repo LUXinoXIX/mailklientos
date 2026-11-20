@@ -4,13 +4,14 @@ import { AccountIconPicker, type IconCfg } from './AccountIcon';
 import { initials } from './AccountRail';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
-  MessageBar, MessageBarBody, MessageBarTitle, Select, Spinner, Switch, Textarea,
+  MessageBar, MessageBarBody, MessageBarTitle, Radio, RadioGroup, Select, Spinner, Switch, Textarea,
 } from '@fluentui/react-components';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  DEFAULT_PORTS, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
+  DEFAULT_PORTS, GMAIL_SERVERS, isGmail, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
 } from '../../core/account';
-import type { AccountTestResult } from '../../core/api';
+import type { AccountTestResult, GoogleGrant } from '../../core/api';
+import type { AppSettings } from '../../core/settings';
 import type { ProbeResult, Protocol } from '../../core/tls-types';
 import { ACCOUNT_COLORS } from '../theme';
 
@@ -156,9 +157,161 @@ function ServerSection(props: {
   );
 }
 
+/** Gmail: prihlásenie cez Google (OAuth) alebo heslom pre aplikácie + nastavenie klienta Google. */
+function GmailAuth(props: {
+  acc: AccountConfig;
+  edit?: ImapAccountPublic;
+  set: (p: Partial<AccountConfig>) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  grant: GoogleGrant | null;
+  setGrant: (g: GoogleGrant | null) => void;
+  google?: AppSettings['google'];
+  onSaveGoogle?: (g: AppSettings['google']) => void;
+  setError: (e: string | null) => void;
+}) {
+  const api = window.mailApi;
+  const { acc } = props;
+  const [signing, setSigning] = useState(false);
+  const [showClient, setShowClient] = useState(!props.google?.clientId);
+  const [cid, setCid] = useState(props.google?.clientId ?? '');
+  const [csec, setCsec] = useState(props.google?.clientSecret ?? '');
+  const open = (u: string) => void api?.openExternal(u);
+
+  async function signIn() {
+    if (!api) return;
+    props.setError(null);
+    setSigning(true);
+    const r = await api.googleSignIn(acc.id, acc.email || undefined);
+    setSigning(false);
+    if (!r.ok) {
+      props.setError(r.hint ? `${r.error} ${r.hint}` : r.error);
+      return;
+    }
+    props.setGrant(r.data);
+    const email = r.data.email || acc.email;
+    props.set({ email, username: email, name: acc.name || r.data.name || email.split('@')[0] || email });
+  }
+  async function signOut() {
+    if (!api) return;
+    await api.googleSignOut(acc.id);
+    props.setGrant(null);
+  }
+  const yes = (b: boolean) => (b ? '✓' : '✗');
+
+  return (
+    <fieldset className="server gmail-auth">
+      <legend>Prihlásenie do Gmailu</legend>
+      <RadioGroup value={acc.auth ?? 'password'} onChange={(_, d) => props.set({ auth: d.value as 'oauth' | 'password' })}>
+        <Radio value="oauth" label="Prihlásiť sa cez Google (odporúčané) – pošta, kalendár aj kontakty" />
+        <Radio value="password" label="Heslo pre aplikácie – len pošta (kalendár a kontakty Google takto nefungujú)" />
+      </RadioGroup>
+
+      {(acc.auth ?? 'password') === 'oauth' ? (
+        <div className="col gap">
+          {props.grant ? (
+            <MessageBar intent="success">
+              <MessageBarBody>
+                Prihlásené ako <b>{props.grant.email || acc.email}</b> · pošta {yes(props.grant.mail)} · kalendár {yes(props.grant.calendar)} · kontakty {yes(props.grant.contacts)}
+                {(!props.grant.calendar || !props.grant.contacts) && ' – chýbajúce povolíš opätovným prihlásením.'}
+              </MessageBarBody>
+            </MessageBar>
+          ) : (
+            <div className="muted small">
+              Otvorí sa stránka Google v prehliadači. Prihlás sa a povoľ prístup – program heslo Google nikdy nevidí.
+            </div>
+          )}
+          <div className="row gap">
+            <Button appearance="primary" disabled={signing || !props.google?.clientId} onClick={signIn}>
+              {props.grant ? 'Prihlásiť sa znova' : 'Prihlásiť sa cez Google'}
+            </Button>
+            {signing && (
+              <>
+                <Spinner size="tiny" label="Dokonči prihlásenie v prehliadači…" />
+                <Button size="small" onClick={() => void api?.googleCancel()}>Zrušiť</Button>
+              </>
+            )}
+            {props.grant && !signing && <Button appearance="subtle" onClick={signOut}>Odhlásiť z Google</Button>}
+            <div className="grow" />
+            <Button appearance="subtle" size="small" onClick={() => setShowClient((v) => !v)}>
+              {showClient ? 'Skryť nastavenie klienta Google' : 'Nastavenie klienta Google…'}
+            </Button>
+          </div>
+          {!props.google?.clientId && (
+            <MessageBar intent="warning">
+              <MessageBarBody>Najprv treba raz vložiť ID klienta Google (postup nižšie). Platí pre všetky kontá Gmail.</MessageBarBody>
+            </MessageBar>
+          )}
+          {showClient && (
+            <div className="gmail-client col gap">
+              <ol className="small steps">
+                <li>
+                  Otvor <a href="#" onClick={(e) => { e.preventDefault(); open('https://console.cloud.google.com/projectcreate'); }}>Google Cloud</a> a vytvor projekt (napr. „Universum eMail“).
+                </li>
+                <li>
+                  V <a href="#" onClick={(e) => { e.preventDefault(); open('https://console.cloud.google.com/apis/library'); }}>knižnici rozhraní</a> zapni <b>Gmail API</b>, <b>CalDAV API</b> a <b>CardDAV API</b>.
+                </li>
+                <li>
+                  <a href="#" onClick={(e) => { e.preventDefault(); open('https://console.cloud.google.com/auth/branding'); }}>Google Auth Platform</a>: vyplň názov a e-mail, typ používateľov <b>Externí</b> (pri Google Workspace môže byť Interní). V časti Publikum pridaj svoj Gmail medzi testovacích používateľov,
+                  alebo daj <b>Zverejniť aplikáciu</b> – inak prihlásenie vyprší po 7 dňoch.
+                </li>
+                <li>
+                  <a href="#" onClick={(e) => { e.preventDefault(); open('https://console.cloud.google.com/auth/clients'); }}>Klienti</a> → Vytvoriť klienta → typ <b>Počítačová aplikácia</b> (Desktop app). Skopíruj ID klienta a tajný kľúč sem.
+                </li>
+              </ol>
+              <div className="muted small">
+                Pri prihlásení Google ukáže „Google túto aplikáciu neoveril“ – je to tvoja vlastná aplikácia, pokračuj cez Rozšírené → Prejsť do aplikácie.
+              </div>
+              <div className="grid2">
+                <Field label="ID klienta">
+                  <Input value={cid} onChange={(_, d) => setCid(d.value.trim())} placeholder="…apps.googleusercontent.com" />
+                </Field>
+                <Field label="Tajný kľúč klienta (client secret)">
+                  <Input type="password" value={csec} onChange={(_, d) => setCsec(d.value.trim())} placeholder="GOCSPX-…" />
+                </Field>
+              </div>
+              <div className="row gap">
+                <Button
+                  disabled={!cid.endsWith('.apps.googleusercontent.com')}
+                  onClick={() => {
+                    props.onSaveGoogle?.({ clientId: cid, clientSecret: csec || undefined });
+                    setShowClient(false);
+                  }}
+                >
+                  Uložiť klienta Google
+                </Button>
+                {cid && !cid.endsWith('.apps.googleusercontent.com') && <span className="muted small">ID klienta končí na .apps.googleusercontent.com</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="col gap">
+          <ol className="small steps">
+            <li>
+              V Google konte zapni <a href="#" onClick={(e) => { e.preventDefault(); open('https://myaccount.google.com/signinoptions/twosv'); }}>dvojstupňové overenie</a> (ak ešte nie je).
+            </li>
+            <li>
+              Otvor <a href="#" onClick={(e) => { e.preventDefault(); open('https://myaccount.google.com/apppasswords'); }}>Heslá aplikácií</a>, zadaj názov „Universum eMail“ a daj Vytvoriť.
+            </li>
+            <li>Skopíruj 16 písmen sem (medzery nevadia). Pri firemnom Google Workspace to musí povoliť správca.</li>
+          </ol>
+          <Field label="Heslo pre aplikácie" required={!props.edit?.hasPassword || props.edit.auth === 'oauth'} hint={props.edit?.hasPassword && props.edit.auth !== 'oauth' ? 'Nechaj prázdne, ak sa nemení.' : undefined}>
+            <Input type="password" value={props.password} onChange={(_, d) => props.setPassword(d.value.replace(/\s+/g, ''))} placeholder="abcd efgh ijkl mnop" />
+          </Field>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
 export function AccountDialog(props: {
   open: boolean;
   edit?: ImapAccountPublic;
+  /** nové konto: predvolené nastavenia (Gmail) */
+  preset?: 'gmail';
+  google?: AppSettings['google'];
+  onSaveGoogle?: (g: AppSettings['google']) => void;
   usedColors: string[];
   onClose: () => void;
   onSaved: (a: AccountPublic) => void;
@@ -177,6 +330,9 @@ export function AccountDialog(props: {
           username: '',
           imap: emptyServer('imap'),
           smtp: emptyServer('smtp'),
+          ...(props.preset === 'gmail'
+            ? { provider: 'gmail' as const, auth: props.google?.clientId ? ('oauth' as const) : ('password' as const), imap: { ...GMAIL_SERVERS.imap }, smtp: { ...GMAIL_SERVERS.smtp } }
+            : {}),
         };
   const [acc, setAcc] = useState<AccountConfig>(init);
   const [aliases, setAliases] = useState(() => (acc.identities ?? []).map((x) => (x.name ? `${x.name} <${x.email}>` : x.email)).join('\n'));
@@ -185,9 +341,19 @@ export function AccountDialog(props: {
   const [test, setTest] = useState<AccountTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const gmail = isGmail(acc);
+  const [grant, setGrant] = useState<GoogleGrant | null>(null);
+  useEffect(() => {
+    if (gmail && props.edit && api) void api.googleGrant(props.edit.id).then((r) => r.ok && setGrant(r.data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const set = (patch: Partial<AccountConfig>) => setAcc((a) => ({ ...a, ...patch }));
   const onEmail = (email: string) => {
+    if (gmail) {
+      setAcc((a) => ({ ...a, email, username: email, name: !a.name || a.name === a.email.split('@')[0] ? email.split('@')[0] ?? '' : a.name }));
+      return;
+    }
     const domain = email.split('@')[1] ?? '';
     setAcc((a) => ({
       ...a,
@@ -261,12 +427,22 @@ export function AccountDialog(props: {
   async function save() {
     if (!api) return;
     if (!acc.email.includes('@') || !acc.imap.host || !acc.smtp.host) {
-      setError('Vyplň e-mail a servery IMAP a SMTP.');
+      setError(gmail ? 'Vyplň adresu Gmailu.' : 'Vyplň e-mail a servery IMAP a SMTP.');
       return;
     }
-    if (!props.edit && !password) {
-      setError('Zadaj heslo.');
+    if (gmail && acc.auth === 'oauth') {
+      if (!grant) {
+        setError('Prihlás sa cez Google (tlačidlo „Prihlásiť sa cez Google“).');
+        return;
+      }
+    } else if ((!props.edit || (gmail && props.edit.auth === 'oauth')) && !password) {
+      setError(gmail ? 'Zadaj heslo pre aplikácie.' : 'Zadaj heslo.');
       return;
+    }
+    // prechod z prihlásenia cez Google na heslo: token zrušiť
+    if (gmail && acc.auth !== 'oauth' && grant) {
+      await api.googleSignOut(acc.id);
+      setGrant(null);
     }
     setBusy('Ukladám…');
     const r = await api.saveAccount({ ...acc, name: acc.name || acc.email }, password || undefined);
@@ -287,14 +463,14 @@ export function AccountDialog(props: {
     <Dialog open={props.open} onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="account-dialog" style={{ maxWidth: 1000, width: "94vw" }}>
         <DialogBody>
-          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : 'Pridať konto IMAP'}</DialogTitle>
+          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : gmail ? 'Pridať konto Gmail' : 'Pridať konto IMAP'}</DialogTitle>
           <DialogContent className="dialog-content">
             {!api && (
               <MessageBar intent="error"><MessageBarBody>Aplikácia nebeží v Electrone (chýba most do hlavného procesu).</MessageBarBody></MessageBar>
             )}
             <div className="grid2">
               <Field label="E-mail" required>
-                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder="meno@firma.sk" />
+                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder={gmail ? 'meno@gmail.com' : 'meno@firma.sk'} />
               </Field>
               <Field label="Zobrazované meno">
                 <Input value={acc.name} onChange={(_, d) => set({ name: d.value })} />
@@ -307,16 +483,30 @@ export function AccountDialog(props: {
                   onChange={(v) => set(v)}
                 />
               </Field>
-              <Field label="Štítok v zbalenom páse kont" hint="Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ZIMBRA alebo IMAP.">
-                <Input value={acc.short ?? ''} maxLength={8} placeholder="ZIMBRA" onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
+              <Field label="Štítok v zbalenom páse kont" hint={`Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ${gmail ? 'GMAIL' : 'ZIMBRA alebo IMAP'}.`}>
+                <Input value={acc.short ?? ''} maxLength={8} placeholder={gmail ? 'GMAIL' : 'ZIMBRA'} onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
               </Field>
-              <Field label="Používateľské meno">
+              {!gmail && <><Field label="Používateľské meno">
                 <Input value={acc.username} onChange={(_, d) => set({ username: d.value.trim() })} />
               </Field>
               <Field label="Heslo" required={!props.edit} hint={props.edit?.hasPassword ? 'Nechaj prázdne, ak sa nemení.' : undefined}>
                 <Input type="password" value={password} onChange={(_, d) => setPassword(d.value)} />
-              </Field>
+              </Field></>}
             </div>
+            {gmail && (
+              <GmailAuth
+                acc={acc}
+                edit={props.edit}
+                set={set}
+                password={password}
+                setPassword={setPassword}
+                grant={grant}
+                setGrant={setGrant}
+                google={props.google}
+                onSaveGoogle={props.onSaveGoogle}
+                setError={setError}
+              />
+            )}
             <div className="row gap colors">
               <span className="muted">Farba konta</span>
               {ACCOUNT_COLORS.map((c) => (
@@ -345,11 +535,16 @@ export function AccountDialog(props: {
                 }}
               />
             </Field>
-            <Field label="Adresa kalendára a kontaktov (CalDAV/CardDAV)" hint="Nechajte prázdne – zistí sa automaticky. Zimbra: https://server/dav/meno@firma.sk/">
-              <Input value={acc.davUrl ?? ''} onChange={(_, d) => set({ davUrl: d.value.trim() || undefined })} placeholder="automaticky" />
-            </Field>
-            <ServerSection proto="imap" value={acc.imap} onChange={(imap) => setAcc((a) => ({ ...a, imap }))} probe={test?.imap} onRetest={(imap) => runTest({ ...acc, imap })} />
-            <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
+            {!gmail && (
+              <>
+                <Field label="Adresa kalendára a kontaktov (CalDAV/CardDAV)" hint="Nechajte prázdne – zistí sa automaticky. Zimbra: https://server/dav/meno@firma.sk/">
+                  <Input value={acc.davUrl ?? ''} onChange={(_, d) => set({ davUrl: d.value.trim() || undefined })} placeholder="automaticky" />
+                </Field>
+                <ServerSection proto="imap" value={acc.imap} onChange={(imap) => setAcc((a) => ({ ...a, imap }))} probe={test?.imap} onRetest={(imap) => runTest({ ...acc, imap })} />
+                <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
+              </>
+            )}
+            {gmail && <div className="muted small">Servery Gmailu: imap.gmail.com:993 a smtp.gmail.com:465 (SSL/TLS) – nastavené automaticky.</div>}
             {test?.login && (
               <MessageBar intent={test.login.ok ? 'success' : 'error'}>
                 <MessageBarBody>
@@ -366,7 +561,7 @@ export function AccountDialog(props: {
             {props.edit && <Button appearance="subtle" onClick={remove}>Odstrániť konto</Button>}
             <div className="grow" />
             {busy && <Spinner size="tiny" label={busy} />}
-            <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>
+            {!gmail && <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>}
             <Button disabled={!!busy} onClick={() => runTest()}>Otestovať</Button>
             <Button appearance="primary" disabled={!!busy} onClick={save}>Uložiť</Button>
             <Button disabled={!!busy} onClick={props.onClose}>Zrušiť</Button>
