@@ -10,7 +10,7 @@ import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
 import { MailIcon, TeamsIcon, WebmailIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onICloud?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -30,6 +30,15 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
                 <span>
                   <b>Gmail (Google)</b>
                   <span className="muted">Osobný Gmail aj Google Workspace. Prihlásenie cez Google (pošta, kalendár, kontakty) alebo heslom pre aplikácie. Štítky, archív a vlákna ako v Gmaile.</span>
+                </span>
+              </button>
+            )}
+            {props.onICloud && (
+              <button className="chooser-card" onClick={props.onICloud}>
+                <MailIcon />
+                <span>
+                  <b>iCloud Mail (Apple)</b>
+                  <span className="muted">@icloud.com, @me.com, @mac.com aj vlastná doména iCloud+. Pošta, kalendár a kontakty iCloud s heslom pre aplikácie.</span>
                 </span>
               </button>
             )}

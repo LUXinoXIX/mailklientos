@@ -8,7 +8,7 @@ import {
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import {
-  DEFAULT_PORTS, GMAIL_SERVERS, isGmail, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
+  DEFAULT_PORTS, GMAIL_SERVERS, ICLOUD_SERVERS, isGmail, isICloud, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
 } from '../../core/account';
 import type { AccountTestResult, GoogleGrant } from '../../core/api';
 import type { AppSettings } from '../../core/settings';
@@ -153,6 +153,48 @@ function ServerSection(props: {
           onLegacy={() => props.onRetest(setTls({ legacy: true }))}
         />
       )}
+    </fieldset>
+  );
+}
+
+/** iCloud: Apple ID a heslo pre aplikácie (Apple nemá prihlásenie cez prehliadač pre cudzie programy). */
+function ICloudAuth(props: {
+  acc: AccountConfig;
+  edit?: ImapAccountPublic;
+  set: (p: Partial<AccountConfig>) => void;
+  password: string;
+  setPassword: (v: string) => void;
+}) {
+  const api = window.mailApi;
+  const { acc } = props;
+  const open = (u: string) => void api?.openExternal(u);
+  return (
+    <fieldset className="server gmail-auth">
+      <legend>Prihlásenie do iCloud</legend>
+      <div className="muted small">
+        Apple pre iné programy ako Apple Mail vyžaduje <b>heslo pre aplikácie</b> (nie heslo Apple ID). To isté heslo platí pre poštu, kalendár aj kontakty.
+        <ol>
+          <li>Zapni dvojstupňové overenie Apple ID (na iPhone/Macu býva zapnuté).</li>
+          <li>
+            Otvor{' '}
+            <a href="#" onClick={(e) => { e.preventDefault(); open('https://account.apple.com/account/manage'); }}>account.apple.com</a>
+            {' '}→ Prihlásenie a bezpečnosť → <b>Heslá pre aplikácie</b> → „+“, názov napr. Universum eMail.
+          </li>
+          <li>Skopíruj zobrazené heslo (xxxx-xxxx-xxxx-xxxx) sem. Apple ho už druhýkrát neukáže.</li>
+          <li>V Nastaveniach iCloud musí byť zapnutá <b>Pošta iCloud</b> (adresa @icloud.com).</li>
+        </ol>
+      </div>
+      <div className="grid2">
+        <Field label="Heslo pre aplikácie" required={!props.edit} hint={props.edit?.hasPassword ? 'Nechaj prázdne, ak sa nemení.' : undefined}>
+          <Input type="password" value={props.password} onChange={(_, d) => props.setPassword(d.value.trim())} placeholder="xxxx-xxxx-xxxx-xxxx" />
+        </Field>
+        <Field label="Apple ID (len ak je iné ako adresa iCloud)" hint="Pre kalendár a kontakty. Napr. keď sa do Apple ID prihlasuješ adresou na Gmaile.">
+          <Input value={acc.appleId ?? ''} onChange={(_, d) => props.set({ appleId: d.value.trim() || undefined })} placeholder={acc.email || 'meno@icloud.com'} />
+        </Field>
+      </div>
+      <div className="muted small">
+        Vlastná doména (iCloud+) a adresy „Skryť môj e-mail“: zadaj ako e-mail adresu @icloud.com a ďalšie adresy pridaj nižšie medzi aliasy pre pole Od.
+      </div>
     </fieldset>
   );
 }
@@ -308,8 +350,8 @@ function GmailAuth(props: {
 export function AccountDialog(props: {
   open: boolean;
   edit?: ImapAccountPublic;
-  /** nové konto: predvolené nastavenia (Gmail) */
-  preset?: 'gmail';
+  /** nové konto: predvolené nastavenia (Gmail, iCloud) */
+  preset?: 'gmail' | 'icloud';
   google?: AppSettings['google'];
   onSaveGoogle?: (g: AppSettings['google']) => void;
   usedColors: string[];
@@ -330,10 +372,15 @@ export function AccountDialog(props: {
           username: '',
           imap: emptyServer('imap'),
           smtp: emptyServer('smtp'),
-          ...(props.preset === 'gmail'
-            ? { provider: 'gmail' as const, auth: props.google?.clientId ? ('oauth' as const) : ('password' as const), imap: { ...GMAIL_SERVERS.imap }, smtp: { ...GMAIL_SERVERS.smtp } }
-            : {}),
+          ...presetFields(),
         };
+  /** pevné nastavenia poskytovateľa pre nové konto */
+  function presetFields(): Partial<AccountConfig> {
+    if (props.preset === 'gmail')
+      return { provider: 'gmail', auth: props.google?.clientId ? 'oauth' : 'password', imap: { ...GMAIL_SERVERS.imap }, smtp: { ...GMAIL_SERVERS.smtp } };
+    if (props.preset === 'icloud') return { provider: 'icloud', auth: 'password', imap: { ...ICLOUD_SERVERS.imap }, smtp: { ...ICLOUD_SERVERS.smtp } };
+    return {};
+  }
   const [acc, setAcc] = useState<AccountConfig>(init);
   const [aliases, setAliases] = useState(() => (acc.identities ?? []).map((x) => (x.name ? `${x.name} <${x.email}>` : x.email)).join('\n'));
   const [password, setPassword] = useState('');
@@ -342,6 +389,9 @@ export function AccountDialog(props: {
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const gmail = isGmail(acc);
+  const icloud = isICloud(acc);
+  /** pevné servery poskytovateľa – polia serverov, autodetekcia a CalDAV adresa sa neukazujú */
+  const fixed = gmail || icloud;
   const [grant, setGrant] = useState<GoogleGrant | null>(null);
   useEffect(() => {
     if (gmail && props.edit && api) void api.googleGrant(props.edit.id).then((r) => r.ok && setGrant(r.data));
@@ -350,8 +400,8 @@ export function AccountDialog(props: {
 
   const set = (patch: Partial<AccountConfig>) => setAcc((a) => ({ ...a, ...patch }));
   const onEmail = (email: string) => {
-    if (gmail) {
-      setAcc((a) => ({ ...a, email, username: email, name: !a.name || a.name === a.email.split('@')[0] ? email.split('@')[0] ?? '' : a.name }));
+    if (fixed) {
+      setAcc((a) => ({ ...a, email, username: a.username && a.username !== a.email && a.username !== a.email.split('@')[0] ? a.username : email, name: !a.name || a.name === a.email.split('@')[0] ? email.split('@')[0] ?? '' : a.name }));
       return;
     }
     const domain = email.split('@')[1] ?? '';
@@ -371,8 +421,12 @@ export function AccountDialog(props: {
     setError(null);
     const r = await api.testAccount(next, password || undefined);
     setBusy(null);
-    if (r.ok) setTest(r.data);
-    else setError(r.error);
+    if (r.ok) {
+      setTest(r.data);
+      // iCloud: prihlásenie prešlo s iným tvarom mena (časť pred @) – zapamätať
+      const u = r.data.login?.username;
+      if (u) setAcc((a) => ({ ...a, username: u }));
+    } else setError(r.error);
   }
 
   async function runAutodetect() {
@@ -427,7 +481,7 @@ export function AccountDialog(props: {
   async function save() {
     if (!api) return;
     if (!acc.email.includes('@') || !acc.imap.host || !acc.smtp.host) {
-      setError(gmail ? 'Vyplň adresu Gmailu.' : 'Vyplň e-mail a servery IMAP a SMTP.');
+      setError(gmail ? 'Vyplň adresu Gmailu.' : icloud ? 'Vyplň adresu iCloud Mail.' : 'Vyplň e-mail a servery IMAP a SMTP.');
       return;
     }
     if (gmail && acc.auth === 'oauth') {
@@ -436,7 +490,7 @@ export function AccountDialog(props: {
         return;
       }
     } else if ((!props.edit || (gmail && props.edit.auth === 'oauth')) && !password) {
-      setError(gmail ? 'Zadaj heslo pre aplikácie.' : 'Zadaj heslo.');
+      setError(fixed ? 'Zadaj heslo pre aplikácie.' : 'Zadaj heslo.');
       return;
     }
     // prechod z prihlásenia cez Google na heslo: token zrušiť
@@ -444,8 +498,20 @@ export function AccountDialog(props: {
       await api.googleSignOut(acc.id);
       setGrant(null);
     }
+    // iCloud: pred uložením zistiť, s akým tvarom mena Apple prihlásenie prijme (celá adresa alebo časť pred @)
+    let toSave = acc;
+    if (icloud && password && !test?.login?.ok) {
+      setBusy('Overujem prihlásenie do iCloud…');
+      const t = await api.testAccount(acc, password);
+      if (t.ok && t.data.login?.username) toSave = { ...acc, username: t.data.login.username };
+      if (t.ok && t.data.login && !t.data.login.ok) {
+        setBusy(null);
+        setTest(t.data);
+        return;
+      }
+    }
     setBusy('Ukladám…');
-    const r = await api.saveAccount({ ...acc, name: acc.name || acc.email }, password || undefined);
+    const r = await api.saveAccount({ ...toSave, name: toSave.name || toSave.email }, password || undefined);
     setBusy(null);
     if (r.ok) props.onSaved(r.data);
     else setError(r.error);
@@ -463,14 +529,14 @@ export function AccountDialog(props: {
     <Dialog open={props.open} onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="account-dialog" style={{ maxWidth: 1000, width: "94vw" }}>
         <DialogBody>
-          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : gmail ? 'Pridať konto Gmail' : 'Pridať konto IMAP'}</DialogTitle>
+          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : gmail ? 'Pridať konto Gmail' : icloud ? 'Pridať konto iCloud' : 'Pridať konto IMAP'}</DialogTitle>
           <DialogContent className="dialog-content">
             {!api && (
               <MessageBar intent="error"><MessageBarBody>Aplikácia nebeží v Electrone (chýba most do hlavného procesu).</MessageBarBody></MessageBar>
             )}
             <div className="grid2">
               <Field label="E-mail" required>
-                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder={gmail ? 'meno@gmail.com' : 'meno@firma.sk'} />
+                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder={gmail ? 'meno@gmail.com' : icloud ? 'meno@icloud.com' : 'meno@firma.sk'} />
               </Field>
               <Field label="Zobrazované meno">
                 <Input value={acc.name} onChange={(_, d) => set({ name: d.value })} />
@@ -483,16 +549,17 @@ export function AccountDialog(props: {
                   onChange={(v) => set(v)}
                 />
               </Field>
-              <Field label="Štítok v zbalenom páse kont" hint={`Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ${gmail ? 'GMAIL' : 'ZIMBRA alebo IMAP'}.`}>
-                <Input value={acc.short ?? ''} maxLength={8} placeholder={gmail ? 'GMAIL' : 'ZIMBRA'} onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
+              <Field label="Štítok v zbalenom páse kont" hint={`Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ${gmail ? 'GMAIL' : icloud ? 'ICLOUD' : 'ZIMBRA alebo IMAP'}.`}>
+                <Input value={acc.short ?? ''} maxLength={8} placeholder={gmail ? 'GMAIL' : icloud ? 'ICLOUD' : 'ZIMBRA'} onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
               </Field>
-              {!gmail && <><Field label="Používateľské meno">
+              {!fixed && <><Field label="Používateľské meno">
                 <Input value={acc.username} onChange={(_, d) => set({ username: d.value.trim() })} />
               </Field>
               <Field label="Heslo" required={!props.edit} hint={props.edit?.hasPassword ? 'Nechaj prázdne, ak sa nemení.' : undefined}>
                 <Input type="password" value={password} onChange={(_, d) => setPassword(d.value)} />
               </Field></>}
             </div>
+            {icloud && <ICloudAuth acc={acc} edit={props.edit} set={set} password={password} setPassword={setPassword} />}
             {gmail && (
               <GmailAuth
                 acc={acc}
@@ -535,7 +602,7 @@ export function AccountDialog(props: {
                 }}
               />
             </Field>
-            {!gmail && (
+            {!fixed && (
               <>
                 <Field label="Adresa kalendára a kontaktov (CalDAV/CardDAV)" hint="Nechajte prázdne – zistí sa automaticky. Zimbra: https://server/dav/meno@firma.sk/">
                   <Input value={acc.davUrl ?? ''} onChange={(_, d) => set({ davUrl: d.value.trim() || undefined })} placeholder="automaticky" />
@@ -544,6 +611,7 @@ export function AccountDialog(props: {
                 <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
               </>
             )}
+            {icloud && <div className="muted small">Servery iCloud: imap.mail.me.com:993 (SSL/TLS) a smtp.mail.me.com:587 (STARTTLS), kalendár caldav.icloud.com, kontakty contacts.icloud.com – nastavené automaticky.{acc.username && acc.username !== acc.email ? ` Prihlasovacie meno IMAP: ${acc.username}.` : ''}</div>}
             {gmail && <div className="muted small">Servery Gmailu: imap.gmail.com:993 a smtp.gmail.com:465 (SSL/TLS) – nastavené automaticky.</div>}
             {test?.login && (
               <MessageBar intent={test.login.ok ? 'success' : 'error'}>
@@ -561,7 +629,7 @@ export function AccountDialog(props: {
             {props.edit && <Button appearance="subtle" onClick={remove}>Odstrániť konto</Button>}
             <div className="grow" />
             {busy && <Spinner size="tiny" label={busy} />}
-            {!gmail && <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>}
+            {!fixed && <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>}
             <Button disabled={!!busy} onClick={() => runTest()}>Otestovať</Button>
             <Button appearance="primary" disabled={!!busy} onClick={save}>Uložiť</Button>
             <Button disabled={!!busy} onClick={props.onClose}>Zrušiť</Button>

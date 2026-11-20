@@ -5,7 +5,7 @@ import https from 'node:https';
 import http from 'node:http';
 import tls from 'node:tls';
 import { DOMParser } from '@xmldom/xmldom';
-import { isGmail, type AccountConfig } from '../core/account';
+import { isGmail, isICloud, type AccountConfig } from '../core/account';
 import { buildEvent, buildTodo, buildVCard, expand, parseEvents, parseTodos, parseVCards, type CalEvent, type CalTodo, type Contact } from '../core/ical';
 import { buildTlsOptions, verifySocket } from '../core/tls';
 import { getPassword } from './accounts';
@@ -29,7 +29,9 @@ async function authHeader(acc: AccountConfig): Promise<string> {
     throw new UserError('Kalendár a kontakty Google vyžadujú prihlásenie cez Google.', 'Heslo pre aplikácie platí len pre poštu. V nastaveniach konta zvoľ „Prihlásiť sa cez Google“.');
   const pass = getPassword(acc.id);
   if (!pass) throw new UserError('Pre konto chýba heslo.');
-  return `Basic ${Buffer.from(`${acc.username}:${pass}`).toString('base64')}`;
+  // iCloud: kalendár a kontakty sa prihlasujú Apple ID (môže byť iné ako adresa iCloud Mail), s tým istým heslom pre aplikácie
+  const user = isICloud(acc) ? acc.appleId?.trim() || acc.email : acc.username;
+  return `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
 }
 
 async function request(acc: AccountConfig, method: string, url: string, body?: string, headers: Record<string, string> = {}, redirects = 3): Promise<DavResponse> {
@@ -170,6 +172,46 @@ async function discoverGoogle(acc: AccountConfig) {
   return res;
 }
 
+/**
+ * iCloud: kalendáre na caldav.icloud.com, kontakty na contacts.icloud.com (každé so svojím principal → home-set;
+ * Apple presmeruje na konkrétny server pXX-caldav / pXX-contacts).
+ */
+async function discoverICloud(acc: AccountConfig) {
+  const res: { cal?: string; card?: string; at: number } = { at: Date.now() };
+  const home = async (base: string, ns: string, prop: 'calendar-home-set' | 'addressbook-home-set') => {
+    const r = await propfind(acc, base, '0', '<d:current-user-principal/>');
+    const principal = text(first(propEl(r[0]?.props ?? [], DAV, 'current-user-principal'), DAV, 'href'));
+    if (!principal) return undefined;
+    const pUrl = new URL(principal, base).toString();
+    const p = await propfind(acc, pUrl, '0', prop === 'calendar-home-set' ? '<c:calendar-home-set/>' : '<cr:addressbook-home-set/>');
+    const href = text(first(propEl(p[0]?.props ?? [], ns, prop), DAV, 'href'));
+    return href ? new URL(href, pUrl).toString() : undefined;
+  };
+  let err: unknown;
+  try {
+    res.cal = await home('https://caldav.icloud.com/', CAL, 'calendar-home-set');
+  } catch (e) {
+    err = e;
+    log(`kalendár iCloud: ${String((e as Error).message)}`);
+  }
+  try {
+    res.card = await home('https://contacts.icloud.com/', CARD, 'addressbook-home-set');
+  } catch (e) {
+    err ??= e;
+    log(`kontakty iCloud: ${String((e as Error).message)}`);
+  }
+  if (!res.cal && !res.card) {
+    if (err instanceof UserError) throw err;
+    throw new UserError(
+      'Kalendár ani kontakty iCloud sa nepodarilo načítať.',
+      'Skontroluj heslo pre aplikácie a Apple ID v nastaveniach konta (ak je Apple ID iná adresa ako iCloud Mail, doplň ju).',
+    );
+  }
+  homes.set(acc.id, res);
+  log(`kalendár: ${acc.name} (iCloud) – ${res.cal ?? '-'} / kontakty ${res.card ?? '-'}`);
+  return res;
+}
+
 async function discover(acc: AccountConfig) {
   const cached = homes.get(acc.id);
   if (cached && Date.now() - cached.at < 3600_000) return cached;
@@ -177,6 +219,7 @@ async function discover(acc: AccountConfig) {
     if (acc.auth !== 'oauth') await authHeader(acc); // vyhodí zrozumiteľnú chybu
     return discoverGoogle(acc);
   }
+  if (isICloud(acc) && !acc.davUrl?.trim()) return discoverICloud(acc);
   let lastErr: unknown;
   for (const base of candidates(acc)) {
     try {

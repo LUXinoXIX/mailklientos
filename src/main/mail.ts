@@ -5,7 +5,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
-import { isGmail, type AccountConfig, type ServerConfig } from '../core/account';
+import { isGmail, isICloud, type AccountConfig, type ServerConfig } from '../core/account';
 import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
 import {
   explainError, explainVerify, imapflowConnection, nodemailerConnection, probeServer, verifySocket,
@@ -18,10 +18,13 @@ import * as secure from './securemail';
 import { parseEvents, parseMethod } from '../core/ical';
 
 export class UserError extends Error {
+  /** server odmietol meno alebo heslo */
+  authFailed?: boolean;
   constructor(message: string, public hint?: string, public needsTrust?: boolean) {
     super(message);
   }
 }
+const authError = (message: string, hint?: string) => Object.assign(new UserError(message, hint), { authFailed: true });
 
 /** Preloží chybu knižnice na zrozumiteľnú správu. */
 export function toUserError(e: unknown, cfg?: ServerConfig): UserError {
@@ -30,14 +33,19 @@ export function toUserError(e: unknown, cfg?: ServerConfig): UserError {
   const err = e as any;
   const text = `${err?.responseText ?? ''} ${err?.response ?? ''} ${err?.message ?? ''}`;
   if (cfg && /gmail|googlemail/i.test(cfg.host) && (err?.authenticationFailed || /AUTHENTICATIONFAILED|invalid credentials|EAUTH|535|534/i.test(`${text} ${err?.code ?? ''}`)))
-    return new UserError(
+    return authError(
       'Google odmietol prihlásenie.',
       /application-specific|app password|InvalidSecondFactor/i.test(text)
         ? 'Gmail vyžaduje heslo pre aplikácie (16 znakov z Google konta → Zabezpečenie → Heslá aplikácií), nie bežné heslo.'
         : 'Pri hesle pre aplikácie skontroluj, či je správne (bez medzier nevadí). Pri prihlásení cez Google sa prihlás znova v nastaveniach konta.',
     );
+  if (cfg && /(^|\.)mail\.me\.com$/i.test(cfg.host) && (err?.authenticationFailed || /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|535|534/i.test(`${text} ${err?.code ?? ''}`)))
+    return authError(
+      'Apple odmietol prihlásenie do iCloud Mail.',
+      'iCloud vyžaduje heslo pre aplikácie (account.apple.com → Prihlásenie a bezpečnosť → Heslá pre aplikácie), nie heslo Apple ID. Zrušené heslo pre aplikácie prestane platiť – vytvor nové. Skontroluj aj, či je v Nastaveniach iCloud zapnutá Pošta iCloud.',
+    );
   if (err?.authenticationFailed || /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|535/i.test(`${text} ${err?.code ?? ''}`))
-    return new UserError('Prihlásenie zlyhalo: nesprávne meno alebo heslo.', 'Pri Zimbre býva meno celý e-mail alebo len časť pred @.');
+    return authError('Prihlásenie zlyhalo: nesprávne meno alebo heslo.', 'Pri Zimbre býva meno celý e-mail alebo len časť pred @.');
   if (/LOGINDISABLED|PRIVACYREQUIRED/i.test(text))
     return new UserError('Server nepovoľuje prihlásenie bez šifrovania.', 'Nastav šifrovanie STARTTLS alebo SSL/TLS.');
   const code: string | undefined = err?.code;
@@ -75,7 +83,9 @@ async function credFor(acc: AccountConfig, override?: string): Promise<Cred> {
     return { imap: { user, accessToken }, smtp: { user, type: 'OAuth2', accessToken }, key: 'oauth' };
   }
   const pass = passwordFor(acc, override);
-  return { imap: { user, pass }, smtp: { user, pass }, key: crypto.createHash('sha256').update(pass).digest('hex') };
+  // iCloud: SMTP vždy s celou adresou (IMAP niekedy chce len časť pred @)
+  const smtpUser = isICloud(acc) && acc.email.includes('@') ? acc.email : user;
+  return { imap: { user, pass }, smtp: { user: smtpUser, pass }, key: crypto.createHash('sha256').update(pass).digest('hex') };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,8 +261,21 @@ const GMAIL_NAMES: Record<string, string> = {
 };
 const GMAIL_ORDER = ['\\Inbox', '\\Flagged', '\\Important', '\\Drafts', '\\Sent', '\\All', '\\Junk', '\\Trash'];
 
+/** iCloud: anglické názvy systémových priečinkov Apple → slovenské; špeciálne použitie aj podľa názvu (keď ho server neohlási). */
+const ICLOUD_FOLDERS: Record<string, { use: string; name: string }> = {
+  drafts: { use: '\\Drafts', name: 'Koncepty' },
+  'sent messages': { use: '\\Sent', name: 'Odoslané' },
+  sent: { use: '\\Sent', name: 'Odoslané' },
+  archive: { use: '\\Archive', name: 'Archív' },
+  junk: { use: '\\Junk', name: 'Nevyžiadaná pošta' },
+  'deleted messages': { use: '\\Trash', name: 'Kôš' },
+  trash: { use: '\\Trash', name: 'Kôš' },
+};
+const ICLOUD_NAMES: Record<string, string> = { '\\Drafts': 'Koncepty', '\\Sent': 'Odoslané', '\\Archive': 'Archív', '\\Junk': 'Nevyžiadaná pošta', '\\Trash': 'Kôš' };
+
 export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
   if (isGmail(acc)) return listGmailFolders(acc);
+  if (isICloud(acc)) return listICloudFolders(acc);
   return withImap(acc, async (c) => {
     const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string }> = await c.list();
     const out = list.map((m) => ({
@@ -261,6 +284,40 @@ export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
       specialUse: m.path.toUpperCase() === 'INBOX' ? '\\Inbox' : m.specialUse ?? null,
       depth: m.delimiter ? m.path.split(m.delimiter).length - 1 : 0,
     }));
+    const rank = (f: FolderInfo) => {
+      const i = f.specialUse ? SPECIAL_ORDER.indexOf(f.specialUse) : -1;
+      return i < 0 ? 99 : i;
+    };
+    return out.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path));
+  });
+}
+
+/** iCloud: systémové priečinky so slovenskými názvami v poradí ako v Apple Mail, vlastné priečinky pod nimi. */
+async function listICloudFolders(acc: AccountConfig): Promise<FolderInfo[]> {
+  return withImap(acc, async (c) => {
+    const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string; flags?: Set<string> }> = await c.list();
+    const out: FolderInfo[] = [];
+    for (const m of list) {
+      if (m.flags?.has('\\Noselect') || m.flags?.has('\\NonExistent')) continue;
+      const inbox = m.path.toUpperCase() === 'INBOX';
+      const known = m.delimiter && m.path.includes(m.delimiter) ? undefined : ICLOUD_FOLDERS[m.path.toLowerCase()];
+      const use = inbox ? '\\Inbox' : m.specialUse ?? known?.use ?? null;
+      out.push({
+        path: m.path,
+        name: inbox ? 'Doručená pošta' : (use && (known || m.specialUse) && ICLOUD_NAMES[use]) || m.name,
+        specialUse: use,
+        depth: m.delimiter ? m.path.split(m.delimiter).length - 1 : 0,
+      });
+    }
+    // dva priečinky s rovnakým použitím (napr. „Sent“ aj „Sent Messages“): slovenský názov len pre ten, ktorý ohlásil server
+    const seen = new Set<string>();
+    for (const f of out.sort((a, b) => Number(!list.find((m) => m.path === a.path)?.specialUse) - Number(!list.find((m) => m.path === b.path)?.specialUse))) {
+      if (!f.specialUse || f.specialUse === '\\Inbox') continue;
+      if (seen.has(f.specialUse)) {
+        f.name = f.path;
+        f.specialUse = null;
+      } else seen.add(f.specialUse);
+    }
     const rank = (f: FolderInfo) => {
       const i = f.specialUse ? SPECIAL_ORDER.indexOf(f.specialUse) : -1;
       return i < 0 ? 99 : i;
@@ -812,6 +869,18 @@ export async function testAccount(acc: AccountConfig, password?: string): Promis
     } catch (e) {
       const u = toUserError(e, acc.imap);
       res.login = { ok: false, message: u.message, hint: u.hint };
+      // iCloud: Apple podľa konta chce celú adresu alebo len časť pred @ – skúsiť aj druhú možnosť
+      const user = acc.username || acc.email;
+      const pw = password || getPassword(acc.id);
+      if (isICloud(acc) && pw && u.authFailed && acc.email.includes('@')) {
+        const alt = user.includes('@') ? acc.email.split('@')[0]! : acc.email;
+        try {
+          await withImap({ ...acc, username: alt }, async () => true, pw);
+          res.login = { ok: true, message: `Prihlásenie do iCloud Mail prebehlo úspešne (meno „${alt}“).`, username: alt };
+        } catch {
+          /* ostane pôvodná chyba */
+        }
+      }
     }
   }
   return res;

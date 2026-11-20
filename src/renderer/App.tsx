@@ -1,7 +1,7 @@
 // Rozloženie C: pás kont úplne vľavo → pás modulov podľa konta → obsah (IMAP klient alebo vložený Outlook) → pravý panel.
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, FluentProvider, Input, Tooltip } from '@fluentui/react-components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isGmail, isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
+import { isGmail, isICloud, isImap, isM365, type AccountPublic, type ImapAccountPublic, type M365Account } from '../core/account';
 import type { FolderInfo, MailApi, MessageFull, MessageSummary, OutboxItem } from '../core/api';
 import { DEFAULT_SETTINGS, PIN_KEYWORD, categoriesOf, SEARCH_FIELDS, type SearchField, type AppSettings, type QuickStep, type SavedSearch, type Task } from '../core/settings';
 import { ALL, AccountRail } from './components/AccountRail';
@@ -71,7 +71,7 @@ type FolderState = FolderInfo[] | 'loading' | { error: string };
 type Dialogs =
   | { kind: 'none' }
   | { kind: 'chooser' }
-  | { kind: 'imap'; edit?: ImapAccountPublic; preset?: 'gmail' }
+  | { kind: 'imap'; edit?: ImapAccountPublic; preset?: 'gmail' | 'icloud' }
   | { kind: 'm365'; edit?: M365Account; host?: 'office' | 'live' | 'web' }
   | { kind: 'signatures' }
   | { kind: 'organize'; tab?: OrganizeTab }
@@ -1523,7 +1523,7 @@ export function App() {
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
           onTransfer={(m) => setTransfer(m)}
-          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : isGmail(a as ImapAccountPublic) ? 'GMAIL' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
+          kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : isGmail(a as ImapAccountPublic) ? 'GMAIL' : isICloud(a as ImapAccountPublic) ? 'ICLOUD' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
           onToggleGpu={() => void api?.setGpuDisabled(!gpuOff)}
@@ -1564,7 +1564,7 @@ export function App() {
             />
           )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : isICloud(activeImap) ? 'ICLOUD' : zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -2266,6 +2266,7 @@ export function App() {
           onClose={closeDialog}
           onImap={() => openDialog({ kind: 'imap' })}
           onGmail={() => openDialog({ kind: 'imap', preset: 'gmail' })}
+          onICloud={() => openDialog({ kind: 'imap', preset: 'icloud' })}
           onM365={(host) => openDialog({ kind: 'm365', host })}
         />
       )}
