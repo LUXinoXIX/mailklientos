@@ -411,7 +411,8 @@ export function buildReply(e: CalEvent, me: { email: string; name?: string }, pa
 export function parseVCards(text: string): Contact[] {
   const tree = toTree(parseLines(text));
   return tree
-    .filter((c) => c.type === 'VCARD')
+    // skupiny kontaktov (iCloud: X-ADDRESSBOOKSERVER-KIND:group, vCard 4: KIND:group) nie sú ľudia
+    .filter((c) => c.type === 'VCARD' && !/^group$/i.test((get(c, 'X-ADDRESSBOOKSERVER-KIND') ?? get(c, 'KIND'))?.value.trim() ?? ''))
     .map((c) => {
       const fn = get(c, 'FN')?.value;
       const n = get(c, 'N')?.value.split(';');

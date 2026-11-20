@@ -53,7 +53,9 @@ export interface AccountConfig {
   iconPreset?: string;
   iconImage?: string;
   /** poskytovateľ so špeciálnym správaním (Gmail: štítky, Odoslané ukladá server, archív = Všetky správy) */
-  provider?: 'gmail';
+  provider?: 'gmail' | 'icloud';
+  /** iCloud: Apple ID pre kalendár a kontakty, ak sa líši od adresy iCloud Mail (napr. Apple ID na Gmaile) */
+  appleId?: string;
   /** prihlásenie: heslo (aj heslo pre aplikácie Google) alebo OAuth (Prihlásiť sa cez Google) */
   auth?: 'password' | 'oauth';
 }
@@ -128,6 +130,16 @@ export const isGmail = (a: { provider?: string; imap?: { host?: string } }) =>
 export const GMAIL_SERVERS = {
   imap: { host: 'imap.gmail.com', port: 993, security: 'ssl' as Security, tls: strictPolicy() },
   smtp: { host: 'smtp.gmail.com', port: 465, security: 'ssl' as Security, tls: strictPolicy() },
+};
+
+/** Konto iCloud Mail (@icloud.com, @me.com, @mac.com aj vlastná doména iCloud+) – podľa voľby pri pridaní alebo podľa servera IMAP. */
+export const isICloud = (a: { provider?: string; imap?: { host?: string } }) =>
+  a.provider === 'icloud' || /(^|\.)imap\.mail\.me\.com$/i.test(a.imap?.host ?? '');
+
+/** Pevné servery iCloud Mail (Apple: IMAP 993 SSL, SMTP 587 STARTTLS). */
+export const ICLOUD_SERVERS = {
+  imap: { host: 'imap.mail.me.com', port: 993, security: 'ssl' as Security, tls: strictPolicy() },
+  smtp: { host: 'smtp.mail.me.com', port: 587, security: 'starttls' as Security, tls: strictPolicy() },
 };
 
 /** Kľúč, pod ktorým je v trezore uložený obnovovací token OAuth konta. */

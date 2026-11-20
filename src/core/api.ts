@@ -131,7 +131,8 @@ export interface DraftRef {
 export interface AccountTestResult {
   imap: ProbeResult;
   smtp: ProbeResult;
-  login?: { ok: boolean; message: string; hint?: string };
+  /** username: s akým menom sa prihlásenie podarilo (iCloud skúša celú adresu aj časť pred @) */
+  login?: { ok: boolean; message: string; hint?: string; username?: string };
 }
 
 export interface WebBounds {
