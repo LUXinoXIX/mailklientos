@@ -357,6 +357,19 @@ export interface MailApi {
   openLog(): Promise<void>;
   logError(msg: string): Promise<void>;
   onAppEvent(cb: (ev: AppEvent) => void): () => void;
+  /** Zámok programu heslom / PIN-om. */
+  lockStatus(): Promise<Result<LockStatus>>;
+  lockNow(): Promise<Result<void>>;
+  lockUnlock(secret: string): Promise<Result<void>>;
+  lockTouchId(): Promise<Result<void>>;
+  /** zapnúť alebo zmeniť; vráti záchranný kód */
+  lockSet(kind: 'pin' | 'password', secret: string, current?: string): Promise<Result<string>>;
+  lockDisable(current: string): Promise<Result<void>>;
+  lockOptions(o: Partial<LockOptions>): Promise<Result<void>>;
+  /** obnova: vráti jednorazový token na nastavenie nového PIN-u/hesla */
+  lockRecoverAccount(accountId: string, password: string): Promise<Result<string>>;
+  lockRecoverCode(code: string): Promise<Result<string>>;
+  lockReset(token: string, kind: 'pin' | 'password', secret: string): Promise<Result<string>>;
   // vložené weby
   /** Otvorí stránku v Edge (Windows) alebo v predvolenom prehliadači. */
   webOpenOutside(url: string): Promise<void>;
@@ -365,7 +378,29 @@ export interface MailApi {
   webClear(partition: string): Promise<void>;
 }
 
+export interface LockOptions {
+  /** minúty nečinnosti do zamknutia (0 = vypnuté) */
+  idleMin: number;
+  /** zamknúť pri zamknutí obrazovky / uspaní */
+  onScreenLock: boolean;
+  touchId: boolean;
+  /** pri zamknutí upozornenia bez obsahu */
+  hideNotif: boolean;
+}
+export interface LockStatus extends LockOptions {
+  enabled: boolean;
+  locked: boolean;
+  kind: 'pin' | 'password';
+  touchIdAvailable: boolean;
+  /** sekundy do ďalšieho pokusu po zlých pokusoch */
+  blockedFor: number;
+  hasRecoveryCode: boolean;
+  /** kontá, ktorých heslom sa dá overiť obnova */
+  recoveryAccounts: { id: string; name: string; email: string }[];
+}
+
 export type AppEvent =
+  | { type: 'lock-changed'; locked: boolean }
   | { type: 'gpu-crash'; count: number }
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { MailApi, WebEvent } from './core/api';
+import type { AppEvent, MailApi, WebEvent } from './core/api';
 
 const inv = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args);
 
@@ -146,8 +146,18 @@ const api: MailApi = {
   setGpuDisabled: (off) => inv('diag:setGpuDisabled', off),
   openLog: () => inv('diag:openLog'),
   logError: (msg) => inv('diag:log', msg),
+  lockStatus: () => inv('lock:status'),
+  lockNow: () => inv('lock:now'),
+  lockUnlock: (s) => inv('lock:unlock', s),
+  lockTouchId: () => inv('lock:touchId'),
+  lockSet: (k, s, c) => inv('lock:set', k, s, c),
+  lockDisable: (c) => inv('lock:disable', c),
+  lockOptions: (o) => inv('lock:options', o),
+  lockRecoverAccount: (id, pw) => inv('lock:recoverAccount', id, pw),
+  lockRecoverCode: (code) => inv('lock:recoverCode', code),
+  lockReset: (t, k, s) => inv('lock:reset', t, k, s),
   onAppEvent: (cb) => {
-    const listener = (_e: IpcRendererEvent, ev: { type: 'gpu-crash'; count: number }) => cb(ev);
+    const listener = (_e: IpcRendererEvent, ev: AppEvent) => cb(ev);
     ipcRenderer.on('app:event', listener);
     return () => ipcRenderer.removeListener('app:event', listener);
   },

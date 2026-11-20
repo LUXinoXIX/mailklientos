@@ -31,6 +31,7 @@ import { attachmentRisk } from '../core/attrisk';
 import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
 import { SettingsTransfer } from './components/SettingsTransfer';
+import { LockSettings } from './components/LockSettings';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
@@ -175,6 +176,7 @@ export function App() {
   const [scheduled, setScheduled] = useState<OutboxItem[]>([]);
   const [status, setStatus] = useState('');
   const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
+  const [lockDlg, setLockDlg] = useState(false);
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
@@ -1500,6 +1502,7 @@ export function App() {
     // pripojené k <body>. Trieda .app (celé okno, pozadie) tam spôsobovala zakrytie celého okna = blikanie.
     <FluentProvider theme={getTheme(themeDef)}>
       <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''}`} style={themeVars(themeDef)}>
+        {lockDlg && <LockSettings onClose={() => setLockDlg(false)} />}
         {transfer && <SettingsTransfer mode={transfer} onClose={() => setTransfer(null)} onStatus={setStatus} />}
       <div className="shell">
         <AccountRail
@@ -1523,6 +1526,7 @@ export function App() {
           onCrypto={() => openDialog({ kind: 'crypto' })}
           onAbout={() => openDialog({ kind: 'about' })}
           onTransfer={(m) => setTransfer(m)}
+          onLockSettings={() => setLockDlg(true)}
           kindOf={(a) => (a.id === DEMO_ID ? '' : isM365(a) ? (a.host === 'web' ? 'WEB' : a.host === 'live' ? 'OS' : '365') : isGmail(a as ImapAccountPublic) ? 'GMAIL' : zimbraOk[a.id] ? 'Z' : 'IMAP')}
           onTestNotification={() => void api?.testNotification().then((r) => setStatus(r.ok ? r.data : r.error))}
           onToggleNotifications={() => saveSettings({ ...settings, notifications: settings.notifications === false })}
