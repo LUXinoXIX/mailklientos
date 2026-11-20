@@ -1744,6 +1744,7 @@ export function App() {
                   visible={activeM365?.id === a.id}
                   onActivate={(key) => setTabs((t) => ({ ...t, [a.id]: { ...t[a.id]!, active: key } }))}
                   onClose={(key) => closeTab(a, key)}
+                  onReorder={(order) => setTabs((t) => ({ ...t, [a.id]: { ...t[a.id]!, order } }))}
                   onTitle={(key, title) =>
                     setTabs((all) => {
                       const st = all[a.id];
