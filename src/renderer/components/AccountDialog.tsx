@@ -8,9 +8,9 @@ import {
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import {
-  DEFAULT_PORTS, GMAIL_SERVERS, isGmail, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
+  DEFAULT_PORTS, GMAIL_SERVERS, OUTLOOK_SERVERS, isGmail, isOutlookCom, strictPolicy, type AccountConfig, type AccountPublic, type ImapAccountPublic, type CertMode, type Security, type ServerConfig,
 } from '../../core/account';
-import type { AccountTestResult, GoogleGrant } from '../../core/api';
+import type { AccountTestResult, GoogleGrant, MicrosoftGrant } from '../../core/api';
 import type { AppSettings } from '../../core/settings';
 import type { ProbeResult, Protocol } from '../../core/tls-types';
 import { ACCOUNT_COLORS } from '../theme';
@@ -305,13 +305,144 @@ function GmailAuth(props: {
   );
 }
 
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Outlook.com: prihlásenie cez Microsoft (OAuth – heslo Outlook.com pre IMAP/SMTP nefunguje) + nastavenie aplikácie Microsoft. */
+function OutlookAuth(props: {
+  acc: AccountConfig;
+  set: (p: Partial<AccountConfig>) => void;
+  grant: MicrosoftGrant | null;
+  setGrant: (g: MicrosoftGrant | null) => void;
+  microsoft?: AppSettings['microsoft'];
+  onSaveMicrosoft?: (m: AppSettings['microsoft']) => void;
+  setError: (e: string | null) => void;
+}) {
+  const api = window.mailApi;
+  const { acc } = props;
+  const [signing, setSigning] = useState(false);
+  const [showClient, setShowClient] = useState(!props.microsoft?.clientId);
+  const [cid, setCid] = useState(props.microsoft?.clientId ?? '');
+  const open = (u: string) => void api?.openExternal(u);
+  const link = (u: string, t: string) => (
+    <a href="#" onClick={(e) => { e.preventDefault(); open(u); }}>{t}</a>
+  );
+
+  async function signIn() {
+    if (!api) return;
+    props.setError(null);
+    setSigning(true);
+    const r = await api.msSignIn(acc.id, acc.email || undefined);
+    setSigning(false);
+    if (!r.ok) {
+      props.setError(r.hint ? `${r.error} ${r.hint}` : r.error);
+      return;
+    }
+    props.setGrant(r.data);
+    const email = r.data.email || acc.email;
+    props.set({ email, username: email, name: acc.name || r.data.name || email.split('@')[0] || email });
+  }
+  async function signOut() {
+    if (!api) return;
+    await api.msSignOut(acc.id);
+    props.setGrant(null);
+  }
+  const yes = (b: boolean) => (b ? '✓' : '✗');
+
+  return (
+    <fieldset className="server gmail-auth">
+      <legend>Prihlásenie do Outlook.com</legend>
+      <div className="col gap">
+        {props.grant ? (
+          <MessageBar intent="success">
+            <MessageBarBody>
+              Prihlásené ako <b>{props.grant.email || acc.email}</b> · prijímanie (IMAP) {yes(props.grant.imap)} · odosielanie (SMTP) {yes(props.grant.smtp)}
+              {!props.grant.smtp && ' – odosielanie povolíš opätovným prihlásením.'}
+            </MessageBarBody>
+          </MessageBar>
+        ) : (
+          <div className="muted small">
+            Otvorí sa stránka Microsoftu v prehliadači. Prihlás sa a potvrď prístup – program heslo nikdy nevidí.
+            Outlook.com od septembra 2024 neprijíma v poštových programoch heslo (ani heslo pre aplikácie), len toto prihlásenie.
+          </div>
+        )}
+        <div className="row gap">
+          <Button appearance="primary" disabled={signing || !props.microsoft?.clientId} onClick={signIn}>
+            {props.grant ? 'Prihlásiť sa znova' : 'Prihlásiť sa cez Microsoft'}
+          </Button>
+          {signing && (
+            <>
+              <Spinner size="tiny" label="Dokonči prihlásenie v prehliadači…" />
+              <Button size="small" onClick={() => void api?.msCancel()}>Zrušiť</Button>
+            </>
+          )}
+          {props.grant && !signing && <Button appearance="subtle" onClick={signOut}>Odhlásiť z Microsoft</Button>}
+          <div className="grow" />
+          <Button appearance="subtle" size="small" onClick={() => setShowClient((v) => !v)}>
+            {showClient ? 'Skryť nastavenie aplikácie Microsoft' : 'Nastavenie aplikácie Microsoft…'}
+          </Button>
+        </div>
+        <div className="muted small">
+          Na {link('https://outlook.live.com/mail/0/options/mail/forwarding', 'outlook.com')} musí byť zapnuté
+          <b> Nastavenia → Pošta → Preposielanie a IMAP → Povoliť zariadeniam a aplikáciám používať IMAP</b>.
+        </div>
+        {!props.microsoft?.clientId && (
+          <MessageBar intent="warning">
+            <MessageBarBody>Najprv treba raz vložiť ID aplikácie Microsoft (postup nižšie). Platí pre všetky kontá Outlook.com.</MessageBarBody>
+          </MessageBar>
+        )}
+        {showClient && (
+          <div className="gmail-client col gap">
+            <ol className="small steps">
+              <li>
+                Otvor {link('https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade', 'Microsoft Entra → Registrácie aplikácií')} a daj <b>Nová registrácia</b>.
+                Prihlásiť sa môžeš aj firemným kontom, ak ti firma registráciu aplikácií dovolí – aplikácia môže byť v ľubovoľnom adresári.
+              </li>
+              <li>
+                Názov „Universum eMail“, podporované typy kont: <b>Kontá v ľubovoľnom adresári organizácie a osobné kontá Microsoft</b> (alebo „Iba osobné kontá Microsoft“).
+              </li>
+              <li>
+                URI presmerovania: platforma <b>Verejný klient/natívny (mobilný a počítačový)</b>, adresa <code>http://localhost</code>. Daj Registrovať.
+              </li>
+              <li>
+                V aplikácii → <b>Overovanie</b> (Authentication) → Rozšírené nastavenia → <b>Povoliť toky verejného klienta</b> = Áno → Uložiť.
+              </li>
+              <li>
+                V <b>Prehľade</b> skopíruj <b>ID aplikácie (klienta)</b> sem. Tajný kľúč netreba.
+              </li>
+            </ol>
+            <div className="grid2">
+              <Field label="ID aplikácie (klienta)">
+                <Input value={cid} onChange={(_, d) => setCid(d.value.trim())} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+              </Field>
+            </div>
+            <div className="row gap">
+              <Button
+                disabled={!GUID.test(cid)}
+                onClick={() => {
+                  props.onSaveMicrosoft?.({ clientId: cid });
+                  setShowClient(false);
+                }}
+              >
+                Uložiť aplikáciu Microsoft
+              </Button>
+              {cid && !GUID.test(cid) && <span className="muted small">ID má tvar xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>}
+            </div>
+          </div>
+        )}
+      </div>
+    </fieldset>
+  );
+}
+
 export function AccountDialog(props: {
   open: boolean;
   edit?: ImapAccountPublic;
   /** nové konto: predvolené nastavenia (Gmail) */
-  preset?: 'gmail';
+  preset?: 'gmail' | 'outlook';
   google?: AppSettings['google'];
   onSaveGoogle?: (g: AppSettings['google']) => void;
+  microsoft?: AppSettings['microsoft'];
+  onSaveMicrosoft?: (m: AppSettings['microsoft']) => void;
   usedColors: string[];
   onClose: () => void;
   onSaved: (a: AccountPublic) => void;
@@ -328,12 +459,14 @@ export function AccountDialog(props: {
           email: '',
           color: ACCOUNT_COLORS.find((c) => !props.usedColors.includes(c)) ?? ACCOUNT_COLORS[0]!,
           username: '',
-          imap: emptyServer('imap'),
-          smtp: emptyServer('smtp'),
-          ...(props.preset === 'gmail'
-            ? { provider: 'gmail' as const, auth: props.google?.clientId ? ('oauth' as const) : ('password' as const), imap: { ...GMAIL_SERVERS.imap }, smtp: { ...GMAIL_SERVERS.smtp } }
-            : {}),
+          ...presetConfig(),
         };
+  function presetConfig(): Pick<AccountConfig, 'imap' | 'smtp' | 'provider' | 'auth'> {
+    if (props.preset === 'gmail')
+      return { provider: 'gmail', auth: props.google?.clientId ? 'oauth' : 'password', imap: { ...GMAIL_SERVERS.imap }, smtp: { ...GMAIL_SERVERS.smtp } };
+    if (props.preset === 'outlook') return { provider: 'outlook', auth: 'oauth', imap: { ...OUTLOOK_SERVERS.imap }, smtp: { ...OUTLOOK_SERVERS.smtp } };
+    return { imap: emptyServer('imap'), smtp: emptyServer('smtp') };
+  }
   const [acc, setAcc] = useState<AccountConfig>(init);
   const [aliases, setAliases] = useState(() => (acc.identities ?? []).map((x) => (x.name ? `${x.name} <${x.email}>` : x.email)).join('\n'));
   const [password, setPassword] = useState('');
@@ -342,15 +475,20 @@ export function AccountDialog(props: {
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const gmail = isGmail(acc);
+  const outlook = isOutlookCom(acc);
+  /** pevné servery a vlastné prihlásenie (Gmail, Outlook.com) */
+  const fixed = gmail || outlook;
   const [grant, setGrant] = useState<GoogleGrant | null>(null);
+  const [msGrant, setMsGrant] = useState<MicrosoftGrant | null>(null);
   useEffect(() => {
     if (gmail && props.edit && api) void api.googleGrant(props.edit.id).then((r) => r.ok && setGrant(r.data));
+    if (outlook && props.edit && api) void api.msGrant(props.edit.id).then((r) => r.ok && setMsGrant(r.data));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const set = (patch: Partial<AccountConfig>) => setAcc((a) => ({ ...a, ...patch }));
   const onEmail = (email: string) => {
-    if (gmail) {
+    if (fixed) {
       setAcc((a) => ({ ...a, email, username: email, name: !a.name || a.name === a.email.split('@')[0] ? email.split('@')[0] ?? '' : a.name }));
       return;
     }
@@ -427,10 +565,15 @@ export function AccountDialog(props: {
   async function save() {
     if (!api) return;
     if (!acc.email.includes('@') || !acc.imap.host || !acc.smtp.host) {
-      setError(gmail ? 'Vyplň adresu Gmailu.' : 'Vyplň e-mail a servery IMAP a SMTP.');
+      setError(gmail ? 'Vyplň adresu Gmailu.' : outlook ? 'Prihlás sa cez Microsoft (doplní adresu).' : 'Vyplň e-mail a servery IMAP a SMTP.');
       return;
     }
-    if (gmail && acc.auth === 'oauth') {
+    if (outlook) {
+      if (!msGrant) {
+        setError('Prihlás sa cez Microsoft (tlačidlo „Prihlásiť sa cez Microsoft“).');
+        return;
+      }
+    } else if (gmail && acc.auth === 'oauth') {
       if (!grant) {
         setError('Prihlás sa cez Google (tlačidlo „Prihlásiť sa cez Google“).');
         return;
@@ -463,14 +606,14 @@ export function AccountDialog(props: {
     <Dialog open={props.open} onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="account-dialog" style={{ maxWidth: 1000, width: "94vw" }}>
         <DialogBody>
-          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : gmail ? 'Pridať konto Gmail' : 'Pridať konto IMAP'}</DialogTitle>
+          <DialogTitle>{props.edit ? `Nastavenia konta ${props.edit.name}` : gmail ? 'Pridať konto Gmail' : outlook ? 'Pridať konto Outlook.com (pošta v programe)' : 'Pridať konto IMAP'}</DialogTitle>
           <DialogContent className="dialog-content">
             {!api && (
               <MessageBar intent="error"><MessageBarBody>Aplikácia nebeží v Electrone (chýba most do hlavného procesu).</MessageBarBody></MessageBar>
             )}
             <div className="grid2">
               <Field label="E-mail" required>
-                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder={gmail ? 'meno@gmail.com' : 'meno@firma.sk'} />
+                <Input value={acc.email} onChange={(_, d) => onEmail(d.value.trim())} placeholder={gmail ? 'meno@gmail.com' : outlook ? 'meno@outlook.com' : 'meno@firma.sk'} />
               </Field>
               <Field label="Zobrazované meno">
                 <Input value={acc.name} onChange={(_, d) => set({ name: d.value })} />
@@ -483,10 +626,10 @@ export function AccountDialog(props: {
                   onChange={(v) => set(v)}
                 />
               </Field>
-              <Field label="Štítok v zbalenom páse kont" hint={`Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ${gmail ? 'GMAIL' : 'ZIMBRA alebo IMAP'}.`}>
-                <Input value={acc.short ?? ''} maxLength={8} placeholder={gmail ? 'GMAIL' : 'ZIMBRA'} onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
+              <Field label="Štítok v zbalenom páse kont" hint={`Max. 8 znakov, napr. FIRMA, PROJEKT. Prázdne = ${gmail ? 'GMAIL' : outlook ? 'OUTLOOK' : 'ZIMBRA alebo IMAP'}.`}>
+                <Input value={acc.short ?? ''} maxLength={8} placeholder={gmail ? 'GMAIL' : outlook ? 'OUTLOOK' : 'ZIMBRA'} onChange={(_, d) => set({ short: d.value.toUpperCase() || undefined })} />
               </Field>
-              {!gmail && <><Field label="Používateľské meno">
+              {!fixed && <><Field label="Používateľské meno">
                 <Input value={acc.username} onChange={(_, d) => set({ username: d.value.trim() })} />
               </Field>
               <Field label="Heslo" required={!props.edit} hint={props.edit?.hasPassword ? 'Nechaj prázdne, ak sa nemení.' : undefined}>
@@ -504,6 +647,17 @@ export function AccountDialog(props: {
                 setGrant={setGrant}
                 google={props.google}
                 onSaveGoogle={props.onSaveGoogle}
+                setError={setError}
+              />
+            )}
+            {outlook && (
+              <OutlookAuth
+                acc={acc}
+                set={set}
+                grant={msGrant}
+                setGrant={setMsGrant}
+                microsoft={props.microsoft}
+                onSaveMicrosoft={props.onSaveMicrosoft}
                 setError={setError}
               />
             )}
@@ -535,7 +689,7 @@ export function AccountDialog(props: {
                 }}
               />
             </Field>
-            {!gmail && (
+            {!fixed && (
               <>
                 <Field label="Adresa kalendára a kontaktov (CalDAV/CardDAV)" hint="Nechajte prázdne – zistí sa automaticky. Zimbra: https://server/dav/meno@firma.sk/">
                   <Input value={acc.davUrl ?? ''} onChange={(_, d) => set({ davUrl: d.value.trim() || undefined })} placeholder="automaticky" />
@@ -543,6 +697,12 @@ export function AccountDialog(props: {
                 <ServerSection proto="imap" value={acc.imap} onChange={(imap) => setAcc((a) => ({ ...a, imap }))} probe={test?.imap} onRetest={(imap) => runTest({ ...acc, imap })} />
                 <ServerSection proto="smtp" value={acc.smtp} onChange={(smtp) => setAcc((a) => ({ ...a, smtp }))} probe={test?.smtp} onRetest={(smtp) => runTest({ ...acc, smtp })} />
               </>
+            )}
+            {outlook && (
+              <div className="muted small">
+                Servery Outlook.com: outlook.office365.com:993 (SSL/TLS) a smtp-mail.outlook.com:587 (STARTTLS) – nastavené automaticky.
+                Kalendár tohto konta je zatiaľ lokálny v programe (Outlook.com nemá CalDAV; kalendár Outlooku až cez Microsoft Graph).
+              </div>
             )}
             {gmail && <div className="muted small">Servery Gmailu: imap.gmail.com:993 a smtp.gmail.com:465 (SSL/TLS) – nastavené automaticky.</div>}
             {test?.login && (
@@ -561,7 +721,7 @@ export function AccountDialog(props: {
             {props.edit && <Button appearance="subtle" onClick={remove}>Odstrániť konto</Button>}
             <div className="grow" />
             {busy && <Spinner size="tiny" label={busy} />}
-            {!gmail && <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>}
+            {!fixed && <Button disabled={!!busy || (!acc.imap.host && !acc.email.includes('@'))} onClick={runAutodetect}>Zistiť automaticky</Button>}
             <Button disabled={!!busy} onClick={() => runTest()}>Otestovať</Button>
             <Button appearance="primary" disabled={!!busy} onClick={save}>Uložiť</Button>
             <Button disabled={!!busy} onClick={props.onClose}>Zrušiť</Button>

@@ -32,6 +32,8 @@ import * as meeting from './meeting';
 import * as localcal from './localcal';
 import * as backup from './backup';
 import * as google from './google';
+import * as microsoft from './microsoft';
+import * as oauth from './oauth';
 import type { CalEvent, Contact } from '../core/ical';
 
 /** Každá odpoveď ide ako { ok, data } alebo { ok:false, error, hint } – žiadne surové výnimky do UI. */
@@ -85,7 +87,7 @@ export function registerIpc() {
   });
   handle('accounts:delete', async (id: string) => {
     const acc = store.loadAccounts().find((a) => a.id === id);
-    if (acc?.kind === 'imap' && acc.auth === 'oauth') await google.signOut(id).catch((): void => undefined);
+    if (acc?.kind === 'imap' && acc.auth === 'oauth') await oauth.signOut(acc).catch((): void => undefined);
     store.deleteAccount(id);
     // upratovanie nesmie zabrániť odstráneniu (pri vloženom Outlooku nie je IMAP spojenie ani cache)
     const tidy = (what: string, f: () => unknown) => {
@@ -130,6 +132,24 @@ export function registerIpc() {
     return true as const;
   });
   handle('google:grant', (id: string) => google.grant(id));
+  // Outlook.com: prihlásenie cez Microsoft (OAuth)
+  handle('ms:signIn', async (id: string, hint?: string) => {
+    const g = await microsoft.signIn(id, hint);
+    mail.closeAllConnections(id);
+    syncWatchers();
+    return g;
+  });
+  handle('ms:cancel', () => {
+    microsoft.cancelSignIn();
+    return true as const;
+  });
+  handle('ms:signOut', async (id: string) => {
+    await microsoft.signOut(id);
+    mail.closeAllConnections(id);
+    syncWatchers();
+    return true as const;
+  });
+  handle('ms:grant', (id: string) => microsoft.grant(id));
   handle('gmail:labels', (id: string, folder: string, uid: number) => mail.gmailLabels(store.getImap(id), folder, uid));
   handle('gmail:setLabels', (id: string, folder: string, uids: number[], add: string[], remove: string[]) =>
     mail.gmailSetLabels(store.getImap(id), folder, uids, add, remove).then((r) => {

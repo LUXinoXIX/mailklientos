@@ -169,6 +169,14 @@ export interface PickedFile {
 }
 
 /** Prihlásenie cez Google: čo konto povolilo. */
+/** Čo povolilo osobné konto Microsoft (Outlook.com) pri prihlásení. */
+export interface MicrosoftGrant {
+  email: string;
+  name?: string;
+  imap: boolean;
+  smtp: boolean;
+}
+
 export interface GoogleGrant {
   email: string;
   name?: string;
@@ -307,6 +315,11 @@ export interface MailApi {
   googleCancel(): Promise<Result<true>>;
   googleSignOut(accountId: string): Promise<Result<true>>;
   googleGrant(accountId: string): Promise<Result<GoogleGrant | null>>;
+  /** Prihlásenie cez Microsoft (OAuth v prehliadači) pre konto Outlook.com s daným id (aj ešte neuložené) */
+  msSignIn(accountId: string, loginHint?: string): Promise<Result<MicrosoftGrant>>;
+  msCancel(): Promise<Result<true>>;
+  msSignOut(accountId: string): Promise<Result<true>>;
+  msGrant(accountId: string): Promise<Result<MicrosoftGrant | null>>;
   /** správy toho istého vlákna z cache (všetky priečinky konta) */
   thread(accountId: string, messageId: string): Promise<Result<MessageSummary[]>>;
   runActions(accountId: string, folder: string, uids: number[], actions: RuleAction[]): Promise<Result<true>>;
