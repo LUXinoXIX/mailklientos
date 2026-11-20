@@ -766,6 +766,7 @@ export function App() {
     return false;
   };
   async function del() {
+    if (multiSel.length > 1) return bulk(multiSel, 'delete');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.deleteMessages(m.accountId, m.folder, [m.uid]);
@@ -774,6 +775,7 @@ export function App() {
     setStatus(r.data.movedTo ? 'Správa presunutá do Odstránených.' : 'Správa natrvalo odstránená.');
   }
   async function archive() {
+    if (multiSel.length > 1) return bulk(multiSel, 'archive');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.archiveMessages(m.accountId, m.folder, [m.uid]);
@@ -782,6 +784,7 @@ export function App() {
     setStatus(`Správa archivovaná (${r.data.movedTo}).`);
   }
   async function move(dest: string) {
+    if (multiSel.length > 1) return bulk(multiSel, { move: dest });
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.moveMessages(m.accountId, m.folder, [m.uid], dest);
@@ -790,6 +793,8 @@ export function App() {
     setStatus('Správa presunutá.');
   }
   async function toggleSeen() {
+    // viac správ: ak je niektorá neprečítaná, všetky označiť ako prečítané, inak ako neprečítané
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.seen) ? 'seen' : 'unseen');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const seen = !m.seen;
@@ -799,6 +804,7 @@ export function App() {
     setUnread((u) => ({ ...u, [m.accountId]: Math.max(0, (u[m.accountId] ?? 0) + (seen ? -1 : 1)) }));
   }
   async function toggleFlag() {
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.flagged) ? 'flag' : 'unflag');
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const flagged = !m.flagged;
@@ -808,6 +814,7 @@ export function App() {
   }
 
   async function setCategory(id: string, on: boolean) {
+    if (multiSel.length > 1) return bulk(multiSel, { cat: id, on });
     const m = current;
     if (!m || !api || guardDemo(m)) return;
     const r = await api.setKeywords(m.accountId, m.folder, [m.uid], on ? [id] : [], on ? [] : [id]);
@@ -818,6 +825,7 @@ export function App() {
     patchMsg(m, { keywords: [...kw] });
   }
   async function togglePin() {
+    if (multiSel.length > 1) return bulk(multiSel, multiSel.some((x) => !x.keywords?.includes(PIN_KEYWORD)) ? 'pin' : 'unpin');
     const m = current;
     if (!m) return;
     await setCategory(PIN_KEYWORD, !m.keywords?.includes(PIN_KEYWORD));
@@ -849,7 +857,7 @@ export function App() {
       setCurrent(undefined);
       setFull({ loading: false });
     }
-    setStatus('Správa presunutá.');
+    setStatus(d.uids.length > 1 ? `Presunuté: ${d.uids.length} ${d.uids.length < 5 ? 'správy' : 'správ'}.` : 'Správa presunutá.');
   }
   function saveCurrentSearch() {
     const q = search.trim();
@@ -1891,7 +1899,8 @@ export function App() {
                       return rs.flatMap((r) => (r.ok ? r.data : [])).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
                     }}
                     onQuick={(m, a) =>
-                      void bulk([m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
+                      // ikona na riadku, ktorý je súčasťou výberu viacerých správ → platí pre celý výber
+                      void bulk(multiSel.length > 1 && multiSel.some((x) => x.uid === m.uid && x.accountId === m.accountId && x.folder === m.folder) ? multiSel : [m], a === 'delete' ? 'delete' : a === 'seen' ? (m.seen ? 'unseen' : 'seen') : a === 'flag' ? (m.flagged ? 'unflag' : 'flag') : m.keywords?.includes(PIN_KEYWORD) ? 'unpin' : 'pin')
                     }
                     sort={settings.listSort}
                     onSort={(s) => saveSettings({ ...settings, listSort: s })}

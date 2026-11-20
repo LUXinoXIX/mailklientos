@@ -94,7 +94,10 @@ export function FolderPane(props: {
       try {
         const d = JSON.parse(e.dataTransfer.getData('application/x-mailklient')) as DragMessages;
         e.preventDefault();
-        if (d.accountId === accountId && d.folder !== path) props.onDropMessages?.(path, d);
+        const items = d.items?.length ? d.items : d.uids.map((uid) => ({ accountId: d.accountId, folder: d.folder, uid }));
+        const groups = new Map<string, number[]>();
+        for (const it of items) if (it.accountId === accountId && it.folder !== path) groups.set(it.folder, [...(groups.get(it.folder) ?? []), it.uid]);
+        for (const [folder, uids] of groups) props.onDropMessages?.(path, { accountId, folder, uids });
       } catch {
         /* nič */
       }
@@ -214,6 +217,8 @@ export interface DragMessages {
   accountId: string;
   folder: string;
   uids: number[];
+  /** pri ťahaní viacerých vybraných správ (môžu byť z rôznych priečinkov v zobrazení Všetky) */
+  items?: { accountId: string; folder: string; uid: number }[];
 }
 
 export type SortBy = 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category';
@@ -378,7 +383,9 @@ export function MessageList(props: {
         className={`msg ${sel ? 'selected' : ''} ${sel && multi.length > 1 ? 'multi-sel' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
         draggable
         onDragStart={(e) => {
-          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid] };
+          // ťahá sa celý výber, ak je správa jeho súčasťou
+          const many = multi.length > 1 && multi.includes(keyOf(m)) ? multiMsgs : [m];
+          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid })) };
           e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
           e.dataTransfer.effectAllowed = 'move';
         }}
