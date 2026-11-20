@@ -11,6 +11,7 @@ import type { AccountConfig } from '../core/account';
 import type { MessageFull } from '../core/api';
 import * as store from './accounts';
 import { log } from './diagnostics';
+import { hideNotificationContent, lockNow } from './applock';
 import * as mail from './mail';
 import { loadSettings, saveSettings } from './settings';
 
@@ -180,7 +181,7 @@ async function checkFollowUps() {
         keep.push(f);
         continue;
       }
-      if (Notification.isSupported()) new Notification({ title: 'Bez odpovede', body: `${f.to} zatiaľ neodpovedal(a) na „${f.subject}“.` }).show();
+      if (Notification.isSupported()) new Notification(hideNotificationContent() ? { title: 'Universum eMail', body: 'Pripomenutie: správa bez odpovede' } : { title: 'Bez odpovede', body: `${f.to} zatiaľ neodpovedal(a) na „${f.subject}“.` }).show();
       emit({ type: 'followup', subject: f.subject, to: f.to, accountId: f.accountId });
     } catch (e) {
       log('pripomenutie: kontrola zlyhala', String((e as Error).message));
@@ -226,6 +227,7 @@ export function setupTray(showMain: () => void) {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Otvoriť Universum eMail', click: showMain },
+      { label: 'Zamknúť', click: () => lockNow() },
       { type: 'separator' },
       { label: 'Ukončiť', click: () => { quitting = true; app.quit(); } },
     ]),

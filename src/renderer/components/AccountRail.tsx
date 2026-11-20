@@ -39,6 +39,7 @@ export function AccountRail(props: {
   onCrypto: () => void;
   onAbout: () => void;
   onTransfer?: (mode: 'export' | 'import') => void;
+  onLockSettings?: () => void;
   /** krátke označenie typu konta na ikone (Z, IMAP, 365) */
   kindOf?: (a: AccountPublic) => string;
   onTestNotification: () => void;
@@ -92,6 +93,14 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>
+            {props.onLockSettings && (
+              <>
+                <MenuItem onClick={props.onLockSettings}>Zámok programu…</MenuItem>
+                <MenuItem onClick={() => void window.mailApi?.lockNow()} secondaryContent="Ctrl+L">
+                  Zamknúť teraz
+                </MenuItem>
+              </>
+            )}
             {props.onTransfer && (
               <>
                 <MenuItem onClick={() => props.onTransfer?.('export')}>Exportovať nastavenia…</MenuItem>
