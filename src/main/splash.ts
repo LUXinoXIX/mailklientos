@@ -1,35 +1,49 @@
-// Štartovací banner „Universum eMail“ (galaxia a let obálky), kým sa nenačíta hlavné okno.
-import { BrowserWindow } from 'electron';
+// Štartovací banner „Universum eMail“ (súhvezdie v tvare obálky), kým sa nenačíta hlavné okno.
+import { app, BrowserWindow } from 'electron';
 
-const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;height:100%;background:#05060b;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;-webkit-user-select:none;cursor:default}
+const html = (version: string) => `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;background:#05081a;overflow:hidden;-webkit-user-select:none;cursor:default}
 svg{display:block;width:100%;height:100%}
-@keyframes fly{0%{transform:translate(0,0) scale(.9);opacity:0}15%{opacity:1}100%{transform:translate(172px,-60px) scale(.35);opacity:0}}
-@keyframes glow{0%,100%{opacity:.15}50%{opacity:.32}}
-@keyframes tw{0%,100%{opacity:.25}50%{opacity:1}}
-@keyframes bar{0%{width:0}100%{width:120px}}
-.env{animation:fly 1.6s ease-in infinite;transform-origin:59px 200px}
-.halo{animation:glow 2s ease-in-out infinite}
+text{font-family:'Segoe UI Variable Display','Segoe UI',-apple-system,BlinkMacSystemFont,'Ubuntu',Arial,sans-serif}
+@keyframes draw{0%{stroke-dashoffset:1}60%,100%{stroke-dashoffset:0}}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:.7}}
+@keyframes tw{0%,100%{opacity:.25}50%{opacity:.9}}
+@keyframes load{0%{transform:translateX(-70px)}100%{transform:translateX(250px)}}
+.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.4s ease-out forwards}
+.l2{animation-delay:.4s}.l3{animation-delay:.8s}
+.halo{animation:pulse 2.6s ease-in-out infinite}
 .s{animation:tw 2.4s ease-in-out infinite}
-.bar{animation:bar 1.8s ease-out forwards}
+.bar{animation:load 1.6s ease-in-out infinite}
 </style></head><body>
-<svg viewBox="0 0 480 270">
-<g fill="#fff"><circle class="s" cx="30" cy="40" r="1"/><circle class="s" style="animation-delay:.6s" cx="90" cy="20" r=".8"/><circle class="s" style="animation-delay:1.1s" cx="440" cy="30" r="1.2"/><circle class="s" style="animation-delay:.3s" cx="410" cy="230" r="1"/><circle class="s" style="animation-delay:1.5s" cx="70" cy="240" r="1.2"/><circle class="s" style="animation-delay:.9s" cx="200" cy="230" r=".8"/><circle class="s" style="animation-delay:1.8s" cx="330" cy="20" r=".9"/><circle class="s" style="animation-delay:.4s" cx="150" cy="110" r=".7"/><circle class="s" style="animation-delay:1.2s" cx="360" cy="180" r=".8"/></g>
-<g transform="rotate(-20 240 135)"><ellipse cx="240" cy="135" rx="210" ry="38" fill="#5aa2ff" opacity=".06"/><ellipse cx="240" cy="135" rx="140" ry="22" fill="#5aa2ff" opacity=".1"/><ellipse cx="240" cy="135" rx="70" ry="11" fill="#9cc8ff" opacity=".25"/></g>
-<circle cx="240" cy="135" r="9" fill="#ffd166"/><circle class="halo" cx="240" cy="135" r="24" fill="#ffd166"/>
-<path d="M60 200 Q 160 150 232 137" fill="none" stroke="#5aa2ff" stroke-width="1.5" stroke-dasharray="3 5" opacity=".7"/>
-<g class="env"><rect x="44" y="190" width="30" height="21" rx="3" fill="#e8f1ff"/><path d="M45 192 L59 203 L73 192" fill="none" stroke="#13233f" stroke-width="2"/></g>
-<text x="240" y="70" text-anchor="middle" font-size="30" font-weight="600" fill="#fff">Universum eMail</text>
-<rect x="180" y="232" width="120" height="3" rx="1.5" fill="#1b2433"/><rect class="bar" x="180" y="232" width="0" height="3" rx="1.5" fill="#5aa2ff"/>
-<text x="240" y="252" text-anchor="middle" font-size="10" fill="#7c8db0">Pripájam kontá…</text>
+<svg viewBox="0 0 720 405">
+<defs>
+<radialGradient id="bg" cx="0.75" cy="0.5" r="0.55"><stop offset="0" stop-color="#121a45"/><stop offset="1" stop-color="#121a45" stop-opacity="0"/></radialGradient>
+<clipPath id="track"><rect x="56" y="359" width="180" height="2" rx="1"/></clipPath>
+</defs>
+<rect width="720" height="405" fill="url(#bg)"/>
+<g fill="#fff"><circle class="s" cx="40" cy="40" r="1.2"/><circle class="s" style="animation-delay:.6s" cx="140" cy="300" r="1"/><circle class="s" style="animation-delay:1.1s" cx="260" cy="40" r="1.4"/><circle class="s" style="animation-delay:.3s" cx="320" cy="350" r="1"/><circle class="s" style="animation-delay:1.5s" cx="370" cy="70" r="1.2"/><circle class="s" style="animation-delay:.9s" cx="700" cy="60" r="1"/><circle class="s" style="animation-delay:1.8s" cx="690" cy="330" r="1.4"/><circle class="s" style="animation-delay:.4s" cx="480" cy="360" r="1"/><circle class="s" style="animation-delay:1.2s" cx="590" cy="40" r="1.2"/><circle class="s" style="animation-delay:.7s" cx="380" cy="220" r="1"/><circle class="s" style="animation-delay:1.4s" cx="200" cy="200" r="1"/></g>
+<g fill="none" stroke="#7dd3fc" stroke-width="1.2" stroke-linecap="round" opacity=".6">
+<path class="ln" pathLength="1" d="M430 110 H650 V280 H430 Z"/>
+<path class="ln l2" pathLength="1" d="M430 110 L540 200 L650 110"/>
+<path class="ln l3" pathLength="1" d="M430 280 L360 330 L300 318" opacity=".6"/>
+</g>
+<g fill="#7dd3fc"><circle class="halo" cx="430" cy="110" r="12"/><circle class="halo" cx="650" cy="110" r="12"/><circle class="halo" cx="650" cy="280" r="10"/><circle class="halo" cx="430" cy="280" r="10"/><circle class="halo" cx="540" cy="200" r="16" fill="#f5c76b"/></g>
+<g fill="#fff"><circle cx="430" cy="110" r="3.6"/><circle cx="650" cy="110" r="3.6"/><circle cx="650" cy="280" r="3"/><circle cx="430" cy="280" r="3"/><circle cx="360" cy="330" r="2.2" opacity=".8"/><circle cx="300" cy="318" r="1.8" opacity=".7"/></g>
+<circle cx="540" cy="200" r="5" fill="#fde68a"/>
+<text x="54" y="170" font-size="54" font-weight="600" fill="#fff" letter-spacing="-0.8">Universum</text>
+<text x="57" y="200" font-size="17" font-weight="500" fill="#7dd3fc" letter-spacing="7">EMAIL</text>
+<text x="56" y="346" font-size="12" fill="#a9b4d0">Pripájam kontá…</text>
+<rect x="56" y="359" width="180" height="2" rx="1" fill="#1a2244"/>
+<g clip-path="url(#track)"><rect class="bar" x="56" y="359" width="70" height="2" rx="1" fill="#f5c76b"/></g>
+<text x="692" y="386" text-anchor="end" font-size="11" fill="#8d98b8" letter-spacing=".4">verzia ${version}</text>
 </svg></body></html>`;
 
 /** Zobrazí banner; vráti funkciu, ktorá ho zavrie (najskôr po minDuration ms). */
 export function showSplash(minDuration = 1400): (after: () => void) => void {
   const started = Date.now();
   const w = new BrowserWindow({
-    width: 480,
-    height: 270,
+    width: 560,
+    height: 315,
     frame: false,
     resizable: false,
     movable: true,
@@ -38,11 +52,11 @@ export function showSplash(minDuration = 1400): (after: () => void) => void {
     alwaysOnTop: process.platform !== 'darwin',
     show: false,
     center: true,
-    backgroundColor: '#05060b',
+    backgroundColor: '#05081a',
     webPreferences: { sandbox: true, contextIsolation: true },
   });
   w.once('ready-to-show', () => w.show());
-  void w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(HTML)}`);
+  void w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html(app.getVersion()))}`);
   let closed = false;
   // poistka: ak hlavné okno dlho nie je pripravené (napr. čaká na Kľúčenku), banner po 12 s zmizne sám
   const guard = setTimeout(() => {
