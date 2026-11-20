@@ -3,7 +3,7 @@
 import { app, safeStorage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AccountConfig, AccountPublic, AnyAccount } from '../core/account';
+import { oauthSecretKey, type AccountConfig, type AccountPublic, type AnyAccount } from '../core/account';
 
 const dir = () => app.getPath('userData');
 const accountsFile = () => path.join(dir(), 'accounts.json');
@@ -63,6 +63,16 @@ export function getPassword(id: string): string | undefined {
   }
 }
 
+/** Ľubovoľné tajomstvo v trezore (napr. obnovovací token OAuth pod kľúčom oauth:<id>). */
+export const getSecret = (key: string) => getPassword(key);
+export const setSecret = (key: string, value: string) => setPassword(key, value);
+export const clearSecret = (key: string) => clearPassword(key);
+
+/** Má konto čím sa prihlásiť (heslo alebo token Google)? */
+export function hasCredentials(a: AccountConfig): boolean {
+  return a.auth === 'oauth' ? !!getPassword(oauthSecretKey(a.id)) : !!getPassword(a.id);
+}
+
 function setPassword(id: string, password: string) {
   if (!canStoreSecrets()) {
     memorySecrets.set(id, password);
@@ -74,7 +84,7 @@ function setPassword(id: string, password: string) {
 }
 
 export const toPublic = (a: AnyAccount): AccountPublic =>
-  a.kind === 'imap' ? { ...a, hasPassword: !!getPassword(a.id) } : ({ ...a, hasPassword: false, webHasPassword: a.host === 'web' && !!getPassword(a.id) } as AccountPublic);
+  a.kind === 'imap' ? { ...a, hasPassword: hasCredentials(a) } : ({ ...a, hasPassword: false, webHasPassword: a.host === 'web' && !!getPassword(a.id) } as AccountPublic);
 
 /** Zabudnúť uložené heslo (webmail: voľba „neukladať heslo“). */
 export function clearPassword(id: string) {
@@ -115,6 +125,8 @@ export function deleteAccount(id: string) {
   writeJson(accountsFile(), loadAccounts().filter((x) => x.id !== id));
   const s = readJson<Record<string, string>>(secretsFile(), {});
   delete s[id];
+  delete s[oauthSecretKey(id)];
   writeJson(secretsFile(), s);
   memorySecrets.delete(id);
+  memorySecrets.delete(oauthSecretKey(id));
 }

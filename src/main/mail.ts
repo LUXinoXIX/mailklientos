@@ -5,13 +5,14 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
-import type { AccountConfig, ServerConfig } from '../core/account';
+import { isGmail, type AccountConfig, type ServerConfig } from '../core/account';
 import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
 import {
   explainError, explainVerify, imapflowConnection, nodemailerConnection, probeServer, verifySocket,
   type Protocol,
 } from '../core/tls';
 import { getPassword } from './accounts';
+import * as google from './google';
 import * as cache from './cache';
 import * as secure from './securemail';
 import { parseEvents, parseMethod } from '../core/ical';
@@ -28,6 +29,13 @@ export function toUserError(e: unknown, cfg?: ServerConfig): UserError {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const err = e as any;
   const text = `${err?.responseText ?? ''} ${err?.response ?? ''} ${err?.message ?? ''}`;
+  if (cfg && /gmail|googlemail/i.test(cfg.host) && (err?.authenticationFailed || /AUTHENTICATIONFAILED|invalid credentials|EAUTH|535|534/i.test(`${text} ${err?.code ?? ''}`)))
+    return new UserError(
+      'Google odmietol prihlásenie.',
+      /application-specific|app password|InvalidSecondFactor/i.test(text)
+        ? 'Gmail vyžaduje heslo pre aplikácie (16 znakov z Google konta → Zabezpečenie → Heslá aplikácií), nie bežné heslo.'
+        : 'Pri hesle pre aplikácie skontroluj, či je správne (bez medzier nevadí). Pri prihlásení cez Google sa prihlás znova v nastaveniach konta.',
+    );
   if (err?.authenticationFailed || /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|535/i.test(`${text} ${err?.code ?? ''}`))
     return new UserError('Prihlásenie zlyhalo: nesprávne meno alebo heslo.', 'Pri Zimbre býva meno celý e-mail alebo len časť pred @.');
   if (/LOGINDISABLED|PRIVACYREQUIRED/i.test(text))
@@ -52,13 +60,31 @@ function passwordFor(acc: AccountConfig, override?: string) {
   return pw;
 }
 
+/** Prihlasovacie údaje pre IMAP a SMTP: heslo, alebo prístupový token Google (XOAUTH2). */
+interface Cred {
+  imap: { user: string; pass?: string; accessToken?: string };
+  smtp: { user: string; pass?: string; type?: 'OAuth2'; accessToken?: string };
+  /** stály kľúč pre trvalé spojenie (nemení sa pri obnove tokenu) */
+  key: string;
+}
+
+async function credFor(acc: AccountConfig, override?: string): Promise<Cred> {
+  const user = acc.username || acc.email;
+  if (acc.auth === 'oauth' && !override) {
+    const accessToken = await google.accessToken(acc);
+    return { imap: { user, accessToken }, smtp: { user, type: 'OAuth2', accessToken }, key: 'oauth' };
+  }
+  const pass = passwordFor(acc, override);
+  return { imap: { user, pass }, smtp: { user, pass }, key: crypto.createHash('sha256').update(pass).digest('hex') };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-function newClient(acc: AccountConfig, pass: string): Client {
+function newClient(acc: AccountConfig, cred: Cred): Client {
   const client: Client = new ImapFlow({
     ...imapflowConnection(acc.imap),
-    auth: { user: acc.username, pass },
+    auth: cred.imap,
     logger: false,
     connectionTimeout: 20000,
     greetingTimeout: 15000,
@@ -85,7 +111,7 @@ async function closeClient(client: Client) {
 /** Jednorazové spojenie (test konta s novým heslom). */
 async function withOneShot<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>, pass: string): Promise<T> {
   await ensureTrusted(acc.imap, 'imap');
-  const client = newClient(acc, pass);
+  const client = newClient(acc, await credFor(acc, pass));
   try {
     await client.connect();
     const bad = verifySocket(client.socket ?? client._socket, acc.imap.host, acc.imap.tls);
@@ -100,9 +126,9 @@ async function withOneShot<T>(acc: AccountConfig, fn: (c: Client) => Promise<T>,
 
 /** Samostatné spojenie na sledovanie schránky (IDLE). Volajúci ho sám zatvára. */
 export async function connectWatcher(acc: AccountConfig): Promise<Client> {
-  const pass = passwordFor(acc);
+  const cred = await credFor(acc);
   await ensureTrusted(acc.imap, 'imap');
-  const client = newClient(acc, pass);
+  const client = newClient(acc, cred);
   try {
     await client.connect();
     const bad = verifySocket(client.socket ?? client._socket, acc.imap.host, acc.imap.tls);
@@ -132,8 +158,7 @@ interface Pooled {
 const pool = new Map<string, Pooled>();
 const IDLE_MS = 5 * 60_000;
 
-const poolKey = (acc: AccountConfig, pass: string) =>
-  JSON.stringify([acc.imap, acc.username, crypto.createHash('sha256').update(pass).digest('hex')]);
+const poolKey = (acc: AccountConfig, cred: Cred) => JSON.stringify([acc.imap, acc.username, cred.key]);
 
 function drop(id: string, p?: Pooled) {
   const cur = pool.get(id);
@@ -144,8 +169,8 @@ function drop(id: string, p?: Pooled) {
 }
 
 async function pooledClient(acc: AccountConfig): Promise<Pooled> {
-  const pass = passwordFor(acc);
-  const key = poolKey(acc, pass);
+  const cred = await credFor(acc);
+  const key = poolKey(acc, cred);
   let p = pool.get(acc.id);
   if (p && (p.key !== key || (p.ok && p.client.usable === false))) {
     drop(acc.id, p);
@@ -153,7 +178,7 @@ async function pooledClient(acc: AccountConfig): Promise<Pooled> {
   }
   if (!p) {
     await ensureTrusted(acc.imap, 'imap');
-    const client = newClient(acc, pass);
+    const client = newClient(acc, cred);
     const entry: Pooled = { key, client, ok: false, ready: Promise.resolve(client) };
     entry.ready = (async () => {
       await client.connect();
@@ -171,6 +196,7 @@ async function pooledClient(acc: AccountConfig): Promise<Pooled> {
     await p.ready;
   } catch (e) {
     drop(acc.id, p);
+    if (acc.auth === 'oauth') google.invalidate(acc.id);
     throw e;
   }
   return p;
@@ -213,7 +239,20 @@ export function closeAllConnections(id?: string) {
 
 const SPECIAL_ORDER = ['\\Inbox', '\\Drafts', '\\Sent', '\\Archive', '\\Junk', '\\Trash'];
 
+/** Gmail: slovenské názvy systémových priečinkov (štítkov). */
+const GMAIL_NAMES: Record<string, string> = {
+  '\\All': 'Všetky správy',
+  '\\Important': 'Dôležité',
+  '\\Flagged': 'S hviezdičkou',
+  '\\Sent': 'Odoslané',
+  '\\Drafts': 'Koncepty',
+  '\\Junk': 'Spam',
+  '\\Trash': 'Kôš',
+};
+const GMAIL_ORDER = ['\\Inbox', '\\Flagged', '\\Important', '\\Drafts', '\\Sent', '\\All', '\\Junk', '\\Trash'];
+
 export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
+  if (isGmail(acc)) return listGmailFolders(acc);
   return withImap(acc, async (c) => {
     const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string }> = await c.list();
     const out = list.map((m) => ({
@@ -224,6 +263,35 @@ export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
     }));
     const rank = (f: FolderInfo) => {
       const i = f.specialUse ? SPECIAL_ORDER.indexOf(f.specialUse) : -1;
+      return i < 0 ? 99 : i;
+    };
+    return out.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path));
+  });
+}
+
+/**
+ * Gmail: priečinok „[Gmail]“ (alebo „[Google Mail]“) sa nedá otvoriť – skryť ho a jeho systémové priečinky dať na prvú úroveň
+ * so slovenskými názvami; vlastné štítky ostávajú (aj vnorené „Práca/Projekt“).
+ */
+async function listGmailFolders(acc: AccountConfig): Promise<FolderInfo[]> {
+  return withImap(acc, async (c) => {
+    const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string; flags?: Set<string> }> = await c.list();
+    const out: FolderInfo[] = [];
+    for (const m of list) {
+      if (m.flags?.has('\\Noselect') || m.flags?.has('\\NonExistent')) continue;
+      const sys = /^\[(gmail|google mail)\]\//i.test(m.path);
+      // príznaky \All, \Important… priamo zo zoznamu (aj keby server neohlásil SPECIAL-USE)
+      const flagUse = [...(m.flags ?? [])].find((f) => GMAIL_NAMES[f]);
+      const use = m.path.toUpperCase() === 'INBOX' ? '\\Inbox' : m.specialUse ?? flagUse ?? null;
+      out.push({
+        path: m.path,
+        name: m.path.toUpperCase() === 'INBOX' ? 'Doručená pošta' : (use && GMAIL_NAMES[use]) || m.name,
+        specialUse: use,
+        depth: sys ? 0 : m.delimiter ? m.path.split(m.delimiter).length - 1 : 0,
+      });
+    }
+    const rank = (f: FolderInfo) => {
+      const i = f.specialUse ? GMAIL_ORDER.indexOf(f.specialUse) : -1;
       return i < 0 ? 99 : i;
     };
     return out.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path));
@@ -316,9 +384,10 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
       const from = Math.max(1, total - limit + 1);
       const out: MessageSummary[] = [];
       const recipients = new Map<number, string>();
+      const gm = isGmail(acc) ? { threadId: true } : {};
       const q = preview
-        ? { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, headers: ['content-type', 'content-transfer-encoding'], bodyParts: [{ key: 'TEXT', maxLength: 3000 }] }
-        : { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true };
+        ? { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, headers: ['content-type', 'content-transfer-encoding'], bodyParts: [{ key: 'TEXT', maxLength: 3000 }], ...gm }
+        : { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, ...gm };
       for await (const m of c.fetch(`${from}:*`, q)) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
@@ -338,6 +407,7 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
           hasAttachments: m.bodyStructure ? hasRealAttachments(m.bodyStructure) : undefined,
+          threadId: m.threadId ? String(m.threadId) : undefined,
           preview: preview ? previewFrom(m.headers ? m.headers.toString('latin1') : '', (m.bodyParts?.get('text') ?? m.bodyParts?.get('TEXT') ?? Buffer.alloc(0)) as Buffer) || undefined : undefined,
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -387,11 +457,16 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
         // všetky správy s vlajkou v priečinku (karta Označené)
         flagged: { flagged: true },
       };
-      const uids: number[] = (await c.search(crit[field] ?? crit.all!, { uid: true })) || [];
+      // Gmail: hľadanie ako na webe Gmailu (X-GM-RAW) – rozumie aj from:, has:attachment, label:, older_than: …
+      const gmail = isGmail(acc) && field !== 'flagged';
+      const gq = q.replace(/"/g, ' ');
+      const gcrit: Record<string, string> = { all: gq, people: `{subject:(${gq}) from:(${gq}) to:(${gq}) cc:(${gq})}`, subject: `subject:(${gq})`, from: `from:(${gq})`, to: `{to:(${gq}) cc:(${gq})}` };
+      const uids: number[] =
+        (await c.search(gmail ? { gmraw: gcrit[field] ?? gq } : crit[field] ?? crit.all!, { uid: true })) || [];
       const pick = uids.sort((a, b) => b - a).slice(0, limit);
       if (!pick.length) return [];
       const out: MessageSummary[] = [];
-      for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true }, { uid: true })) {
+      for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, ...(isGmail(acc) ? { threadId: true } : {}) }, { uid: true })) {
         const f = addr(m.envelope?.from?.[0]);
         const d: Date | undefined = m.envelope?.date ?? m.internalDate;
         const flags: Set<string> = m.flags ?? new Set();
@@ -402,6 +477,7 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
           messageId: m.envelope?.messageId || undefined, inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
           hasAttachments: m.bodyStructure ? hasRealAttachments(m.bodyStructure) : undefined,
+          threadId: m.threadId ? String(m.threadId) : undefined,
         });
       }
       return out.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
@@ -619,15 +695,18 @@ export async function saveDraft(acc: AccountConfig, input: SendInput, prev?: Dra
       folder = 'Drafts';
     }
     const res = await c.append(folder, raw, ['\\Seen', '\\Draft']);
-    if (prev) await deleteDraftIn(c, prev);
+    if (prev) await deleteDraftIn(c, prev, isGmail(acc));
     return res?.uid ? { folder, uid: Number(res.uid) } : null;
   });
 }
 
-async function deleteDraftIn(c: Client, d: DraftRef) {
+async function deleteDraftIn(c: Client, d: DraftRef, gmail = false) {
+  // Gmail by zmazaný koncept len „archivoval“ (ostal by vo Všetkých správach) – staré verzie preto do Koša
+  const trash = gmail ? await findSpecial(c, '\\Trash', /^\[(gmail|google mail)\]\/(trash|kôš|bin)/i) : undefined;
   const lock = await c.getMailboxLock(d.folder);
   try {
-    await c.messageDelete(String(d.uid), { uid: true });
+    if (trash) await c.messageMove(String(d.uid), trash, { uid: true });
+    else await c.messageDelete(String(d.uid), { uid: true });
   } catch {
     /* koncept už neexistuje */
   } finally {
@@ -636,7 +715,7 @@ async function deleteDraftIn(c: Client, d: DraftRef) {
 }
 
 export async function deleteDraft(acc: AccountConfig, d: DraftRef) {
-  await withImap(acc, (c) => deleteDraftIn(c, d));
+  await withImap(acc, (c) => deleteDraftIn(c, d, isGmail(acc)));
   return true as const;
 }
 
@@ -675,14 +754,14 @@ async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid
 }
 
 export async function sendMail(acc: AccountConfig, input: SendInput) {
-  const pass = passwordFor(acc);
+  const cred = await credFor(acc);
   await ensureTrusted(acc.smtp, 'smtp');
   const base = buildMail(acc, input);
   const fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
   const mail = { ...base, attachments: [...(base.attachments ?? []), ...fw] };
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),
-    auth: { user: acc.username, pass },
+    auth: cred.smtp,
     connectionTimeout: 20000,
     greetingTimeout: 15000,
   });
@@ -702,9 +781,10 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   } finally {
     transport.close();
   }
-  // Uloženie do Odoslaných (IMAP servery to zvyčajne nerobia samy).
-  let savedToSent = false;
-  try {
+  // Uloženie do Odoslaných (IMAP servery to zvyčajne nerobia samy). Gmail ukladá odoslané správy sám –
+  // ďalšia kópia by tam bola dvakrát.
+  let savedToSent = isGmail(acc);
+  if (!savedToSent) try {
     const raw: Buffer = secureRaw ?? (await new MailComposer({ ...mail, messageId: info.messageId, date: new Date() }).compile().build());
     await withImap(acc, async (c) => {
       const list: Array<{ path: string; specialUse?: string }> = await c.list();
@@ -781,6 +861,57 @@ export async function setKeywords(acc: AccountConfig, folder: string, uids: numb
   });
 }
 
+/** Modifikované UTF-7 (RFC 3501) pre názvy štítkov, keď server nezapol UTF8=ACCEPT. */
+export function utf7Decode(s: string): string {
+  return s.replace(/&([^-]*)-/g, (_m, b64: string) => {
+    if (!b64) return '&';
+    const buf = Buffer.from(b64.replace(/,/g, '/'), 'base64');
+    let out = '';
+    for (let i = 0; i + 1 < buf.length; i += 2) out += String.fromCharCode((buf[i]! << 8) | buf[i + 1]!);
+    return out;
+  });
+}
+export function utf7Encode(s: string): string {
+  return s.replace(/&/g, '&-').replace(/[^\x20-\x7e]+/g, (run) => {
+    const buf = Buffer.alloc(run.length * 2);
+    for (let i = 0; i < run.length; i++) buf.writeUInt16BE(run.charCodeAt(i), i * 2);
+    return `&${buf.toString('base64').replace(/=+$/, '').replace(/\//g, ',')}-`;
+  });
+}
+const utf8On = (c: Client) => !!c.enabled?.has?.('UTF8=ACCEPT');
+
+/** Gmail: štítky správy (X-GM-LABELS). Systémové majú tvar \\Inbox, \\Important, \\Starred…, vlastné ich názov („Práca/Projekt“). */
+export async function gmailLabels(acc: AccountConfig, folder: string, uid: number): Promise<string[]> {
+  if (!isGmail(acc)) return [];
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const m = await c.fetchOne(String(uid), { labels: true }, { uid: true });
+      const raw = [...((m?.labels as Set<string> | undefined) ?? [])];
+      return utf8On(c) ? raw : raw.map((l) => (l.startsWith('\\') ? l : utf7Decode(l)));
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+/** Gmail: pridať/odobrať štítky (aj viacerým správam). Odobratie štítku aktuálneho priečinka správu z neho presunie. */
+export async function gmailSetLabels(acc: AccountConfig, folder: string, uids: number[], add: string[], remove: string[]) {
+  if (!uids.length || !isGmail(acc)) return true;
+  return withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const set = uidSet(uids);
+      const enc = (l: string[]) => (utf8On(c) ? l : l.map((x) => (x.startsWith('\\') ? x : utf7Encode(x))));
+      if (add.length) await c.messageFlagsAdd(set, enc(add), { uid: true, useLabels: true });
+      if (remove.length) await c.messageFlagsRemove(set, enc(remove), { uid: true, useLabels: true });
+      return true;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
 /** Vytvorí priečinok, ak neexistuje; vráti jeho cestu. */
 export async function ensureFolder(acc: AccountConfig, name: string): Promise<string> {
   return withImap(acc, async (c) => {
@@ -849,6 +980,20 @@ export async function moveMessages(acc: AccountConfig, folder: string, uids: num
 export async function archiveMessages(acc: AccountConfig, folder: string, uids: number[]) {
   if (!uids.length) return { movedTo: '' };
   return withImap(acc, async (c) => {
+    if (isGmail(acc)) {
+      // Gmail: archivovať = odobrať štítok priečinka (Doručená pošta…), správa ostane vo Všetkých správach
+      const all = await findSpecial(c, '\\All', /^\[(gmail|google mail)\]\/(all mail|všetky)/i);
+      if (all && all !== folder) {
+        const lock = await c.getMailboxLock(folder);
+        try {
+          await c.messageMove(uidSet(uids), all, { uid: true });
+          cache.removeMessages(acc.id, folder, uids);
+          return { movedTo: all };
+        } finally {
+          lock.release();
+        }
+      }
+    }
     let archive = await findSpecial(c, '\\Archive', /^(archive|archív|archiv)$/i);
     if (!archive) {
       await c.mailboxCreate('Archive').catch((): void => undefined);

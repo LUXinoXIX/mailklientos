@@ -155,7 +155,7 @@ function stop(w: Watch) {
   w.client = undefined;
 }
 
-const keyOf = (a: AccountConfig) => JSON.stringify([a.imap, a.username, store.getPassword(a.id) ? 1 : 0]);
+const keyOf = (a: AccountConfig) => JSON.stringify([a.imap, a.username, a.auth ?? 'password', store.hasCredentials(a) ? 1 : 0]);
 
 /** Zladí sledovanie s aktuálnym zoznamom kont (pri štarte a po každej zmene kont). */
 export function syncWatchers() {
@@ -169,7 +169,7 @@ export function syncWatchers() {
     }
   }
   for (const a of accs) {
-    if (watches.has(a.id) || !store.getPassword(a.id)) continue;
+    if (watches.has(a.id) || !store.hasCredentials(a)) continue;
     const w: Watch = { id: a.id, key: keyOf(a), stopped: false, lastUid: 0, delay: 5000 };
     watches.set(a.id, w);
     void start(w);

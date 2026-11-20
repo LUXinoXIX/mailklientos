@@ -1,5 +1,6 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
 import { useAttachmentGuard } from './AttachmentGuard';
+import { GmailLabels } from './GmailLabels';
 import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,7 +8,7 @@ import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { ImapAccountPublic } from '../../core/account';
 import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, AttachBadgeIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -93,7 +94,10 @@ export function FolderPane(props: {
       try {
         const d = JSON.parse(e.dataTransfer.getData('application/x-mailklient')) as DragMessages;
         e.preventDefault();
-        if (d.accountId === accountId && d.folder !== path) props.onDropMessages?.(path, d);
+        const items = d.items?.length ? d.items : d.uids.map((uid) => ({ accountId: d.accountId, folder: d.folder, uid }));
+        const groups = new Map<string, number[]>();
+        for (const it of items) if (it.accountId === accountId && it.folder !== path) groups.set(it.folder, [...(groups.get(it.folder) ?? []), it.uid]);
+        for (const [folder, uids] of groups) props.onDropMessages?.(path, { accountId, folder, uids });
       } catch {
         /* nič */
       }
@@ -191,6 +195,11 @@ export function groupThreads(list: MessageSummary[]): MessageSummary[][] {
   for (const m of list) {
     const k = key(m);
     if (!parent.has(k)) parent.set(k, k);
+    // Gmail: vlákno určuje server (X-GM-THRID), rovnako ako na webe Gmailu
+    if (m.threadId) {
+      union(k, `gt:${m.accountId}:${m.threadId}`);
+      continue;
+    }
     if (m.messageId) union(k, `id:${m.accountId}:${m.messageId}`);
     if (m.inReplyTo) union(k, `id:${m.accountId}:${m.inReplyTo}`);
     const ns = normSubject(m.subject);
@@ -208,6 +217,8 @@ export interface DragMessages {
   accountId: string;
   folder: string;
   uids: number[];
+  /** pri ťahaní viacerých vybraných správ (môžu byť z rôznych priečinkov v zobrazení Všetky) */
+  items?: { accountId: string; folder: string; uid: number }[];
 }
 
 export type SortBy = 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category';
@@ -372,7 +383,9 @@ export function MessageList(props: {
         className={`msg ${sel ? 'selected' : ''} ${sel && multi.length > 1 ? 'multi-sel' : ''} ${unread ? 'unread' : ''} ${m.flagged ? 'important' : ''} ${opts.child ? 'msg-child' : ''}`}
         draggable
         onDragStart={(e) => {
-          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid] };
+          // ťahá sa celý výber, ak je správa jeho súčasťou
+          const many = multi.length > 1 && multi.includes(keyOf(m)) ? multiMsgs : [m];
+          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid })) };
           e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
           e.dataTransfer.effectAllowed = 'move';
         }}
@@ -412,7 +425,6 @@ export function MessageList(props: {
               {m.fromName || m.fromAddress}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
-            {m.hasAttachments && <AttachTinyIcon className="msg-att" aria-label="Má prílohu" title="Správa má prílohu" />}
             <span className="msg-date">{fmtDate(m.date)}</span>
           </div>
           <div className="msg-row">
@@ -452,6 +464,14 @@ export function MessageList(props: {
             </div>
           )}
         </div>
+        {/* príloha: vlastný stĺpec vpravo, zvislo v strede (stĺpec je vždy, aby dátumy ostali pod sebou) */}
+        <span className="msg-attcol">
+          {m.hasAttachments && (
+            <span className="msg-att-badge" role="img" aria-label="Má prílohu" title="Správa má prílohu">
+              <AttachBadgeIcon />
+            </span>
+          )}
+        </span>
       </button>
     );
   };
@@ -668,6 +688,8 @@ export function ReadingPane(props: {
   onTogglePin?: () => void;
   /** ďalšie akcie (⋯) – menu na súradniciach */
   onMore?: (x: number, y: number) => void;
+  /** Gmail: štítky správy (priečinky konta pre „+ Štítok“) */
+  gmail?: { folders: FolderInfo[]; onChanged: (removedCurrent: boolean) => void };
 }) {
   const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
   const [showImages, setShowImages] = useState(false);
@@ -739,6 +761,7 @@ export function ReadingPane(props: {
           </div>
         ) : null;
       })()}
+      {props.gmail && !demo && <GmailLabels message={m} folders={props.gmail.folders} onChanged={props.gmail.onChanged} />}
       {props.onUnsubscribe && (
         <div className="unsub">
           Hromadná správa (newsletter).

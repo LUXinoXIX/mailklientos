@@ -10,7 +10,7 @@ import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
 import { MailIcon, TeamsIcon, WebmailIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -21,9 +21,18 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
               <MailIcon />
               <span>
                 <b>E-mail (IMAP / SMTP)</b>
-                <span className="muted">Zimbra, Gmail, Seznam, firemný server… Plnohodnotný poštový klient v aplikácii.</span>
+                <span className="muted">Zimbra, Seznam, firemný server… Plnohodnotný poštový klient v aplikácii.</span>
               </span>
             </button>
+            {props.onGmail && (
+              <button className="chooser-card" onClick={props.onGmail}>
+                <MailIcon />
+                <span>
+                  <b>Gmail (Google)</b>
+                  <span className="muted">Osobný Gmail aj Google Workspace. Prihlásenie cez Google (pošta, kalendár, kontakty) alebo heslom pre aplikácie. Štítky, archív a vlákna ako v Gmaile.</span>
+                </span>
+              </button>
+            )}
             <button className="chooser-card" onClick={() => props.onM365('office')}>
               <TeamsIcon />
               <span>
@@ -128,8 +137,12 @@ export function M365Dialog(props: {
   async function remove() {
     if (!e || !window.mailApi) return;
     setBusy(true);
-    await window.mailApi.deleteAccount(e.id);
+    const r = await window.mailApi.deleteAccount(e.id);
     setBusy(false);
+    if (r && 'ok' in r && !r.ok) {
+      setConfirmDelete(false);
+      return setError(r.error);
+    }
     props.onDeleted();
   }
 
@@ -215,24 +228,25 @@ export function M365Dialog(props: {
               </div>
             </Field>
             {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
-            {confirmDelete && (
-              <MessageBar intent="warning">
-                <MessageBarBody>
-                  Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta {web ? 'na serveri' : 'v Microsoft 365'} zostane nedotknutá.
-                  <div className="row gap">
-                    <Button size="small" appearance="primary" onClick={() => void remove()}>Odstrániť</Button>
-                    <Button size="small" onClick={() => setConfirmDelete(false)}>Nie</Button>
-                  </div>
-                </MessageBarBody>
-              </MessageBar>
-            )}
           </DialogContent>
           <DialogActions className="dialog-actions">
-            {e && <Button appearance="subtle" onClick={() => setConfirmDelete(true)}>Odstrániť konto</Button>}
-            {e && <Button appearance="subtle" onClick={() => void signOut()}>Odhlásiť</Button>}
-            <div className="grow" />
-            <Button appearance="primary" disabled={busy} onClick={() => void save()}>Uložiť</Button>
-            <Button onClick={props.onClose}>Zrušiť</Button>
+            {confirmDelete ? (
+              // potvrdenie priamo v lište tlačidiel – vždy viditeľné (v obsahu dialógu bolo pod posúvaním a nebolo ho vidieť)
+              <>
+                <span className="confirm-del">Odstrániť konto z aplikácie a vymazať jeho prihlásenie? Pošta {web ? 'na serveri' : 'v Microsoft 365'} zostane nedotknutá.</span>
+                <div className="grow" />
+                <Button appearance="primary" disabled={busy} onClick={() => void remove()}>{busy ? 'Odstraňujem…' : 'Odstrániť'}</Button>
+                <Button disabled={busy} onClick={() => setConfirmDelete(false)}>Nie</Button>
+              </>
+            ) : (
+              <>
+                {e && <Button appearance="subtle" onClick={() => setConfirmDelete(true)}>Odstrániť konto</Button>}
+                {e && <Button appearance="subtle" onClick={() => void signOut()}>Odhlásiť</Button>}
+                <div className="grow" />
+                <Button appearance="primary" disabled={busy} onClick={() => void save()}>Uložiť</Button>
+                <Button onClick={props.onClose}>Zrušiť</Button>
+              </>
+            )}
           </DialogActions>
         </DialogBody>
       </DialogSurface>
