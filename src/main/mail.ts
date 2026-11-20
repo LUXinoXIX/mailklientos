@@ -5,14 +5,14 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
-import { isGmail, type AccountConfig, type ServerConfig } from '../core/account';
+import { isGmail, isOutlookCom, type AccountConfig, type ServerConfig } from '../core/account';
 import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
 import {
   explainError, explainVerify, imapflowConnection, nodemailerConnection, probeServer, verifySocket,
   type Protocol,
 } from '../core/tls';
 import { getPassword } from './accounts';
-import * as google from './google';
+import * as oauth from './oauth';
 import * as cache from './cache';
 import * as secure from './securemail';
 import { parseEvents, parseMethod } from '../core/ical';
@@ -35,6 +35,13 @@ export function toUserError(e: unknown, cfg?: ServerConfig): UserError {
       /application-specific|app password|InvalidSecondFactor/i.test(text)
         ? 'Gmail vyžaduje heslo pre aplikácie (16 znakov z Google konta → Zabezpečenie → Heslá aplikácií), nie bežné heslo.'
         : 'Pri hesle pre aplikácie skontroluj, či je správne (bez medzier nevadí). Pri prihlásení cez Google sa prihlás znova v nastaveniach konta.',
+    );
+  if (cfg && /outlook\.office365\.com|outlook\.com$/i.test(cfg.host) && (err?.authenticationFailed || /AUTHENTICATE failed|AUTHENTICATIONFAILED|authentication unsuccessful|EAUTH|535|5\.7\.(3|139)/i.test(`${text} ${err?.code ?? ''}`)))
+    return new UserError(
+      'Outlook.com odmietol prihlásenie.',
+      /5\.7\.139|basic authentication is disabled/i.test(text)
+        ? 'Outlook.com neprijíma heslo – v nastaveniach konta sa prihlás cez Microsoft.'
+        : 'Skontroluj, či je na outlook.com zapnutý prístup IMAP (Nastavenia → Pošta → Preposielanie a IMAP → „Povoliť zariadeniam a aplikáciám používať IMAP“). Ak áno, prihlás sa cez Microsoft v nastaveniach konta znova.',
     );
   if (err?.authenticationFailed || /AUTHENTICATIONFAILED|authentication failed|invalid credentials|EAUTH|535/i.test(`${text} ${err?.code ?? ''}`))
     return new UserError('Prihlásenie zlyhalo: nesprávne meno alebo heslo.', 'Pri Zimbre býva meno celý e-mail alebo len časť pred @.');
@@ -71,7 +78,7 @@ interface Cred {
 async function credFor(acc: AccountConfig, override?: string): Promise<Cred> {
   const user = acc.username || acc.email;
   if (acc.auth === 'oauth' && !override) {
-    const accessToken = await google.accessToken(acc);
+    const accessToken = await oauth.accessToken(acc);
     return { imap: { user, accessToken }, smtp: { user, type: 'OAuth2', accessToken }, key: 'oauth' };
   }
   const pass = passwordFor(acc, override);
@@ -196,7 +203,7 @@ async function pooledClient(acc: AccountConfig): Promise<Pooled> {
     await p.ready;
   } catch (e) {
     drop(acc.id, p);
-    if (acc.auth === 'oauth') google.invalidate(acc.id);
+    if (acc.auth === 'oauth') oauth.invalidate(acc);
     throw e;
   }
   return p;
@@ -251,8 +258,28 @@ const GMAIL_NAMES: Record<string, string> = {
 };
 const GMAIL_ORDER = ['\\Inbox', '\\Flagged', '\\Important', '\\Drafts', '\\Sent', '\\All', '\\Junk', '\\Trash'];
 
+/** Outlook.com: slovenské názvy systémových priečinkov (aj keby server neohlásil SPECIAL-USE, podľa anglického názvu). */
+const OUTLOOK_NAMES: Record<string, string> = {
+  '\\Drafts': 'Koncepty',
+  '\\Sent': 'Odoslané',
+  '\\Archive': 'Archív',
+  '\\Junk': 'Nevyžiadaná pošta',
+  '\\Trash': 'Odstránené',
+};
+const OUTLOOK_BY_PATH: Record<string, string> = {
+  drafts: '\\Drafts',
+  sent: '\\Sent',
+  'sent items': '\\Sent',
+  archive: '\\Archive',
+  junk: '\\Junk',
+  'junk email': '\\Junk',
+  deleted: '\\Trash',
+  'deleted items': '\\Trash',
+};
+
 export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
   if (isGmail(acc)) return listGmailFolders(acc);
+  if (isOutlookCom(acc)) return listOutlookFolders(acc);
   return withImap(acc, async (c) => {
     const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string }> = await c.list();
     const out = list.map((m) => ({
@@ -261,6 +288,31 @@ export async function listFolders(acc: AccountConfig): Promise<FolderInfo[]> {
       specialUse: m.path.toUpperCase() === 'INBOX' ? '\\Inbox' : m.specialUse ?? null,
       depth: m.delimiter ? m.path.split(m.delimiter).length - 1 : 0,
     }));
+    const rank = (f: FolderInfo) => {
+      const i = f.specialUse ? SPECIAL_ORDER.indexOf(f.specialUse) : -1;
+      return i < 0 ? 99 : i;
+    };
+    return out.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path));
+  });
+}
+
+/** Outlook.com: slovenské názvy, skrytý Pošta na odoslanie (Outbox – len vnútorný priečinok Exchange). */
+async function listOutlookFolders(acc: AccountConfig): Promise<FolderInfo[]> {
+  return withImap(acc, async (c) => {
+    const list: Array<{ path: string; name: string; specialUse?: string; delimiter?: string; flags?: Set<string> }> = await c.list();
+    const out: FolderInfo[] = [];
+    for (const m of list) {
+      if (m.flags?.has('\\Noselect') || m.flags?.has('\\NonExistent')) continue;
+      if (/^outbox$/i.test(m.path)) continue;
+      const top = !m.delimiter || !m.path.includes(m.delimiter);
+      const use = m.path.toUpperCase() === 'INBOX' ? '\\Inbox' : m.specialUse ?? (top ? OUTLOOK_BY_PATH[m.path.toLowerCase()] : undefined) ?? null;
+      out.push({
+        path: m.path,
+        name: m.path.toUpperCase() === 'INBOX' ? 'Doručená pošta' : (use && top && OUTLOOK_NAMES[use]) || m.name,
+        specialUse: use,
+        depth: m.delimiter ? m.path.split(m.delimiter).length - 1 : 0,
+      });
+    }
     const rank = (f: FolderInfo) => {
       const i = f.specialUse ? SPECIAL_ORDER.indexOf(f.specialUse) : -1;
       return i < 0 ? 99 : i;
@@ -781,9 +833,9 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   } finally {
     transport.close();
   }
-  // Uloženie do Odoslaných (IMAP servery to zvyčajne nerobia samy). Gmail ukladá odoslané správy sám –
+  // Uloženie do Odoslaných (IMAP servery to zvyčajne nerobia samy). Gmail aj Outlook.com ukladajú odoslané správy samy –
   // ďalšia kópia by tam bola dvakrát.
-  let savedToSent = isGmail(acc);
+  let savedToSent = isGmail(acc) || isOutlookCom(acc);
   if (!savedToSent) try {
     const raw: Buffer = secureRaw ?? (await new MailComposer({ ...mail, messageId: info.messageId, date: new Date() }).compile().build());
     await withImap(acc, async (c) => {

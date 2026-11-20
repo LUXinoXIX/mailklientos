@@ -10,7 +10,7 @@ import { accountPartition, type M365Account } from '../../core/account';
 import { ACCOUNT_COLORS, accountColor } from '../theme';
 import { MailIcon, TeamsIcon, WebmailIcon } from '../icons';
 
-export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
+export function AddAccountChooser(props: { onClose: () => void; onImap: () => void; onGmail?: () => void; onOutlook?: () => void; onM365: (host: 'office' | 'live' | 'web') => void }) {
   return (
     <Dialog open onOpenChange={(_, d) => !d.open && props.onClose()}>
       <DialogSurface className="chooser-dialog">
@@ -47,6 +47,15 @@ export function AddAccountChooser(props: { onClose: () => void; onImap: () => vo
                 <span className="muted">Osobné konto Microsoft. Vložený Outlook.com a osobné aplikácie: OneDrive, Word, Excel, OneNote, Copilot…</span>
               </span>
             </button>
+            {props.onOutlook && (
+              <button className="chooser-card" onClick={props.onOutlook}>
+                <MailIcon />
+                <span>
+                  <b>Outlook.com – pošta v programe (Outlook.com, Hotmail, Live)</b>
+                  <span className="muted">Osobné konto Microsoft ako plnohodnotná pošta: ribbon, priečinky, offline, hľadanie, pravidlá, podpisy – ako IMAP konto. Prihlásenie cez Microsoft.</span>
+                </span>
+              </button>
+            )}
             <button className="chooser-card" onClick={() => props.onM365('web')}>
               <WebmailIcon />
               <span>

@@ -5,11 +5,12 @@ import https from 'node:https';
 import http from 'node:http';
 import tls from 'node:tls';
 import { DOMParser } from '@xmldom/xmldom';
-import { isGmail, type AccountConfig } from '../core/account';
+import { isGmail, isOutlookCom, type AccountConfig } from '../core/account';
 import { buildEvent, buildTodo, buildVCard, expand, parseEvents, parseTodos, parseVCards, type CalEvent, type CalTodo, type Contact } from '../core/ical';
 import { buildTlsOptions, verifySocket } from '../core/tls';
 import { getPassword } from './accounts';
 import * as google from './google';
+import * as oauth from './oauth';
 import { log } from './diagnostics';
 import { UserError } from './mail';
 
@@ -24,7 +25,7 @@ interface DavResponse {
 
 /** Hlavička Authorization: heslo (Basic) alebo token Google (Bearer). */
 async function authHeader(acc: AccountConfig): Promise<string> {
-  if (acc.auth === 'oauth') return `Bearer ${await google.accessToken(acc)}`;
+  if (acc.auth === 'oauth') return `Bearer ${await oauth.accessToken(acc)}`;
   if (isGmail(acc))
     throw new UserError('Kalendár a kontakty Google vyžadujú prihlásenie cez Google.', 'Heslo pre aplikácie platí len pre poštu. V nastaveniach konta zvoľ „Prihlásiť sa cez Google“.');
   const pass = getPassword(acc.id);
@@ -36,7 +37,7 @@ async function request(acc: AccountConfig, method: string, url: string, body?: s
   const r = await requestOnce(acc, await authHeader(acc), method, url, body, headers, redirects);
   // token Google mohol medzičasom vypršať: raz obnoviť a skúsiť znova
   if (r.status === 401 && acc.auth === 'oauth') {
-    google.invalidate(acc.id);
+    oauth.invalidate(acc);
     return requestOnce(acc, await authHeader(acc), method, url, body, headers, redirects);
   }
   return r;
@@ -173,6 +174,9 @@ async function discoverGoogle(acc: AccountConfig) {
 async function discover(acc: AccountConfig) {
   const cached = homes.get(acc.id);
   if (cached && Date.now() - cached.at < 3600_000) return cached;
+  // Outlook.com nemá CalDAV/CardDAV – kalendár ostáva lokálny v programe (kalendár Outlooku až cez Microsoft Graph)
+  if (isOutlookCom(acc) && !acc.davUrl?.trim())
+    throw new UserError('Outlook.com nemá kalendár ani kontakty cez CalDAV/CardDAV.', 'Kalendár tohto konta je lokálny v programe.');
   if (isGmail(acc) && !acc.davUrl?.trim()) {
     if (acc.auth !== 'oauth') await authHeader(acc); // vyhodí zrozumiteľnú chybu
     return discoverGoogle(acc);

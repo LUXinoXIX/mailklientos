@@ -53,7 +53,7 @@ export interface AccountConfig {
   iconPreset?: string;
   iconImage?: string;
   /** poskytovateľ so špeciálnym správaním (Gmail: štítky, Odoslané ukladá server, archív = Všetky správy) */
-  provider?: 'gmail';
+  provider?: 'gmail' | 'outlook';
   /** prihlásenie: heslo (aj heslo pre aplikácie Google) alebo OAuth (Prihlásiť sa cez Google) */
   auth?: 'password' | 'oauth';
 }
@@ -128,6 +128,15 @@ export const isGmail = (a: { provider?: string; imap?: { host?: string } }) =>
 export const GMAIL_SERVERS = {
   imap: { host: 'imap.gmail.com', port: 993, security: 'ssl' as Security, tls: strictPolicy() },
   smtp: { host: 'smtp.gmail.com', port: 465, security: 'ssl' as Security, tls: strictPolicy() },
+};
+
+/** Osobné konto Outlook.com / Hotmail / Live ako plnohodnotná pošta (IMAP + SMTP s prihlásením cez Microsoft). */
+export const isOutlookCom = (a: { provider?: string }) => a.provider === 'outlook';
+
+/** Pevné servery Outlook.com (len OAuth, heslo Microsoft od 9/2024 neprijíma). */
+export const OUTLOOK_SERVERS = {
+  imap: { host: 'outlook.office365.com', port: 993, security: 'ssl' as Security, tls: strictPolicy() },
+  smtp: { host: 'smtp-mail.outlook.com', port: 587, security: 'starttls' as Security, tls: strictPolicy() },
 };
 
 /** Kľúč, pod ktorým je v trezore uložený obnovovací token OAuth konta. */

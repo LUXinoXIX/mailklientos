@@ -6,7 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import tls from 'node:tls';
-import { isGmail, type AccountConfig } from '../core/account';
+import { isGmail, isOutlookCom, type AccountConfig } from '../core/account';
 import { buildTlsOptions, verifySocket } from '../core/tls';
 import { getPassword } from './accounts';
 import { log } from './diagnostics';
@@ -86,7 +86,7 @@ async function soapRaw(acc: AccountConfig, name: string, ns: string, body: J, to
 }
 
 async function session(acc: AccountConfig): Promise<Session> {
-  if (isGmail(acc)) throw new UserError('Konto Gmail nie je Zimbra.');
+  if (isGmail(acc) || isOutlookCom(acc)) throw new UserError('Konto Gmail ani Outlook.com nie je Zimbra.');
   const s = sessions.get(acc.id);
   if (s && s.until > Date.now() + 60_000) return s;
   const pass = getPassword(acc.id);
@@ -116,7 +116,7 @@ export async function soap(acc: AccountConfig, name: string, ns: 'urn:zimbraAcco
 
 /** Je server konta Zimbra? (výsledok sa pamätá; neúspech sa skúsi znova o hodinu) */
 export async function isZimbra(acc: AccountConfig): Promise<boolean> {
-  if (isGmail(acc)) return false; // Gmail: heslo nesmie odísť na iný server
+  if (isGmail(acc) || isOutlookCom(acc)) return false; // Gmail/Outlook.com: heslo nesmie odísť na iný server
   if (sessions.has(acc.id)) return true;
   const n = notZimbra.get(acc.id);
   if (n && Date.now() - n < 3600_000) return false;
