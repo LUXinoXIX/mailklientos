@@ -8,6 +8,7 @@ import { log } from './diagnostics';
 import { closeClient, connectWatcher } from './mail';
 import { loadSettings } from './settings';
 import { runRules } from './actions';
+import { hideNotificationContent } from './applock';
 import { maybeAutoReply } from './vacation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,6 +38,20 @@ function notify(acc: AccountConfig, items: Array<{ uid: number; from: string; su
   const win = mainWindow();
   // upozornenie aj pri otvorenej aplikácii (ako Outlook); blikanie na paneli úloh len keď je okno v pozadí
   if (win && !win.isFocused()) win.flashFrame(true);
+  if (hideNotificationContent()) {
+    // zamknutý program: bez odosielateľa a predmetu
+    const n = new Notification({ title: 'Universum eMail', body: items.length > 1 ? `Nová pošta (${items.length})` : 'Nová pošta' });
+    n.on('click', () => {
+      const w = mainWindow();
+      if (w) {
+        if (w.isMinimized()) w.restore();
+        w.show();
+        w.focus();
+      }
+    });
+    n.show();
+    return;
+  }
   const shown = items.slice(-3);
   for (const m of shown) {
     const n = new Notification({

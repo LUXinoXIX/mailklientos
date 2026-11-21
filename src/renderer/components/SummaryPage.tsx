@@ -110,6 +110,10 @@ export function SummaryPage(props: {
   const s = props.settings;
   const [edit, setEdit] = useState(false);
   const [dragOver, setDragOver] = useState<SummaryTile | null>(null);
+  const [appVer, setAppVer] = useState('');
+  useEffect(() => {
+    void window.mailApi?.appInfo().then((r) => r.ok && setAppVer(r.data.version));
+  }, []);
   const [now, setNow] = useState(() => new Date());
   const [events, setEvents] = useState<(CalEvent & { accountId: string })[] | null>(null);
   const [flagged, setFlagged] = useState<MessageSummary[] | null>(null);
@@ -585,6 +589,7 @@ export function SummaryPage(props: {
           </div>
         )}
       </div>
+      {appVer && <div className="sum-appver">Universum eMail {appVer}</div>}
     </section>
   );
 }

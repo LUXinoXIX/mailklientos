@@ -6,6 +6,7 @@ import { registerIpc, setComposeWindowFactory } from './main/ipc';
 import { startOutbox } from './main/outbox';
 import { startUpdater } from './main/updater';
 import { showSplash } from './main/splash';
+import { startAutoLock } from './main/applock';
 import { isQuitting, markQuitting, setupTray, startFollowUps } from './main/extras';
 import { loadSettings } from './main/settings';
 import { closeAllConnections } from './main/mail';
@@ -207,6 +208,7 @@ app.whenReady().then(() => {
   startSnoozeTimer();
   startOutbox();
   startFollowUps();
+  startAutoLock();
   setupTray(() => {
     const w = getMainWindow();
     if (!w || w.webContents.getURL().includes('view=1') || w.webContents.getURL().includes('compose=1')) return createWindow();
