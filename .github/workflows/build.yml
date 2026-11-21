@@ -184,11 +184,98 @@ jobs:
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
 
+  # macOS zostavené priamo na Macu (Apple Silicon): balík .app, ad-hoc podpis Apple codesign, .dmg (hdiutil)
+  # a .zip (ditto – zachová odkazy vo frameworkoch). Dymový test: aplikácia musí na Macu naštartovať a bežať.
+  # Ak by Mac runner zlyhal, zverejní sa záložný .zip zostavený na Linuxe.
+  mac:
+    name: Zostavenie (macos)
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Inštalácia závislostí
+        run: |
+          mkdir -p ci
+          set +e +o pipefail
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund 2>&1 | tee ci/install.log
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then exit 0; fi
+          fi
+          npm install --no-audit --no-fund 2>&1 | tee -a ci/install.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Zostavenie, podpis, DMG a ZIP
+        run: |
+          set -eo pipefail
+          sw_vers | tee ci/mac.log
+          npx electron-forge package --platform=darwin --arch=arm64 2>&1 | tee -a ci/mac.log
+          src=$(ls -d out/*-darwin-arm64/*.app | head -1)
+          stage="$RUNNER_TEMP/stage"; mkdir -p "$stage"
+          app="$stage/Universum eMail.app"
+          ditto "$src" "$app"
+          codesign --force --deep --sign - "$app" 2>&1 | tee -a ci/mac.log
+          codesign --verify --deep --strict --verbose=2 "$app" 2>&1 | tail -5 | tee -a ci/mac.log
+          # kontrola súčastí, ktoré pri poškodenej kópii chýbajú
+          test -e "$app/Contents/Frameworks/Electron Framework.framework/Electron Framework"
+          ls -la "$app/Contents/Frameworks/Electron Framework.framework/" | tee -a ci/mac.log
+          ver=$(node -p "require('./package.json').version")
+          mkdir -p out/mac
+          ditto -c -k --sequesterRsrc --keepParent "$app" "out/mac/UniversumEmail-macOS-${ver}.zip"
+          ln -s /Applications "$stage/Aplikácie"
+          hdiutil create -volname "Universum eMail" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "out/mac/UniversumEmail-macOS-${ver}.dmg" 2>&1 | tee -a ci/mac.log
+          ls -la out/mac | tee -a ci/mac.log
+
+      - name: Dymový test na Macu
+        run: |
+          set +e
+          ver=$(node -p "require('./package.json').version")
+          mnt=$(hdiutil attach -nobrowse -readonly "out/mac/UniversumEmail-macOS-${ver}.dmg" | tail -1 | awk -F'\t' '{print $NF}')
+          echo "pripojené: $mnt" | tee ci/smoke.log
+          rm -rf "$RUNNER_TEMP/apps"; mkdir -p "$RUNNER_TEMP/apps"
+          ditto "$mnt/Universum eMail.app" "$RUNNER_TEMP/apps/Universum eMail.app"
+          hdiutil detach "$mnt" -quiet
+          "$RUNNER_TEMP/apps/Universum eMail.app/Contents/MacOS/MailKlient" --enable-logging=stderr >> ci/smoke.log 2>&1 &
+          pid=$!
+          sleep 25
+          if kill -0 $pid 2>/dev/null; then echo "beží" | tee -a ci/smoke.log; kill $pid; exit 0; fi
+          echo "SPADLA" | tee -a ci/smoke.log
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: mailklient-macos
+          path: out/mac/*
+          if-no-files-found: error
+
+      - name: Uloženie logov
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dir="$RUNNER_TEMP/logs"; mkdir -p "$dir"
+          cp ci/*.log "$dir"/ 2>/dev/null || true
+          echo "commit=${GITHUB_SHA} run=${GITHUB_RUN_ID} job=${{ job.status }}" > "$dir/status.txt"
+          cd "$dir"
+          git init -q
+          git checkout -q -b ci-logs-macos
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD || true
+
   # Prototyp na Tauri 2 (WebView2 = jadro Edge): rovnaké rozhranie s ukážkovými dátami, test blikania.
 
   release:
     name: Zverejnenie (latest-build)
-    needs: [build]
+    needs: [build, mac]
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
@@ -201,7 +288,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p files
-          find artifacts -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' -o -name '*.nupkg' -o -name 'RELEASES' \) -exec cp {} files/ \;
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' -o -name '*.nupkg' -o -name 'RELEASES' \) -not -path 'artifacts/mailklient-macos/*' -exec cp {} files/ \;
+          # Mac: zostavenie z Mac runnera (DMG + ZIP) má prednosť pred záložným ZIP z Linuxu
+          if [ -d artifacts/mailklient-macos ]; then cp artifacts/mailklient-macos/* files/; echo "Mac: z Mac runnera"; else echo "Mac: záložný ZIP z Linuxu"; fi
           ls -la files
           if [ -z "$(ls -A files)" ]; then echo "Žiadne inštalátory, release preskakujem."; exit 0; fi
           gh release delete latest-build --cleanup-tag -y || true
@@ -209,5 +298,5 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Najnovšie zostavenie" \
-            --notes "Automaticky zostavené z commitu ${GITHUB_SHA::7}. Windows: MailKlient-Setup.exe (rýchla inštalácia pre teba) alebo UniversumEmail-Setup.exe (klasický sprievodca: pre všetkých používateľov alebo len pre teba, výber priečinka). macOS (čip M): stiahni UniversumEmail-macOS-….zip, rozbaľ, presuň Universum eMail do Aplikácií; pri prvom spustení Nastavenia systému → Súkromie a bezpečnosť → Aj tak otvoriť."
+            --notes "Automaticky zostavené z commitu ${GITHUB_SHA::7}. Windows: MailKlient-Setup.exe (rýchla inštalácia pre teba) alebo UniversumEmail-Setup.exe (klasický sprievodca: pre všetkých používateľov alebo len pre teba, výber priečinka). macOS (čip M): stiahni UniversumEmail-macOS-….dmg, otvor ho a pretiahni Universum eMail na Aplikácie (alebo .zip); pri prvom spustení pravý klik → Otvoriť, prípadne Nastavenia systému → Súkromie a bezpečnosť → Aj tak otvoriť."
 

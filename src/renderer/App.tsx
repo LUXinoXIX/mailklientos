@@ -317,6 +317,12 @@ export function App() {
   }, [loadAccounts, api]); // eslint-disable-line react-hooks/exhaustive-deps
   const startupDone = useRef(false);
   const summaryEnabled = settings.summary?.enabled !== false;
+  const toggleAllInboxes = () => {
+    const on = settings.showAllInboxes === false;
+    saveSettings({ ...settings, showAllInboxes: on });
+    // pri skrytí, ak bolo zvolené „Všetky“, prepnúť na prvé konto
+    if (!on && activeId === ALL) setActiveId(imapAccounts[0]?.id ?? activeId);
+  };
   const toggleSummary = () => {
     const on = !summaryEnabled;
     saveSettings({ ...settings, summary: { ...(settings.summary ?? {}), enabled: on } });
@@ -1509,7 +1515,7 @@ export function App() {
           accounts={railAccounts}
           active={summaryOn ? SUMMARY : activeKey}
           unread={unread}
-          showAll={imapAccounts.length > 1}
+          showAll={imapAccounts.length > 1 && settings.showAllInboxes !== false}
           onSelect={setActiveId}
           onAdd={() => openDialog({ kind: 'chooser' })}
           onEdit={editAccount}
@@ -1634,6 +1640,8 @@ export function App() {
               onMyDay={(v) => saveSettings({ ...settings, myDay: v })}
               summaryEnabled={summaryEnabled}
               onToggleSummary={toggleSummary}
+              allInboxes={settings.showAllInboxes !== false}
+              onToggleAllInboxes={imapAccounts.length > 1 ? toggleAllInboxes : undefined}
               onRefresh={() => setRefreshKey((k) => k + 1)}
               onEditAccount={activeImap && activeImap.id !== DEMO_ID ? () => editAccount(activeImap) : undefined}
               onSignatures={() => openDialog({ kind: 'signatures' })}
