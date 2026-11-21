@@ -109,6 +109,8 @@ export interface AppSettings {
   icsFeeds?: IcsFeed[];
   /** úvodná stránka Súhrn */
   summary?: SummarySettings;
+  /** ikona „Všetky doručené“ v páse kont (predvolene zapnutá) */
+  showAllInboxes?: boolean;
   /** zoradenie zoznamu správ */
   listSort?: { by: 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category'; dir: 'desc' | 'asc' };
   /** šírky stĺpcov v px (priečinky, zoznam správ, pravý panel) */
