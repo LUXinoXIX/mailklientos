@@ -1,0 +1,6 @@
+pripojené: /Volumes/Universum eMail
+2026-11-21 17:10:51.660 MailKlient Helper[2675:11053] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+2026-11-21 17:10:51.660 MailKlient Helper[2675:11047] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+2026-11-21 17:10:51.668 MailKlient Helper[2675:11053] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+(electron) 'safeStorage.isEncryptionAvailable' is deprecated and will be removed. Please use 'safeStorage.isAsyncEncryptionAvailable' instead.
+beží
