@@ -17,6 +17,8 @@ export interface WebTab {
 export interface TabsState {
   tabs: WebTab[];
   active: string;
+  /** poradie kariet v lište (kľúče); webové stránky ostávajú v DOM v pôvodnom poradí – presun <webview> v DOM by stránku znova načítal */
+  order?: string[];
 }
 
 export const baseKey = (accountId: string) => `acc-${accountId}`;
@@ -71,6 +73,7 @@ export function M365View(props: {
   /** konto je práve vybraté (inak ostáva načítané, len skryté) */
   visible: boolean;
   onActivate: (key: string) => void;
+  onReorder?: (order: string[]) => void;
   onClose: (key: string) => void;
   onTitle: (key: string, title: string) => void;
   onEditAccount: () => void;
@@ -116,15 +119,101 @@ export function M365View(props: {
     };
   }, [state.tabs[0]?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // karty v poradí lišty; prvá (hlavná) je vždy prvá
+  const ordered = (() => {
+    const [home, ...rest] = state.tabs;
+    if (!home) return state.tabs;
+    const idx = new Map((state.order ?? []).map((k, i) => [k, i]));
+    const sorted = [...rest].sort((a, b) => (idx.get(a.key) ?? 1e9) - (idx.get(b.key) ?? 1e9));
+    return [home, ...sorted];
+  })();
+  const moveTab = (key: string, toKey: string | null, d = 0) => {
+    const keys = ordered.slice(1).map((t) => t.key);
+    const from = keys.indexOf(key);
+    if (from < 0) return;
+    keys.splice(from, 1);
+    let to = toKey === null ? from + d : keys.indexOf(toKey) + (d > 0 ? 1 : 0);
+    if (toKey === null) to = Math.max(0, Math.min(keys.length, to));
+    else if (to < 0) to = 0;
+    keys.splice(to, 0, key);
+    props.onReorder?.(keys);
+  };
+  const [dragTab, setDragTab] = useState<string | null>(null);
+  const [menuFor, setMenuFor] = useState<{ key: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('blur', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('blur', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [menuFor]);
+  const toEdge = (key: string, end: boolean) => {
+    const keys = ordered.slice(1).map((t) => t.key).filter((k) => k !== key);
+    props.onReorder?.(end ? [...keys, key] : [key, ...keys]);
+  };
+  const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
+
   return (
     <section className={`m365 ${props.visible ? '' : 'm365-hidden'}`} aria-hidden={!props.visible}>
       <div className="m365-bar">
         <div className="m365-tabs" role="tablist" aria-label="Karty konta">
-          {state.tabs.map((t, i) => {
+          {ordered.map((t, i) => {
             const on = t.key === active.key;
+            const movable = i > 0 && !!props.onReorder;
+            const mark = dropAt?.key === t.key ? (dropAt.after ? 'drop-after' : 'drop-before') : '';
             return (
-              <div key={t.key} className={`m365-tab ${on ? 'on' : ''}`} style={on ? { boxShadow: `inset 0 -2px 0 ${props.color}` } : undefined}>
-                <button role="tab" aria-selected={on} className="m365-tab-btn" onClick={() => props.onActivate(t.key)} title={t.url}>
+              <div
+                key={t.key}
+                className={`m365-tab ${on ? 'on' : ''} ${dragTab === t.key ? 'dragging' : ''} ${mark}`}
+                style={on ? { boxShadow: `inset 0 -2px 0 ${props.color}` } : undefined}
+                draggable={movable}
+                onDragStart={(e) => {
+                  if (!movable) return;
+                  e.dataTransfer.setData('text/x-m365-tab', t.key);
+                  e.dataTransfer.effectAllowed = 'move';
+                  setDragTab(t.key);
+                }}
+                onDragOver={(e) => {
+                  if (!dragTab || i === 0) return;
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setDropAt({ key: t.key, after: e.clientX > r.left + r.width / 2 });
+                }}
+                onDragLeave={() => setDropAt((x) => (x?.key === t.key ? null : x))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragTab && dropAt && dragTab !== t.key) moveTab(dragTab, t.key, dropAt.after ? 1 : -1);
+                  setDragTab(null);
+                  setDropAt(null);
+                }}
+                onDragEnd={() => {
+                  setDragTab(null);
+                  setDropAt(null);
+                }}
+              >
+                <button
+                  role="tab"
+                  aria-selected={on}
+                  className="m365-tab-btn"
+                  onClick={() => props.onActivate(t.key)}
+                  title={movable ? `${t.url}\nPresunúť: potiahni myšou alebo Ctrl+Shift+← / →` : t.url}
+                  onKeyDown={(e) => {
+                    if (movable && e.ctrlKey && e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                      e.preventDefault();
+                      moveTab(t.key, null, e.key === 'ArrowLeft' ? -1 : 1);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (!movable) return;
+                    e.preventDefault();
+                    setMenuFor({ key: t.key, x: e.clientX, y: e.clientY });
+                  }}
+                >
                   {t.title}
                 </button>
                 {i > 0 && (
@@ -136,6 +225,30 @@ export function M365View(props: {
             );
           })}
         </div>
+        {menuFor && (
+          <div className="m365-tabmenu" role="menu" style={{ left: menuFor.x, top: menuFor.y }} onMouseDown={(e) => e.stopPropagation()}>
+            {(
+              [
+                ['Presunúť vľavo', () => moveTab(menuFor.key, null, -1)],
+                ['Presunúť vpravo', () => moveTab(menuFor.key, null, 1)],
+                ['Presunúť na začiatok', () => toEdge(menuFor.key, false)],
+                ['Presunúť na koniec', () => toEdge(menuFor.key, true)],
+                ['Zavrieť kartu', () => props.onClose(menuFor.key)],
+              ] as [string, () => void][]
+            ).map(([label, fn]) => (
+              <button
+                key={label}
+                role="menuitem"
+                onClick={() => {
+                  fn();
+                  setMenuFor(null);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="m365-tools">
           <Tooltip content="Späť" relationship="label">
             <Button size="small" appearance="subtle" icon={<BackIcon />} onClick={() => cur()?.back()} aria-label="Späť" />

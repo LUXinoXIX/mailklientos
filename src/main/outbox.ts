@@ -1,5 +1,6 @@
 // Pošta na odoslanie: 10 s na späťvzatie („Zrušiť odoslanie“) a naplánované odoslanie („Odoslať neskôr“).
 // Fronta je v userData/outbox.json, takže naplánované správy prežijú reštart (odošlú sa, keď MailKlient beží).
+import { hideNotificationContent } from './applock';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +65,7 @@ async function tick() {
       // vrátiť do fronty o 5 minút, používateľa upozorniť
       save([...load(), { ...it, sendAt: new Date(Date.now() + 5 * 60_000).toISOString(), kind: 'later', retry: true }]);
       emit({ type: 'outbox-failed', id: it.id, subject: it.subject, error: msg });
-      if (Notification.isSupported()) new Notification({ title: 'Správu sa nepodarilo odoslať', body: `${it.subject}\n${msg}\nSkúsim znova o 5 minút.` }).show();
+      if (Notification.isSupported()) new Notification({ title: 'Správu sa nepodarilo odoslať', body: hideNotificationContent() ? 'Skúsim znova o 5 minút.' : `${it.subject}\n${msg}\nSkúsim znova o 5 minút.` }).show();
     } finally {
       sending.delete(it.id);
       emit({ type: 'outbox-changed' });

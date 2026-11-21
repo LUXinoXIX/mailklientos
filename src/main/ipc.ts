@@ -31,6 +31,7 @@ import * as recent from './recent';
 import * as meeting from './meeting';
 import * as localcal from './localcal';
 import * as backup from './backup';
+import * as applock from './applock';
 import * as google from './google';
 import type { CalEvent, Contact } from '../core/ical';
 
@@ -364,6 +365,16 @@ export function registerIpc() {
   handle('launcher:pick', () => settings.pickProgram(winOf()));
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
   handle('launcher:icon', (target: string) => settings.programIcon(target));
+  handle('lock:status', () => applock.status());
+  handle('lock:now', () => applock.lockNow());
+  handle('lock:unlock', (s: string) => applock.unlock(s));
+  handle('lock:touchId', () => applock.unlockTouchId());
+  handle('lock:set', (k: 'pin' | 'password', s: string, c?: string) => applock.setSecret(k, s, c));
+  handle('lock:disable', (c: string) => applock.disable(c));
+  handle('lock:options', (o: Partial<import('../core/api').LockOptions>) => applock.setOptions(o));
+  handle('lock:recoverAccount', (id: string, pw: string) => applock.recoverWithAccount(id, pw));
+  handle('lock:recoverCode', (code: string) => applock.recoverWithCode(code));
+  handle('lock:reset', (t: string, k: 'pin' | 'password', s: string) => applock.resetWith(t, k, s));
   handle('backup:export', (parts: backup.BackupParts) => backup.exportBackup(winOf(), parts));
   handle('backup:pick', () => backup.pickBackup(winOf()));
   handle('backup:apply', (token: string, parts: backup.BackupParts & { settings: boolean }) => backup.applyBackup(token, parts));
