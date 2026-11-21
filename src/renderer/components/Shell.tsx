@@ -9,7 +9,7 @@ import type { FolderInfo } from '../../core/api';
 import {
   ArchiveIcon, AttachIcon, CalendarIcon, SignatureIcon, CloudIcon, ComposeIcon, ContactsIcon, DeleteIcon, ExcelIcon, FlagIcon, ForwardIcon, MailIcon,
   MarkReadIcon, MarkUnreadIcon, MoveIcon, PanelIcon, PowerPointIcon, ReplyAllIcon, ReplyIcon, SettingsIcon, SyncIcon,
-  SendReceiveIcon, HomeIcon, GlobeIcon, EditSmallIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
+  SendReceiveIcon, HomeIcon, AllInboxIcon, GlobeIcon, EditSmallIcon, TasksIcon, TeamsIcon, WordIcon, TagIcon, LoopIcon, TemplateIcon, FileIcon, LockIcon, ServerIcon, CopilotIcon, PlannerIcon, OneNoteIcon, SharePointIcon, FormsIcon, PinIcon, SnoozeIcon, QuickStepIcon, RulesIcon, ConversationIcon, SearchSmallIcon,
   CalendarSmallIcon, TasksSmallIcon,
 } from '../icons';
 import { BUILTIN_THEMES, onColor, type ThemeDef, type ThemeKey } from '../theme';
@@ -268,6 +268,8 @@ export function Ribbon(props: {
   /** úvodná stránka Súhrn zapnutá */
   summaryEnabled?: boolean;
   onToggleSummary?: () => void;
+  allInboxes?: boolean;
+  onToggleAllInboxes?: () => void;
   onRefresh: () => void;
   onEditAccount?: () => void;
   onSignatures: () => void;
@@ -516,6 +518,11 @@ export function Ribbon(props: {
             {p.onToggleSummary && (
               <ToolbarButton icon={<HomeIcon />} onClick={p.onToggleSummary} aria-pressed={!!p.summaryEnabled} title="Úvodná stránka s prehľadom kont, stretnutí a úloh">
                 {p.summaryEnabled ? '✓ ' : ''}Súhrn
+              </ToolbarButton>
+            )}
+            {p.onToggleAllInboxes && (
+              <ToolbarButton icon={<AllInboxIcon />} onClick={p.onToggleAllInboxes} aria-pressed={!!p.allInboxes} title="Ikona „Všetky doručené“ v páse kont vľavo">
+                {p.allInboxes ? '✓ ' : ''}Všetky doručené
               </ToolbarButton>
             )}
             <ToolbarButton icon={<ConversationIcon />} onClick={() => p.onConversations(!p.conversations)} aria-pressed={p.conversations}>
