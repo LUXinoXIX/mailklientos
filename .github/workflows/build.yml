@@ -18,14 +18,10 @@ jobs:
     name: Zostavenie (${{ matrix.label }})
     strategy:
       fail-fast: false
+      # dev: len Linux (kontrola typov, dymový test, balík závislostí pre vývoj) – Windows a Mac sa zostavujú
+      # až pri vydaní (main) alebo ručnom spustení, aby sa zbytočne nekompilovali pri každom zápise do dev.
       matrix:
-        include:
-          - os: windows-latest
-            label: windows
-          # macOS: Apple Silicon (M1–M4), bez podpisu Apple (ad-hoc podpis, prvé spustenie cez „Aj tak otvoriť“)
-          # macOS (Apple Silicon) sa zostavuje v jobe linux – Mac runnery GitHubu bývajú bez kapacity
-          - os: ubuntu-latest
-            label: linux
+        include: ${{ fromJSON((github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && '[{"os":"windows-latest","label":"windows"},{"os":"ubuntu-latest","label":"linux"}]' || '[{"os":"ubuntu-latest","label":"linux"}]') }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -36,10 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-
-      - name: Linux nástroje pre .deb
-        if: matrix.label == 'linux'
-        run: sudo apt-get update -q && sudo apt-get install -y -q fakeroot dpkg
 
       - name: Inštalácia závislostí
         run: |
@@ -72,9 +64,10 @@ jobs:
           npm run typecheck 2>&1 | tee ci/typecheck.log
           exit ${PIPESTATUS[0]}
 
+      # Windows: inštalátor (Squirrel). Linux: len zabalenie aplikácie pre dymový test (Linux sa nezverejňuje).
       - name: Zostavenie inštalátora
         run: |
-          npm run make 2>&1 | tee ci/make.log
+          if [ "${{ matrix.label }}" = linux ]; then npx electron-forge package 2>&1 | tee ci/make.log; else npm run make 2>&1 | tee ci/make.log; fi
           exit ${PIPESTATUS[0]}
 
       # Druhý inštalátor pre Windows: klasický sprievodca Inno Setup (pre všetkých / len pre mňa, Program Files,
@@ -123,42 +116,15 @@ jobs:
           import -window root ci/screenshot-compose.png || true
           if kill -0 $pid 2>/dev/null; then echo "beží (compose)" | tee -a ci/smoke.log; kill $pid; else echo "SPADLA (compose)" | tee -a ci/smoke.log; exit 1; fi
 
-      # macOS pre Apple Silicon (M1–M4) zostavený na Linuxe: Electron Forge zabalí aplikáciu pre darwin/arm64,
-      # rcodesign (open source, bez Apple účtu) ju ad-hoc podpíše – na Macoch s čipom M musí byť kód podpísaný,
-      # inak macOS hlási „aplikácia je poškodená“. Prvé spustenie: Nastavenia → Súkromie a bezpečnosť → Aj tak otvoriť.
-      - name: macOS (Apple Silicon) – zostavenie a ad-hoc podpis
-        if: matrix.label == 'linux'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -o pipefail
-          npx electron-forge package --platform=darwin --arch=arm64 2>&1 | tee ci/mac-package.log
-          src=$(ls -d out/*-darwin-arm64/*.app | head -1)
-          app="$(dirname "$src")/Universum eMail.app"
-          mv "$src" "$app"
-          echo "aplikácia: $app" | tee -a ci/mac-package.log
-          tag=$(gh release list -R indygreg/apple-platform-rs --limit 60 --json tagName --jq '[.[] | select(.tagName|startswith("apple-codesign/"))][0].tagName')
-          echo "rcodesign: $tag" | tee -a ci/mac-package.log
-          mkdir -p "$RUNNER_TEMP/rc"
-          gh release download "$tag" -R indygreg/apple-platform-rs -p '*x86_64-unknown-linux-musl.tar.gz' -D "$RUNNER_TEMP/rc"
-          tar -xzf "$RUNNER_TEMP"/rc/*.tar.gz -C "$RUNNER_TEMP/rc"
-          rc=$(find "$RUNNER_TEMP/rc" -name rcodesign -type f | head -1)
-          "$rc" sign "$app" 2>&1 | tail -20 | tee -a ci/mac-package.log
-          "$rc" print-signature-info "$app/Contents/MacOS/MailKlient" 2>&1 | grep -i -m3 "signature\|ad-hoc\|cdhash" | tee -a ci/mac-package.log || true
-          ver=$(node -p "require('./package.json').version")
-          mkdir -p out/make/zip/darwin
-          (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/out/make/zip/darwin/UniversumEmail-macOS-${ver}.zip" "$(basename "$app")")
-          ls -la out/make/zip/darwin | tee -a ci/mac-package.log
-
       - name: Zoznam výstupov
         if: always()
         run: (find out/make -type f 2>/dev/null || echo "out/make neexistuje") | tee ci/outputs.log
 
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: success() && matrix.label == 'windows'
         with:
           name: mailklient-${{ matrix.label }}
+          retention-days: 3
           path: |
             out/make/**/*.exe
             out/make/**/*.zip
@@ -186,9 +152,9 @@ jobs:
 
   # macOS zostavené priamo na Macu (Apple Silicon): balík .app, ad-hoc podpis Apple codesign, .dmg (hdiutil)
   # a .zip (ditto – zachová odkazy vo frameworkoch). Dymový test: aplikácia musí na Macu naštartovať a bežať.
-  # Ak by Mac runner zlyhal, zverejní sa záložný .zip zostavený na Linuxe.
   mac:
     name: Zostavenie (macos)
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 45
     defaults:
@@ -253,6 +219,7 @@ jobs:
         if: success()
         with:
           name: mailklient-macos
+          retention-days: 3
           path: out/mac/*
           if-no-files-found: error
 
@@ -271,8 +238,6 @@ jobs:
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD || true
 
-  # Prototyp na Tauri 2 (WebView2 = jadro Edge): rovnaké rozhranie s ukážkovými dátami, test blikania.
-
   release:
     name: Zverejnenie (latest-build)
     needs: [build, mac]
@@ -288,9 +253,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p files
-          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.deb' -o -name '*.msi' -o -name '*.nupkg' -o -name 'RELEASES' \) -not -path 'artifacts/mailklient-macos/*' -exec cp {} files/ \;
-          # Mac: zostavenie z Mac runnera (DMG + ZIP) má prednosť pred záložným ZIP z Linuxu
-          if [ -d artifacts/mailklient-macos ]; then cp artifacts/mailklient-macos/* files/; echo "Mac: z Mac runnera"; else echo "Mac: záložný ZIP z Linuxu"; fi
+          # Windows (Squirrel + Inno) a Mac (DMG + ZIP); Linux sa nezverejňuje
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.nupkg' -o -name 'RELEASES' \) -exec cp {} files/ \;
           ls -la files
           if [ -z "$(ls -A files)" ]; then echo "Žiadne inštalátory, release preskakujem."; exit 0; fi
           gh release delete latest-build --cleanup-tag -y || true

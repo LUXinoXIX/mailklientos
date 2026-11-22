@@ -17,6 +17,17 @@ import * as cache from './cache';
 import * as secure from './securemail';
 import { parseEvents, parseMethod } from '../core/ical';
 
+/** Dátum správy ako ISO text; neplatný dátum (poškodená hlavička Date) nesmie zhodiť načítanie celého priečinka
+    („Invalid time value“) – skúsi sa ďalší zdroj (čas doručenia na server), inak null. */
+export function safeIso(...ds: unknown[]): string | null {
+  for (const d of ds) {
+    if (d === undefined || d === null || d === '') continue;
+    const t = d instanceof Date ? d.getTime() : new Date(d as string | number).getTime();
+    if (Number.isFinite(t)) return new Date(t).toISOString();
+  }
+  return null;
+}
+
 export class UserError extends Error {
   constructor(message: string, public hint?: string, public needsTrust?: boolean) {
     super(message);
@@ -390,7 +401,6 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
         : { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, ...gm };
       for await (const m of c.fetch(`${from}:*`, q)) {
         const f = addr(m.envelope?.from?.[0]);
-        const d: Date | undefined = m.envelope?.date ?? m.internalDate;
         const flags: Set<string> = m.flags ?? new Set();
         out.push({
           accountId: acc.id,
@@ -399,7 +409,7 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           subject: m.envelope?.subject || '(bez predmetu)',
           fromName: f.name,
           fromAddress: f.address,
-          date: d ? new Date(d).toISOString() : null,
+          date: safeIso(m.envelope?.date, m.internalDate),
           seen: flags.has('\\Seen'),
           flagged: flags.has('\\Flagged'),
           answered: flags.has('\\Answered'),
@@ -468,11 +478,10 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
       const out: MessageSummary[] = [];
       for await (const m of c.fetch(uidSet(pick), { uid: true, envelope: true, flags: true, internalDate: true, bodyStructure: true, ...(isGmail(acc) ? { threadId: true } : {}) }, { uid: true })) {
         const f = addr(m.envelope?.from?.[0]);
-        const d: Date | undefined = m.envelope?.date ?? m.internalDate;
         const flags: Set<string> = m.flags ?? new Set();
         out.push({
           accountId: acc.id, folder, uid: m.uid, subject: m.envelope?.subject || '(bez predmetu)',
-          fromName: f.name, fromAddress: f.address, date: d ? new Date(d).toISOString() : null,
+          fromName: f.name, fromAddress: f.address, date: safeIso(m.envelope?.date, m.internalDate),
           seen: flags.has('\\Seen'), flagged: flags.has('\\Flagged'), answered: flags.has('\\Answered'),
           messageId: m.envelope?.messageId || undefined, inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),
@@ -598,7 +607,7 @@ async function parseFull(acc: AccountConfig, folder: string, uid: number, source
     subject: p.subject || '(bez predmetu)',
     fromName: f?.name || f?.address || '',
     fromAddress: f?.address || '',
-    date: p.date ? p.date.toISOString() : null,
+    date: safeIso(p.date),
     seen: true,
     flagged,
     messageId: p.messageId || undefined,
