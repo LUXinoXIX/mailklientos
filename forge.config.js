@@ -38,13 +38,6 @@ module.exports = {
         iconUrl: 'https://raw.githubusercontent.com/LUXinoXIX/mailklientos/main/assets/icon.ico',
       },
     },
-    // macOS a Linux: prenosný ZIP (macOS: v CI sa aplikácia ad-hoc podpíše a ZIP vytvorí znova).
-    { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux'] },
-    {
-      name: '@electron-forge/maker-deb',
-      platforms: ['linux'],
-      config: { options: { name: 'mailklient', bin: 'MailKlient', productName: 'Universum eMail', icon: 'assets/icon.png' } },
-    },
   ],
   plugins: [
     {
