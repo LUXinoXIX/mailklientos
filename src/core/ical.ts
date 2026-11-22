@@ -222,7 +222,13 @@ function eventFrom(c: Comp): CalEvent | null {
 export function parseEvents(ics: string): Array<CalEvent & { exdates: number[] }> {
   const tree = toTree(parseLines(ics));
   return tree.flatMap((cal) => all(cal, 'VEVENT')).flatMap((c) => {
-    const e = eventFrom(c);
+    // udalosť s neplatným dátumom sa preskočí – nesmie zhodiť celý kalendár („Invalid time value“)
+    let e: ReturnType<typeof eventFrom>;
+    try {
+      e = eventFrom(c);
+    } catch {
+      return [];
+    }
     if (!e) return [];
     const exdates = c.props
       .filter((p) => p.name === 'EXDATE')
