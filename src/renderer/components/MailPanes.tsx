@@ -606,9 +606,12 @@ export function MessageList(props: {
   );
 }
 
-function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void }) {
+function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void }) {
   const { method, event: e } = props.invite;
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<null | 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'>(null);
+  // výsledok odpovede priamo v karte (predtým len v stavovom riadku dole – nebolo ho vidieť)
+  const [result, setResult] = useState<{ ok: boolean; text: string; p: string } | null>(null);
+  useEffect(() => setResult(null), [e.uid]);
   const when = e.allDay
     ? new Date(e.start).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : `${new Date(e.start).toLocaleString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} – ${new Date(e.end).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`;
@@ -642,17 +645,25 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
             <Button
               key={p}
               size="small"
-              appearance={p === 'ACCEPTED' ? 'primary' : 'secondary'}
-              disabled={busy}
+              appearance={p === 'ACCEPTED' && !result ? 'primary' : result?.ok && result.p === p ? 'primary' : 'secondary'}
+              disabled={!!busy}
               onClick={async () => {
-                setBusy(true);
-                await props.onRespond!(p);
-                setBusy(false);
+                setBusy(p);
+                setResult(null);
+                const r = await props.onRespond!(p);
+                setBusy(null);
+                if (r) setResult({ ...r, p });
               }}
             >
-              {p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
+              {busy === p ? 'Odosielam…' : p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
             </Button>
           ))}
+        </div>
+      )}
+      {result && (
+        <div className={`invite-result ${result.ok ? (/nepodarilo/i.test(result.text) ? 'warn' : 'ok') : 'err'}`} role="status">
+          {result.ok ? '✓ ' : '⚠ '}
+          {result.text}
         </div>
       )}
     </div>
@@ -687,7 +698,7 @@ export function ReadingPane(props: {
   onOpenThread?: (m: MessageSummary) => void;
   categories?: Category[];
   onRemoveCategory?: (id: string) => void;
-  onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void;
+  onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void;
   onBlockSender?: () => void;
   onPrint?: (pdf: boolean) => void;
   onUnsubscribe?: () => void;

@@ -130,8 +130,11 @@ body { overflow: hidden; }
 .m365 { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--colorNeutralBackground1); }
 .m365-bar { flex: none; display: flex; align-items: stretch; gap: 8px; height: 38px; padding: 0 8px; border-bottom: 1px solid var(--colorNeutralStroke2); background: var(--colorNeutralBackground2); }
 .m365-tabs { flex: 1; min-width: 0; display: flex; align-items: stretch; overflow-x: auto; }
-.m365-tab { display: flex; align-items: center; border-right: 1px solid var(--colorNeutralStroke3); }
-.m365-tab.on { background: var(--colorNeutralBackground1); }
+.m365-tabs { gap: 3px; padding-top: 4px; }
+/* neaktívne karty jemne tmavšie než lišta, aby boli vidieť; aktívna svetlá ako obsah */
+.m365-tab { display: flex; align-items: center; background: var(--colorNeutralBackground3); border: 1px solid var(--colorNeutralStroke2); border-bottom: 0; border-radius: 6px 6px 0 0; }
+.m365-tab:hover { background: var(--colorNeutralBackground3Hover); }
+.m365-tab.on { background: var(--colorNeutralBackground1); border-color: var(--colorNeutralStroke1); }
 .m365-tab-btn { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0 12px; height: 100%; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m365-tab.on .m365-tab-btn { font-weight: 600; }
 .m365-tab-x { border: 0; background: none; cursor: pointer; padding: 4px; margin-right: 4px; border-radius: 4px; display: grid; place-items: center; color: var(--colorNeutralForeground3); }
@@ -1004,3 +1007,8 @@ body.app-locked webview, body.app-locked .m365-webs { visibility: hidden !import
 .replied-bar.rep { background: var(--colorBrandBackground2); color: var(--colorBrandForeground2); }
 .replied-bar.fwd { background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); }
 .replied-bar .linklike { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+
+.invite-result { margin-top: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+.invite-result.ok { background: var(--colorPaletteGreenBackground1); color: var(--colorPaletteGreenForeground1); }
+.invite-result.warn { background: var(--colorPaletteYellowBackground1); color: var(--colorPaletteYellowForeground2); }
+.invite-result.err { background: var(--colorPaletteRedBackground1); color: var(--colorPaletteRedForeground1); }

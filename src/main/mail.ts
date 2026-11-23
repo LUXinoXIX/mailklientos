@@ -767,7 +767,9 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   const cred = await credFor(acc);
   await ensureTrusted(acc.smtp, 'smtp');
   const base = buildMail(acc, input);
-  const fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
+  let fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
+  // preposlaná pozvánka ide ako kalendárová časť (text/calendar) – pôvodný .ics by bol navyše ako obyčajná príloha
+  if (input.ical) fw = fw.filter((a: { filename: string; contentType?: string }) => !/calendar/i.test(String(a.contentType ?? '')) && !/\.ics$/i.test(a.filename));
   const mail = { ...base, attachments: [...(base.attachments ?? []), ...fw] };
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),

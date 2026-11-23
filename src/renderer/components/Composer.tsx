@@ -382,6 +382,11 @@ export const Composer = forwardRef<
       readReceipt: receipt,
       draft: draft.current ?? undefined,
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
+      // preposlaná pozvánka na stretnutie: ako pozvánka (text/calendar REQUEST), aby si ju príjemca mohol pridať do kalendára
+      ical:
+        init.kind === 'forward' && init.original?.invite && init.original.invite.method !== 'CANCEL' && init.original.invite.method !== 'REPLY'
+          ? { method: 'REQUEST', content: init.original.invite.ics }
+          : undefined,
       origin:
         init.original && (init.kind === 'forward' || init.kind === 'reply' || init.kind === 'replyAll')
           ? { accountId: init.original.accountId, folder: init.original.folder, uid: init.original.uid, messageId: init.original.messageId, kind: init.kind === 'forward' ? 'forward' : 'reply' }

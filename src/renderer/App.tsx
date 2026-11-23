@@ -2026,6 +2026,7 @@ export function App() {
                       const r = await api.calRespond(m.accountId, m.folder, m.uid, ps);
                       setStatus(r.ok ? r.data : r.error);
                       if (r.ok) setAgendaTick((t) => t + 1);
+                      return r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error };
                     }}
                   />
                   )}
