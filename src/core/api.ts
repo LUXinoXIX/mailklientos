@@ -52,6 +52,18 @@ export interface MessageSummary {
 }
 
 /** odpoveď alebo preposlanie nájdené v Odoslaných */
+export interface WeatherPlace {
+  name: string;
+  lat: number;
+  lon: number;
+  /** kraj, štát */
+  detail?: string;
+}
+export interface WeatherData {
+  current: { temp: number; feels: number; code: number; wind: number; humidity: number; day: boolean; time: string };
+  days: { date: string; code: number; max: number; min: number; rain: number | null }[];
+}
+
 export interface ReplyInfo {
   kind: 'reply' | 'forward';
   date: string | null;
@@ -105,7 +117,7 @@ export interface SendInput {
   /** Koncept, ktorý sa po odoslaní zmaže. */
   draft?: DraftRef;
   /** Preposlanie: prílohy pôvodnej správy sa pripoja. */
-  forward?: { folder: string; uid: number };
+  forward?: { folder: string; uid: number; /** celá pôvodná správa ako príloha .eml */ asAttachment?: boolean };
   /** pôvodná správa, na ktorú sa odpovedá / ktorá sa preposiela – po odoslaní sa označí (\\Answered / $Forwarded) */
   origin?: { accountId: string; folder: string; uid: number; messageId?: string; kind: 'reply' | 'forward' };
   /** Odosielateľ (identita/alias); prázdne = hlavná adresa konta */
@@ -205,9 +217,14 @@ export interface MailApi {
   /** správa v samostatnom okne */
   messageWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   /** odpoveď / preposlanie v samostatnom okne písania */
-  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
+  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward' | 'forwardAttach'): Promise<Result<true>>;
   /** oznámiť ostatným oknám zmenu v priečinku */
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** Poslať ďalej ako originál (presmerovanie): pôvodná správa bez zmeny, hlavičky Resent-* */
+  redirectMessage(accountId: string, folder: string, uid: number, to: string): Promise<Result<void>>;
+  /** počasie (Open-Meteo) pre dlaždicu Súhrnu */
+  weatherSearch(q: string): Promise<Result<WeatherPlace[]>>;
+  weatherForecast(lat: number, lon: number): Promise<Result<WeatherData>>;
   /** ďalšie okno s celým programom */
   newWindow(): Promise<Result<void>>;
   /** odpovede a preposlania správy (hľadá v Odoslaných podľa In-Reply-To / References) */
@@ -237,6 +254,8 @@ export interface MailApi {
   openInOffice(url: string): Promise<Result<true>>;
   appInfo(): Promise<Result<{ version: string; electron: string; chrome: string; node: string; platform: string }>>;
   zimbraCheck(accountId: string): Promise<Result<boolean>>;
+  /** verzia servera Zimbra (z GetInfo), null ak nie je známa */
+  zimbraVersion(accountId: string): Promise<Result<{ full: string; short: string } | null>>;
   zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraGalAuto(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraFreeBusy(accountId: string, emails: string[], from: number, to: number): Promise<Result<FreeBusy[]>>;

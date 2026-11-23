@@ -33,6 +33,7 @@ import * as meeting from './meeting';
 import * as localcal from './localcal';
 import * as backup from './backup';
 import * as applock from './applock';
+import * as weather from './weather';
 import * as google from './google';
 import type { CalEvent, Contact } from '../core/ical';
 
@@ -260,6 +261,7 @@ export function registerIpc() {
   // Zimbra
   const zacc = (id: string) => store.getImap(id);
   handle('zimbra:check', (id: string) => zimbra.isZimbra(zacc(id)));
+  handle('zimbra:version', (id: string) => zimbra.serverVersion(zacc(id)));
   handle('zimbra:gal', (id: string, q: string) => zimbra.galSearch(zacc(id), q));
   handle('zimbra:galAuto', (id: string, q: string) => zimbra.galAutocomplete(zacc(id), q));
   handle('zimbra:freeBusy', (id: string, emails: string[], from: number, to: number) => zimbra.freeBusy(zacc(id), emails, from, to));
@@ -324,6 +326,9 @@ export function registerIpc() {
     void markOriginAfterSend(msg);
     return r;
   });
+  handle('weather:search', (q: string) => weather.searchPlace(q));
+  handle('weather:forecast', (lat: number, lon: number) => weather.forecast(lat, lon));
+  handle('mail:redirect', (id: string, folder: string, uid: number, to: string) => mail.redirectMessage(store.getImap(id), folder, uid, to));
   handle('mail:replyInfo', (id: string, messageId: string) => mail.replyInfo(store.getImap(id), messageId));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
     await mail.setFlags(store.getImap(id), folder, uids, flags);

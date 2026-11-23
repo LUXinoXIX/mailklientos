@@ -27,6 +27,8 @@ export function TopBar(props: {
   onToggleRight: () => void;
   /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
   kind?: string;
+  /** podrobnosti k typu konta (napr. celá verzia servera Zimbra) */
+  kindTitle?: string;
   searchOptions?: {
     field: SearchField;
     onField: (f: SearchField) => void;
@@ -44,7 +46,7 @@ export function TopBar(props: {
       <div className="topbar-title">
         <div className="topbar-name">
           {props.title}
-          {props.kind && <span className="kind-badge" title="Typ konta">{props.kind}</span>}
+          {props.kind && <span className="kind-badge" title={props.kindTitle ?? 'Typ konta'}>{props.kind}</span>}
         </div>
         <div className="topbar-sub">{props.subtitle}</div>
       </div>
@@ -233,7 +235,7 @@ export function Ribbon(props: {
   onCompose: () => void;
   onReply: () => void;
   onReplyAll: () => void;
-  onForward: () => void;
+  onForward: (mode?: 'inline' | 'attachment' | 'redirect') => void;
   onDelete: () => void;
   onArchive: () => void;
   onMove: (dest: string) => void;
@@ -401,7 +403,18 @@ export function Ribbon(props: {
             <ToolbarDivider />
             <ToolbarButton icon={<ReplyIcon />} disabled={!p.hasMessage} onClick={p.onReply}>Odpovedať</ToolbarButton>
             <ToolbarButton icon={<ReplyAllIcon />} disabled={!p.hasMessage} onClick={p.onReplyAll}>Všetkým</ToolbarButton>
-            <ToolbarButton icon={<ForwardIcon />} disabled={!p.hasMessage} onClick={p.onForward}>Preposlať</ToolbarButton>
+            <Menu positioning="below-start">
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<ForwardIcon />} disabled={!p.hasMessage}>Poslať ďalej ▾</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem icon={<ForwardIcon />} onClick={() => p.onForward('inline')}>Poslať ďalej</MenuItem>
+                  <MenuItem onClick={() => p.onForward('attachment')}>Poslať ďalej ako prílohu…</MenuItem>
+                  <MenuItem onClick={() => p.onForward('redirect')}>Poslať ďalej ako originál…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             <ToolbarDivider />
             <ToolbarButton icon={<DeleteIcon />} disabled={!p.hasMessage} onClick={p.onDelete}>Odstrániť</ToolbarButton>
             <ToolbarButton icon={<ArchiveIcon />} disabled={!p.hasMessage} onClick={p.onArchive}>Archív</ToolbarButton>
@@ -612,7 +625,7 @@ export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
   { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
 ];
 
-export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void; footer?: React.ReactNode }) {
+export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void; /** otvoriť v novej karte (vložený Outlook) */ onSelectNew?: (k: K) => void; footer?: React.ReactNode }) {
   return (
     <nav className="rail" aria-label="Moduly konta">
       {props.modules.map((m) => {
@@ -621,17 +634,34 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
           <div key={m.key}>
             {m.sep && <div className="rail-sep" />}
             {m.section && <div className="rail-section">{m.section}</div>}
-            <Tooltip content={m.label} relationship="label" positioning="after">
-              <button
-                className={`rail-btn ${on ? 'active' : ''}`}
-                style={on ? { color: props.color, boxShadow: `inset 3px 0 0 ${props.color}` } : undefined}
-                onClick={() => props.onSelect(m.key)}
-                aria-pressed={on}
-              >
-                {m.icon}
-                <span className="rail-label">{m.label}</span>
-              </button>
-            </Tooltip>
+            {(() => {
+              const btn = (
+                <button
+                  className={`rail-btn ${on ? 'active' : ''}`}
+                  style={on ? { color: props.color, boxShadow: `inset 3px 0 0 ${props.color}` } : undefined}
+                  onClick={(e) => (props.onSelectNew && (e.ctrlKey || e.metaKey) ? props.onSelectNew(m.key) : props.onSelect(m.key))}
+                  // prostredné tlačidlo myši = nová karta (ako v prehliadači)
+                  onAuxClick={(e) => e.button === 1 && props.onSelectNew?.(m.key)}
+                  aria-pressed={on}
+                  title={props.onSelectNew ? `${m.label} – pravý klik alebo Ctrl+klik: otvoriť v novej karte` : undefined}
+                >
+                  {m.icon}
+                  <span className="rail-label">{m.label}</span>
+                </button>
+              );
+              if (!props.onSelectNew) return <Tooltip content={m.label} relationship="label" positioning="after">{btn}</Tooltip>;
+              return (
+                <Menu openOnContext positioning="after-top">
+                  <MenuTrigger disableButtonEnhancement>{btn}</MenuTrigger>
+                  <MenuPopover>
+                    <MenuList>
+                      <MenuItem onClick={() => props.onSelect(m.key)}>Otvoriť</MenuItem>
+                      <MenuItem onClick={() => props.onSelectNew!(m.key)} secondaryContent="Ctrl+klik">Otvoriť v novej karte</MenuItem>
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+              );
+            })()}
           </div>
         );
       })}

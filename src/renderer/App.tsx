@@ -32,6 +32,7 @@ import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
 import { SettingsTransfer } from './components/SettingsTransfer';
 import { LockSettings } from './components/LockSettings';
+import { RedirectDialog } from './components/RedirectDialog';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
@@ -99,7 +100,7 @@ const SMOKE = SMOKE_MODE === 'm365';
 const POP = new URLSearchParams(window.location.search);
 const POP_COMPOSE =
   POP.get('compose') === '1'
-    ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')), mode: (POP.get('mode') ?? '') as '' | 'reply' | 'replyAll' | 'forward' }
+    ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')), mode: (POP.get('mode') ?? '') as '' | 'reply' | 'replyAll' | 'forward' | 'forwardAttach' }
     : null;
 // samostatné okno so správou
 const POP_VIEW = POP.get('view') === '1' ? { accountId: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')) } : null;
@@ -177,6 +178,7 @@ export function App() {
   const [status, setStatus] = useState('');
   const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
   const [lockDlg, setLockDlg] = useState(false);
+  const [redirect, setRedirect] = useState<MessageSummary | null>(null);
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
@@ -653,7 +655,14 @@ export function App() {
         { divider: true },
         { label: 'Odpovedať', hint: 'Ctrl+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'reply') },
         { label: 'Odpovedať všetkým', hint: 'Ctrl+Shift+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'replyAll') },
-        { label: 'Preposlať', hint: 'Ctrl+F', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forward') },
+        {
+          label: 'Poslať ďalej',
+          sub: [
+            { label: 'Poslať ďalej', hint: 'Ctrl+F', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forward') },
+            { label: 'Poslať ďalej ako prílohu…', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forwardAttach') },
+            { label: 'Poslať ďalej ako originál…', onClick: () => setRedirect(one) },
+          ],
+        },
         { divider: true },
       );
     } else items.push({ label: `Označených správ: ${msgs.length}`, disabled: true }, { divider: true });
@@ -1227,6 +1236,16 @@ export function App() {
   }
 
   /** Písanie v čítacom paneli (ako Outlook). */
+  /** Poslať ďalej: bežne (citácia + prílohy), ako prílohu (.eml) alebo ako originál (presmerovanie) */
+  function forwardAs(mode: 'inline' | 'attachment' | 'redirect' = 'inline') {
+    const m = full.msg;
+    if (mode === 'inline' || !m || m.accountId === DEMO_ID) return compose('forward');
+    if (mode === 'redirect') return setRedirect(m);
+    const me = imapAccounts.find((a) => a.id === m.accountId)?.email ?? '';
+    if (activeImap) setImapModule((x) => ({ ...x, [activeImap.id]: 'mail' }));
+    setRibbonTab('message');
+    setCompose({ init: { ...replyInit(m, 'forward', m.accountId, me), forwardAsAttachment: true }, key: Date.now() });
+  }
   function compose(kind: ComposeKind) {
     // už je otvorená rozpísaná správa: presunúť ju do samostatného okna (nič sa nestratí), potom otvoriť novú
     // predchádzajúca rozpísaná správa ostane ako karta dole
@@ -1258,9 +1277,14 @@ export function App() {
   // kontakty na dopĺňanie: odosielatelia načítaných správ + adresy, na ktoré si písal
   // ktoré kontá sú na serveri Zimbra (rozšírené funkcie cez jej rozhranie)
   const [zimbraOk, setZimbraOk] = useState<Record<string, boolean>>({});
+  const [zimbraVer, setZimbraVer] = useState<Record<string, { full: string; short: string }>>({});
   useEffect(() => {
     if (!api || demo) return;
-    for (const a of accounts.filter(isImap)) void api.zimbraCheck(a.id).then((r) => setZimbraOk((z) => ({ ...z, [a.id]: r.ok && r.data })));
+    for (const a of accounts.filter(isImap))
+      void api.zimbraCheck(a.id).then((r) => {
+        setZimbraOk((z) => ({ ...z, [a.id]: r.ok && r.data }));
+        if (r.ok && r.data) void api.zimbraVersion(a.id).then((v) => v.ok && v.data && setZimbraVer((x) => ({ ...x, [a.id]: v.data! })));
+      });
   }, [api, accounts, demo]);
   // obsadenosť schránky (Zimbra alebo IMAP QUOTA)
   const [quota, setQuota] = useState<Record<string, { used: number; limit: number } | null>>({});
@@ -1386,21 +1410,27 @@ export function App() {
   const m365Base = (acc: M365Account) => (acc.host === 'web' ? WEBMAIL_MODULES : acc.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES);
   const [railEdit, setRailEdit] = useState(false);
   const railOff = !!activeM365?.railOff;
-  function selectM365Module(acc: M365Account, mod: M365Module) {
+  /** Aplikácia z pásu: prepne na jej kartu, alebo (newTab – pravý klik, prostredné tlačidlo, Ctrl+klik) otvorí ďalšiu kartu. */
+  function selectM365Module(acc: M365Account, mod: M365Module, newTab = false) {
     const st = tabs[acc.id] ?? initialTabs(acc);
-    if (mod === 'mail') return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
-    const key = `${baseKey(acc.id)}:${mod}`;
+    if (mod === 'mail' && !newTab) return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
+    const baseK = `${baseKey(acc.id)}:${mod}`;
+    // ďalšia karta tej istej aplikácie: vlastný kľúč a poradové číslo v názve
+    const n = newTab ? st.tabs.filter((x) => x.key === baseK || x.key.startsWith(`${baseK}#`)).length + (mod === 'mail' ? 1 : 0) : 0;
+    const key = newTab && n > 0 ? `${baseK}#${Date.now()}` : baseK;
+    const suffix = newTab && n > 0 ? ` (${n + 1})` : '';
     const exists = st.tabs.some((x) => x.key === key);
     // vlastný odkaz v páse aplikácií
     const cust = (mod as string).startsWith('custom:') ? acc.railCustom?.find((c) => c.key === mod) : undefined;
     if (cust) {
-      setTabs((t) => ({ ...t, [acc.id]: { tabs: exists ? st.tabs : [...st.tabs, { key, title: cust.label, url: cust.url }], active: key } }));
+      setTabs((t) => ({ ...t, [acc.id]: { ...st, tabs: exists ? st.tabs : [...st.tabs, { key, title: cust.label + suffix, url: cust.url }], active: key } }));
       return;
     }
     setTabs((t) => ({
       ...t,
       [acc.id]: {
-        tabs: exists ? st.tabs : [...st.tabs, { key, title: acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod], url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
+        ...st,
+        tabs: exists ? st.tabs : [...st.tabs, { key, title: (acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod]) + suffix, url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
         active: key,
       },
     }));
@@ -1410,7 +1440,7 @@ export function App() {
       const st = t[acc.id];
       if (!st) return t;
       const rest = st.tabs.filter((x) => x.key !== key);
-      return { ...t, [acc.id]: { tabs: rest, active: st.active === key ? baseKey(acc.id) : st.active } };
+      return { ...t, [acc.id]: { ...st, tabs: rest, active: st.active === key ? baseKey(acc.id) : st.active } };
     });
   }
 
@@ -1446,7 +1476,9 @@ export function App() {
       void api.getMessage(POP_COMPOSE.acc, POP_COMPOSE.folder, POP_COMPOSE.uid).then((r) => {
         if (!r.ok) return setStatus(r.error);
         const me = accounts.find((a) => a.id === POP_COMPOSE.acc);
-        setPopInit(replyInit(r.data, POP_COMPOSE.mode as 'reply', POP_COMPOSE.acc, me && isImap(me) ? me.email : ''));
+        const att = POP_COMPOSE.mode === 'forwardAttach';
+        const init = replyInit(r.data, (att ? 'forward' : POP_COMPOSE.mode) as 'reply', POP_COMPOSE.acc, me && isImap(me) ? me.email : '');
+        setPopInit(att ? { ...init, forwardAsAttachment: true } : init);
       });
       return;
     }
@@ -1511,6 +1543,7 @@ export function App() {
     <FluentProvider theme={getTheme(themeDef)}>
       <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''}`} style={themeVars(themeDef)}>
         {lockDlg && <LockSettings onClose={() => setLockDlg(false)} />}
+        {redirect && <RedirectDialog msg={redirect} onClose={() => setRedirect(null)} onDone={(t) => setStatus(t)} />}
         {transfer && <SettingsTransfer mode={transfer} onClose={() => setTransfer(null)} onStatus={setStatus} />}
       <div className="shell">
         <AccountRail
@@ -1576,7 +1609,8 @@ export function App() {
             />
           )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kindTitle={activeImap && zimbraVer[activeImap.id] ? `Server Zimbra, verzia ${zimbraVer[activeImap.id]!.full}` : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'Microsoft 365 – osobné' : 'Microsoft 365 – firemné') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? (zimbraVer[activeImap.id] ? `ZIMBRA ${zimbraVer[activeImap.id]!.short}` : 'ZIMBRA') : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
@@ -1607,7 +1641,7 @@ export function App() {
               onCompose={() => compose('new')}
               onReply={() => compose('reply')}
               onReplyAll={() => compose('replyAll')}
-              onForward={() => compose('forward')}
+              onForward={(mode) => forwardAs(mode)}
               onDelete={() => void del()}
               onArchive={() => void archive()}
               onMove={(d) => void move(d)}
@@ -1722,6 +1756,7 @@ export function App() {
                   active={m365ActiveModule}
                   color={topColor}
                   onSelect={(k) => selectM365Module(activeM365, k as M365Module)}
+                  onSelectNew={(k) => selectM365Module(activeM365, k as M365Module, true)}
                   footer={
                     <Tooltip content="Upraviť pás aplikácií: poradie, skryť/pridať, vypnúť" relationship="label" positioning="after">
                       <button className="rail-btn rail-edit-btn" onClick={() => setRailEdit(true)} aria-label="Upraviť pás aplikácií">
@@ -1955,7 +1990,7 @@ export function App() {
                     color={colorOf(full.msg?.accountId ?? '')}
                     onReply={() => compose('reply')}
                     onReplyAll={() => compose('replyAll')}
-                    onForward={() => compose('forward')}
+                    onForward={(mode) => forwardAs(mode)}
                     thread={thread}
                     onOpenThread={(t) => void open(t)}
                     categories={categoriesOf(settings)}
@@ -2002,7 +2037,9 @@ export function App() {
                           }
                         } },
                         { divider: true },
-                        { label: 'Preposlať správu s prílohami', onClick: () => compose('forward') },
+                        { label: 'Poslať ďalej s prílohami', onClick: () => forwardAs('inline') },
+                        { label: 'Poslať ďalej ako prílohu…', onClick: () => forwardAs('attachment') },
+                        { label: 'Poslať ďalej ako originál…', onClick: () => forwardAs('redirect') },
                         { label: `Kopírovať názov „${a?.filename ?? ''}“`, onClick: () => void navigator.clipboard.writeText(a?.filename ?? '') },
                       ]);
                     }}
@@ -2027,7 +2064,13 @@ export function App() {
                       if (!m || !api || m.accountId === DEMO_ID) return;
                       const r = await api.calRespond(m.accountId, m.folder, m.uid, ps);
                       setStatus(r.ok ? r.data : r.error);
-                      if (r.ok) setAgendaTick((t) => t + 1);
+                      if (r.ok) {
+                        setAgendaTick((t) => t + 1);
+                        const KW = { ACCEPTED: '$InviteAccepted', TENTATIVE: '$InviteTentative', DECLINED: '$InviteDeclined' };
+                        const kws = [...(m.keywords ?? []).filter((k) => !Object.values(KW).includes(k)), KW[ps]];
+                        setFull((f) => (f.msg && f.msg.uid === m.uid && f.msg.folder === m.folder ? { ...f, msg: { ...f.msg, keywords: kws, answered: true } } : f));
+                        setMessages((l) => l.map((x) => (x.uid === m.uid && x.folder === m.folder && x.accountId === m.accountId ? { ...x, keywords: kws, answered: true } : x)));
+                      }
                       return r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error };
                     }}
                   />

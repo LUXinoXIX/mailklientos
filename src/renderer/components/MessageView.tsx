@@ -1,6 +1,6 @@
 // Správa otvorená celá: v samostatnom okne alebo na karte hlavného okna (ako Thunderbird).
 // Má vlastný pás tlačidiel; zmeny oznámi ostatným oknám (zoznam sa obnoví).
-import { Toolbar, ToolbarButton, ToolbarDivider } from '@fluentui/react-components';
+import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Toolbar, ToolbarButton, ToolbarDivider } from '@fluentui/react-components';
 import { useCallback, useEffect, useState } from 'react';
 import type { MessageFull, MessageSummary } from '../../core/api';
 import { PIN_KEYWORD, type Category } from '../../core/settings';
@@ -8,6 +8,7 @@ import {
   DeleteIcon, FlagIcon, ForwardIcon, MarkReadIcon, MarkUnreadIcon, NewWindowIcon, NextIcon, PinIcon, PrevIcon, PrintIcon, ReplyAllIcon, ReplyIcon,
 } from '../icons';
 import { ReadingPane } from './MailPanes';
+import { RedirectDialog } from './RedirectDialog';
 
 export interface MessageRef {
   accountId: string;
@@ -99,7 +100,9 @@ export function MessageView(props: {
     else if (props.standalone) window.close();
     else props.onClose?.();
   }
-  const reply = (mode: 'reply' | 'replyAll' | 'forward') => void api?.replyWindow(ref.accountId, ref.folder, ref.uid, mode);
+  const reply = (mode: 'reply' | 'replyAll' | 'forward' | 'forwardAttach') => void api?.replyWindow(ref.accountId, ref.folder, ref.uid, mode);
+  const [redirect, setRedirect] = useState(false);
+  const forwardAs = (mode?: 'inline' | 'attachment' | 'redirect') => (mode === 'redirect' ? setRedirect(true) : reply(mode === 'attachment' ? 'forwardAttach' : 'forward'));
 
   // klávesy v okne správy
   useEffect(() => {
@@ -127,7 +130,19 @@ export function MessageView(props: {
       <Toolbar className="msgview-bar" size="small" aria-label="Akcie správy">
         <ToolbarButton icon={<ReplyIcon />} onClick={() => reply('reply')}>Odpovedať</ToolbarButton>
         <ToolbarButton icon={<ReplyAllIcon />} onClick={() => reply('replyAll')}>Všetkým</ToolbarButton>
-        <ToolbarButton icon={<ForwardIcon />} onClick={() => reply('forward')}>Preposlať</ToolbarButton>
+        <Menu positioning="below-start">
+          <MenuTrigger disableButtonEnhancement>
+            <ToolbarButton icon={<ForwardIcon />}>Poslať ďalej ▾</ToolbarButton>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem icon={<ForwardIcon />} onClick={() => forwardAs('inline')}>Poslať ďalej</MenuItem>
+              <MenuItem onClick={() => forwardAs('attachment')}>Poslať ďalej ako prílohu…</MenuItem>
+              <MenuItem onClick={() => forwardAs('redirect')}>Poslať ďalej ako originál…</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+        {redirect && msg && <RedirectDialog msg={msg} onClose={() => setRedirect(false)} onDone={(t) => setStatus(t)} />}
         <ToolbarDivider />
         <ToolbarButton icon={<FlagIcon />} aria-pressed={!!msg?.flagged} onClick={() => void flags({ flagged: !msg?.flagged })}>{msg?.flagged ? 'Zrušiť vlajku' : 'Vlajka'}</ToolbarButton>
         <ToolbarButton icon={<PinIcon />} aria-pressed={pinned} onClick={() => void pin()}>{pinned ? 'Odopnúť' : 'Pripnúť'}</ToolbarButton>
@@ -148,7 +163,7 @@ export function MessageView(props: {
         categories={props.categories}
         onReply={() => reply('reply')}
         onReplyAll={() => reply('replyAll')}
-        onForward={() => reply('forward')}
+        onForward={(mode) => forwardAs(mode)}
         onPrint={(pdf) => void api?.printMessage(ref.accountId, ref.folder, ref.uid, pdf)}
         onUnsubscribe={
           msg?.unsubscribe
