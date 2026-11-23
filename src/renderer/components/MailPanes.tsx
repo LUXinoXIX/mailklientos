@@ -607,12 +607,16 @@ export function MessageList(props: {
   );
 }
 
-function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void }) {
+function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; keywords?: string[]; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void }) {
   const { method, event: e } = props.invite;
   const [busy, setBusy] = useState<null | 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'>(null);
   // výsledok odpovede priamo v karte (predtým len v stavovom riadku dole – nebolo ho vidieť)
   const [result, setResult] = useState<{ ok: boolean; text: string; p: string } | null>(null);
   useEffect(() => setResult(null), [e.uid]);
+  // uložená odpoveď (kľúčové slovo pri správe) – platí aj po zatvorení a znovuotvorení správy
+  const kw = props.keywords ?? [];
+  const saved: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED' | null = kw.includes('$InviteAccepted') ? 'ACCEPTED' : kw.includes('$InviteTentative') ? 'TENTATIVE' : kw.includes('$InviteDeclined') ? 'DECLINED' : null;
+  const chosen = result?.ok ? (result.p as 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') : saved;
   const when = e.allDay
     ? new Date(e.start).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : `${new Date(e.start).toLocaleString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} – ${new Date(e.end).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`;
@@ -646,7 +650,7 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
             <Button
               key={p}
               size="small"
-              appearance={p === 'ACCEPTED' && !result ? 'primary' : result?.ok && result.p === p ? 'primary' : 'secondary'}
+              appearance={chosen ? (chosen === p ? 'primary' : 'secondary') : p === 'ACCEPTED' ? 'primary' : 'secondary'}
               disabled={!!busy}
               onClick={async () => {
                 setBusy(p);
@@ -659,6 +663,11 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
               {busy === p ? 'Odosielam…' : p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
             </Button>
           ))}
+        </div>
+      )}
+      {!result && saved && (
+        <div className={`invite-result ${saved === 'DECLINED' ? 'warn' : 'ok'}`} role="status">
+          {saved === 'ACCEPTED' ? '✓ Túto pozvánku ste prijali.' : saved === 'TENTATIVE' ? '✓ Túto pozvánku ste predbežne prijali.' : 'Túto pozvánku ste odmietli.'} Odpoveď môžete zmeniť tlačidlami vyššie.
         </div>
       )}
       {result && (
@@ -826,7 +835,7 @@ export function ReadingPane(props: {
           <div className="small">Neklikajte na odkazy a neposielajte heslá ani platobné údaje, kým si odosielateľa neoveríte inou cestou.</div>
         </div>
       )}
-      {m.invite && <InviteCard invite={m.invite} onRespond={props.onRespond} />}
+      {m.invite && <InviteCard invite={m.invite} keywords={m.keywords} onRespond={props.onRespond} />}
       {props.thread && props.thread.length > 1 && (
         <details className="thread-box">
           <summary>Konverzácia: {props.thread.length} správ</summary>

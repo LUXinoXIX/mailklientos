@@ -1,4 +1,5 @@
 // Kalendár a kontakty nad CalDAV/CardDAV: výber kalendárov, pozvánky (iMIP) a odpovede na ne.
+import * as cache from './cache';
 import crypto from 'node:crypto';
 import type { AccountConfig } from '../core/account';
 import type { DavCollection } from '../core/api';
@@ -112,6 +113,15 @@ export async function respond(acc: AccountConfig, folder: string, uid: number, p
     } catch (e) {
       saved = ` Do kalendára sa ju nepodarilo uložiť: ${(e as Error).message}`;
     }
+  }
+  // stav odpovede natrvalo pri správe (kľúčové slovo na serveri + v cache), aby karta pozvánky ukazovala prijaté aj po návrate
+  const KW = { ACCEPTED: '$InviteAccepted', TENTATIVE: '$InviteTentative', DECLINED: '$InviteDeclined' } as const;
+  try {
+    await mail.setKeywords(acc, folder, [uid], [KW[partstat], '\\Answered'], Object.values(KW).filter((k) => k !== KW[partstat]));
+  } catch {
+    // server nedovolí vlastné kľúčové slová – aspoň v cache programu
+    const cur = cache.cachedSummary(acc.id, folder, uid)?.keywords ?? [];
+    cache.updateKeywords(acc.id, folder, uid, [...cur.filter((k) => !Object.values(KW).includes(k as never)), KW[partstat]]);
   }
   return `${label} – odpoveď odoslaná organizátorovi.${saved}`;
 }

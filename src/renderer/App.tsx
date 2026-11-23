@@ -2051,7 +2051,13 @@ export function App() {
                       if (!m || !api || m.accountId === DEMO_ID) return;
                       const r = await api.calRespond(m.accountId, m.folder, m.uid, ps);
                       setStatus(r.ok ? r.data : r.error);
-                      if (r.ok) setAgendaTick((t) => t + 1);
+                      if (r.ok) {
+                        setAgendaTick((t) => t + 1);
+                        const KW = { ACCEPTED: '$InviteAccepted', TENTATIVE: '$InviteTentative', DECLINED: '$InviteDeclined' };
+                        const kws = [...(m.keywords ?? []).filter((k) => !Object.values(KW).includes(k)), KW[ps]];
+                        setFull((f) => (f.msg && f.msg.uid === m.uid && f.msg.folder === m.folder ? { ...f, msg: { ...f.msg, keywords: kws, answered: true } } : f));
+                        setMessages((l) => l.map((x) => (x.uid === m.uid && x.folder === m.folder && x.accountId === m.accountId ? { ...x, keywords: kws, answered: true } : x)));
+                      }
                       return r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error };
                     }}
                   />
