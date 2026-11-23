@@ -13,6 +13,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
+import { markOriginAfterSend } from './replymark';
 import { reconnectWatchers, syncWatchers, testNotification } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
@@ -74,6 +75,7 @@ export function setComposeWindowFactory(f: (q: Record<string, string>) => void) 
 }
 
 export function registerIpc() {
+  handle('app:newWindow', () => openComposeWindow?.({ second: '1' }));
   // kontá
   handle('accounts:list', () => ({ accounts: store.publicAccounts(), canStoreSecrets: store.canStoreSecrets() }));
   handle('accounts:save', (acc: AnyAccount, password?: string) => {
@@ -317,7 +319,12 @@ export function registerIpc() {
     return true as const;
   });
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));
-  handle('mail:send', (id: string, msg: SendInput) => mail.sendMail(store.getImap(id), msg));
+  handle('mail:send', async (id: string, msg: SendInput) => {
+    const r = await mail.sendMail(store.getImap(id), msg);
+    void markOriginAfterSend(msg);
+    return r;
+  });
+  handle('mail:replyInfo', (id: string, messageId: string) => mail.replyInfo(store.getImap(id), messageId));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
     await mail.setFlags(store.getImap(id), folder, uids, flags);
     return true as const;
@@ -360,7 +367,13 @@ export function registerIpc() {
 
   // nastavenia a spúšťače
   handle('settings:get', () => settings.loadSettings());
-  handle('settings:save', (s: AppSettings) => settings.saveSettings(s));
+  handle('settings:save', (s: AppSettings) => {
+    const r = settings.saveSettings(s);
+    // viac hlavných okien: ostatné si načítajú nové nastavenia (inak by ich pri ďalšom uložení prepísali starými)
+    const from = winOf();
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w !== from) w.webContents.send('app:event', { type: 'settings-changed' });
+    return r;
+  });
   handle('signatures:outlook', () => settings.outlookSignatures());
   handle('launcher:pick', () => settings.pickProgram(winOf()));
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
@@ -395,3 +408,4 @@ export function registerIpc() {
   on('web:clear', (partition: string) => web.clearPartition(partition));
   on('web:openOutside', (url: string) => web.openOutside(url));
 }
+

@@ -51,7 +51,11 @@ function savedBounds(): Electron.Rectangle | null {
 const createWindow = (query?: Record<string, string>) => {
   const compose = !!query?.compose;
   const view = !!query?.view;
-  const mainWin = !compose && !view;
+  /** ďalšie hlavné okno (ozubené koliesko → Nové okno): celý program, ale nie je „hlavné“ (zatvorí sa normálne) */
+  const second = !!query?.second;
+  const mainWin = !compose && !view && !second;
+  const main = getMainWindow();
+  const sb = second && main ? main.getBounds() : null;
   // okno správy: posledný rozmer, každé ďalšie posunuté, aby sa neprekrývali presne
   const vb = view ? savedBounds() : null;
   const shift = view ? (BrowserWindow.getAllWindows().length % 6) * 28 : 0;
@@ -69,6 +73,7 @@ const createWindow = (query?: Record<string, string>) => {
     width: view ? vb?.width ?? 900 : compose ? 980 : 1440,
     height: view ? vb?.height ?? 820 : compose ? 820 : 900,
     ...(view && vb ? { x: vb.x + shift, y: vb.y + shift } : {}),
+    ...(sb ? { x: sb.x + 40, y: sb.y + 40, width: sb.width, height: sb.height } : {}),
     minWidth: view ? 480 : compose ? 640 : 960,
     minHeight: view ? 400 : 600,
     title: view ? 'Správa – Universum eMail' : compose ? 'Nová správa – Universum eMail' : 'Universum eMail',
@@ -183,6 +188,7 @@ app.whenReady().then(() => {
             { role: 'minimize', label: 'Minimalizovať' },
             { role: 'zoom', label: 'Zväčšiť okno' },
             { role: 'close', label: 'Zavrieť okno' },
+            { label: 'Nové okno', accelerator: 'Cmd+Shift+N', click: () => createWindow({ second: '1' }) },
             { type: 'separator' },
             { role: 'front', label: 'Všetko dopredu' },
           ],

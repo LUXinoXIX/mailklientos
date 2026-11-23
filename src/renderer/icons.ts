@@ -66,6 +66,8 @@ export {
   ArrowReply24Regular as ReplyIcon,
   ArrowReplyAll24Regular as ReplyAllIcon,
   ArrowForward24Regular as ForwardIcon,
+  ArrowReply16Filled as ReplyTinyIcon,
+  ArrowForward16Filled as ForwardTinyIcon,
   Delete24Regular as DeleteIcon,
   Archive24Regular as ArchiveIcon,
   FolderArrowRight24Regular as MoveIcon,

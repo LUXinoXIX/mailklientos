@@ -6,7 +6,7 @@ import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { isGmail, type AccountConfig, type ServerConfig } from '../core/account';
-import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, SendInput } from '../core/api';
+import type { AccountTestResult, DraftRef, FolderInfo, MessageFull, MessageSummary, ReplyInfo, SendInput } from '../core/api';
 import {
   explainError, explainVerify, imapflowConnection, nodemailerConnection, probeServer, verifySocket,
   type Protocol,
@@ -681,7 +681,8 @@ function buildMail(acc: AccountConfig, input: SendInput) {
     attachDataUrls: true,
     attachments: input.attachments?.map((a) => ({ path: a.path, filename: a.filename })),
     inReplyTo: input.replyMessageId || undefined,
-    references: input.replyMessageId || undefined,
+    // preposlanie: odkaz na pôvodnú správu (bez In-Reply-To), aby sa dalo nájsť, kedy a komu bola preposlaná
+    references: input.replyMessageId || (input.origin?.kind === 'forward' ? input.origin.messageId : undefined) || undefined,
     priority: input.priority ?? 'normal',
     headers: Object.keys(headers).length ? headers : undefined,
     icalEvent: input.ical ? { method: input.ical.method, content: input.ical.content } : undefined,
@@ -766,7 +767,9 @@ export async function sendMail(acc: AccountConfig, input: SendInput) {
   const cred = await credFor(acc);
   await ensureTrusted(acc.smtp, 'smtp');
   const base = buildMail(acc, input);
-  const fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
+  let fw = input.forward ? await forwardedAttachments(acc, input.forward) : [];
+  // preposlaná pozvánka ide ako kalendárová časť (text/calendar) – pôvodný .ics by bol navyše ako obyčajná príloha
+  if (input.ical) fw = fw.filter((a: { filename: string; contentType?: string }) => !/calendar/i.test(String(a.contentType ?? '')) && !/\.ics$/i.test(a.filename));
   const mail = { ...base, attachments: [...(base.attachments ?? []), ...fw] };
   const transport = nodemailer.createTransport({
     ...nodemailerConnection(acc.smtp),
@@ -1096,6 +1099,55 @@ export async function folderOp(
         cache.removeFolder(acc.id, path);
       }
       return path;
+    } finally {
+      lock.release();
+    }
+  });
+}
+
+
+/** Po odoslaní odpovede / preposlania označí pôvodnú správu (\\Answered, $Forwarded) na serveri aj v cache. */
+export async function markOrigin(acc: AccountConfig, origin: NonNullable<SendInput['origin']>): Promise<void> {
+  const flag = origin.kind === 'reply' ? '\\Answered' : '$Forwarded';
+  await withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(origin.folder);
+    try {
+      await c.messageFlagsAdd(String(origin.uid), [flag], { uid: true });
+    } finally {
+      lock.release();
+    }
+  });
+  if (origin.kind === 'reply') cache.updateFlags(acc.id, origin.folder, [origin.uid], { answered: true });
+  else {
+    const kw = cache.cachedSummary(acc.id, origin.folder, origin.uid)?.keywords ?? [];
+    if (!kw.includes('$Forwarded')) cache.updateKeywords(acc.id, origin.folder, origin.uid, [...kw, '$Forwarded']);
+  }
+}
+
+/** Odpovede a preposlania správy z Odoslaných (podľa In-Reply-To a References). */
+export async function replyInfo(acc: AccountConfig, messageId: string): Promise<ReplyInfo[]> {
+  if (!messageId) return [];
+  return withImap(acc, async (c) => {
+    const sent = await findFolder(c, '\\Sent', /^(sent|odoslan|\[gmail\]\/sent|\[google mail\]\/sent)/i);
+    if (!sent) return [];
+    const lock = await c.getMailboxLock(sent, { readOnly: true });
+    try {
+      const a = ((await c.search({ header: { 'in-reply-to': messageId } }, { uid: true })) || []) as number[];
+      const b = ((await c.search({ header: { references: messageId } }, { uid: true })) || []) as number[];
+      const uids = [...new Set([...a, ...b])].slice(-20);
+      if (!uids.length) return [];
+      const out: ReplyInfo[] = [];
+      for await (const m of c.fetch(uids.join(','), { envelope: true, internalDate: true }, { uid: true })) {
+        const env = m.envelope;
+        out.push({
+          kind: env?.inReplyTo && env.inReplyTo.includes(messageId) ? 'reply' : 'forward',
+          date: safeIso(env?.date, m.internalDate),
+          to: (env?.to ?? []).map((x: { name?: string; address?: string }) => x.name || x.address || '').filter(Boolean).join(', '),
+          folder: sent,
+          uid: m.uid,
+        });
+      }
+      return out.sort((x, y) => (x.date ?? '').localeCompare(y.date ?? ''));
     } finally {
       lock.release();
     }

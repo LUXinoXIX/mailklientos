@@ -1,5 +1,6 @@
 // Pošta na odoslanie: 10 s na späťvzatie („Zrušiť odoslanie“) a naplánované odoslanie („Odoslať neskôr“).
 // Fronta je v userData/outbox.json, takže naplánované správy prežijú reštart (odošlú sa, keď MailKlient beží).
+import { markOriginAfterSend } from './replymark';
 import { hideNotificationContent } from './applock';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -55,6 +56,7 @@ async function tick() {
       // pred odoslaním vyradiť z fronty (aby sa pri páde neodoslala dvakrát)
       save(load().filter((x) => x.id !== it.id));
       const r = await mail.sendMail(acc, it.input);
+      void markOriginAfterSend(it.input);
       if (it.input.followUpDays && r.messageId) {
         addFollowUp({ accountId: it.accountId, messageId: r.messageId, subject: it.subject, to: it.to, due: new Date(Date.now() + it.input.followUpDays * 86400_000).toISOString() });
       }

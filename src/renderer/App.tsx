@@ -216,6 +216,7 @@ export function App() {
     let tickTimer = 0;
     const off = api.onAppEvent((ev) => {
       if (ev.type === 'gpu-crash') setGpuCrash(ev.count);
+      else if (ev.type === 'settings-changed') void api.getSettings().then((r) => r.ok && setSettings(r.data));
       else if (ev.type === 'mail-changed') {
         window.clearTimeout(tickTimer);
         tickTimer = window.setTimeout(() => setMailTick((t) => t + 1), 800);
@@ -1162,6 +1163,7 @@ export function App() {
     if (ctrl && k === 'e') return e.preventDefault(), document.querySelector<HTMLInputElement>('.topbar-search input')?.focus();
     if (typing || dialog.kind !== 'none' || activeTab) return;
     if (e.key === 'Enter' && current && !ctrl) return e.preventDefault(), openFull(current, e.shiftKey);
+    if (ctrl && e.shiftKey && k === 'n') return e.preventDefault(), void api?.newWindow();
     if (ctrl && k === 'n') return e.preventDefault(), compose('new');
     if (ctrl && e.shiftKey && k === 'r') return e.preventDefault(), full.msg && compose('replyAll');
     if (ctrl && k === 'r') return e.preventDefault(), full.msg && compose('reply');
@@ -1905,6 +1907,7 @@ export function App() {
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
                     onMulti={setMultiSel}
                     listKey={`${selection.accountId}/${selection.folder}/${mailTick}`}
+                    folderKey={`${selection.accountId}/${selection.folder}`}
                     onFlaggedServer={async () => {
                       if (!api || demo) return [];
                       const targets = selection.accountId === ALL ? imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, folder: 'INBOX' })) : [{ id: selection.accountId, folder: selection.folder }];
@@ -2025,6 +2028,7 @@ export function App() {
                       const r = await api.calRespond(m.accountId, m.folder, m.uid, ps);
                       setStatus(r.ok ? r.data : r.error);
                       if (r.ok) setAgendaTick((t) => t + 1);
+                      return r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error };
                     }}
                   />
                   )}

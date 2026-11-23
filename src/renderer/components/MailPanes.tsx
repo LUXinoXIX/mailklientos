@@ -6,9 +6,9 @@ import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { ImapAccountPublic } from '../../core/account';
-import type { FolderInfo, MessageFull, MessageSummary, OutboxItem } from '../../core/api';
+import type { FolderInfo, MessageFull, MessageSummary, OutboxItem, ReplyInfo } from '../../core/api';
 import { PIN_KEYWORD, type Category, type SavedSearch } from '../../core/settings';
-import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, AttachBadgeIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
+import { PreviewSmallIcon, SaveSmallIcon, AttachTinyIcon, AttachBadgeIcon, ReplyTinyIcon, ForwardTinyIcon, ArchiveIcon, DeleteIcon, FlagIcon, MarkReadIcon, MarkUnreadIcon, MoreIcon, PdfIcon, PinIcon, PrintIcon, DeleteSmallIcon, FlagSmallIcon, PinOutlineSmallIcon, ReadSmallIcon, SortIcon, UnreadSmallIcon, NewWindowSmallIcon, LockSmallIcon, VerifiedIcon, WarnIcon, PinSmallIcon, SearchSmallIcon, AttachIcon, FlagFilledIcon, FolderIcon, ForwardIcon, InboxIcon, ReplyAllIcon, ReplyIcon, SentIcon, TrashIcon } from '../icons';
 import { accountColor } from '../theme';
 
 export type Selection = { accountId: string | 'all'; folder: string };
@@ -250,6 +250,8 @@ export function MessageList(props: {
   onFlaggedServer?: () => Promise<MessageSummary[]>;
   /** identifikácia zobrazeného priečinka (na obnovenie výsledku zo servera) */
   listKey?: string;
+  /** konto/priečinok – pri zmene sa karta vráti na „Všetky“ */
+  folderKey?: string;
   /** rýchle akcie priamo v riadku (pri prejdení myšou) */
   onQuick?: (m: MessageSummary, a: 'flag' | 'pin' | 'delete' | 'seen') => void;
   sort?: { by: SortBy; dir: 'desc' | 'asc' };
@@ -266,6 +268,10 @@ export function MessageList(props: {
   loadingMore?: boolean;
 }) {
   const [tab, setTab] = useState<'all' | 'unread' | 'flagged'>('all');
+  // prechod do iného priečinka alebo konta → karta Všetky
+  useEffect(() => {
+    setTab('all');
+  }, [props.folderKey]);
   // karta Označené: okrem načítaných správ aj staršie s vlajkou zo servera
   const [srvFlagged, setSrvFlagged] = useState<{ key: string; list: MessageSummary[]; loading: boolean } | null>(null);
   const listKey = props.listKey ?? '';
@@ -425,6 +431,12 @@ export function MessageList(props: {
               {m.fromName || m.fromAddress}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
+            {(m.answered || m.keywords?.includes('$Forwarded')) && (
+              <span className="msg-replied" aria-label={[m.answered && 'Odpovedané', m.keywords?.includes('$Forwarded') && 'Preposlané'].filter(Boolean).join(', ')}>
+                {m.answered && <ReplyTinyIcon className="rep" title="Odpovedané" />}
+                {m.keywords?.includes('$Forwarded') && <ForwardTinyIcon className="fwd" title="Preposlané" />}
+              </span>
+            )}
             <span className="msg-date">{fmtDate(m.date)}</span>
           </div>
           <div className="msg-row">
@@ -594,9 +606,12 @@ export function MessageList(props: {
   );
 }
 
-function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void }) {
+function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespond?: (p: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void }) {
   const { method, event: e } = props.invite;
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<null | 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'>(null);
+  // výsledok odpovede priamo v karte (predtým len v stavovom riadku dole – nebolo ho vidieť)
+  const [result, setResult] = useState<{ ok: boolean; text: string; p: string } | null>(null);
+  useEffect(() => setResult(null), [e.uid]);
   const when = e.allDay
     ? new Date(e.start).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : `${new Date(e.start).toLocaleString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} – ${new Date(e.end).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`;
@@ -630,17 +645,25 @@ function InviteCard(props: { invite: NonNullable<MessageFull['invite']>; onRespo
             <Button
               key={p}
               size="small"
-              appearance={p === 'ACCEPTED' ? 'primary' : 'secondary'}
-              disabled={busy}
+              appearance={p === 'ACCEPTED' && !result ? 'primary' : result?.ok && result.p === p ? 'primary' : 'secondary'}
+              disabled={!!busy}
               onClick={async () => {
-                setBusy(true);
-                await props.onRespond!(p);
-                setBusy(false);
+                setBusy(p);
+                setResult(null);
+                const r = await props.onRespond!(p);
+                setBusy(null);
+                if (r) setResult({ ...r, p });
               }}
             >
-              {p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
+              {busy === p ? 'Odosielam…' : p === 'ACCEPTED' ? 'Prijať' : p === 'TENTATIVE' ? 'Predbežne' : 'Odmietnuť'}
             </Button>
           ))}
+        </div>
+      )}
+      {result && (
+        <div className={`invite-result ${result.ok ? (/nepodarilo/i.test(result.text) ? 'warn' : 'ok') : 'err'}`} role="status">
+          {result.ok ? '✓ ' : '⚠ '}
+          {result.text}
         </div>
       )}
     </div>
@@ -675,7 +698,7 @@ export function ReadingPane(props: {
   onOpenThread?: (m: MessageSummary) => void;
   categories?: Category[];
   onRemoveCategory?: (id: string) => void;
-  onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => void;
+  onRespond?: (partstat: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => Promise<{ ok: boolean; text: string } | void> | void;
   onBlockSender?: () => void;
   onPrint?: (pdf: boolean) => void;
   onUnsubscribe?: () => void;
@@ -742,6 +765,7 @@ export function ReadingPane(props: {
             )}
           </div>
           <Recipients label="Komu" value={m.to} />
+          {(m.answered || m.keywords?.includes('$Forwarded')) && <RepliedBar m={m} />}
           {m.cc && <Recipients label="Kópia" value={m.cc} />}
           <div className="muted read-date">{m.date ? new Date(m.date).toLocaleString('sk-SK') : ''}</div>
         </div>
@@ -940,6 +964,62 @@ function Recipients(props: { label: string; value: string }) {
           </button>
         )}
       </span>
+    </div>
+  );
+}
+
+
+/** Pruh „Odpovedali ste … / Preposlané …“ v otvorenej správe – dátum a odkaz podľa správy v Odoslaných. */
+function RepliedBar(props: { m: MessageFull }) {
+  const { m } = props;
+  const [info, setInfo] = useState<ReplyInfo[] | null>(null);
+  useEffect(() => {
+    setInfo(null);
+    if (!m.messageId) return setInfo([]);
+    let alive = true;
+    void window.mailApi?.replyInfo(m.accountId, m.messageId).then((r) => alive && setInfo(r.ok ? r.data : []));
+    return () => {
+      alive = false;
+    };
+  }, [m.accountId, m.messageId]);
+  const when = (iso: string | null) =>
+    iso ? `${new Date(iso).toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric', year: 'numeric' })} o ${new Date(iso).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}` : '';
+  const open = (r: ReplyInfo) => void window.mailApi?.messageWindow(m.accountId, r.folder, r.uid);
+  const replies = info?.filter((r) => r.kind === 'reply') ?? [];
+  const fwds = info?.filter((r) => r.kind === 'forward') ?? [];
+  const lastReply = replies[replies.length - 1];
+  const lastFwd = fwds[fwds.length - 1];
+  const fwdFlag = m.keywords?.includes('$Forwarded');
+  return (
+    <div className="replied-bars">
+      {(m.answered || replies.length > 0) && (
+        <div className="replied-bar rep">
+          <ReplyTinyIcon />
+          <span className="grow">
+            {lastReply ? `Odpovedali ste ${when(lastReply.date)}` : 'Na túto správu ste odpovedali'}
+            {replies.length > 1 ? ` (odpovedí: ${replies.length})` : ''}
+          </span>
+          {lastReply && (
+            <button type="button" className="linklike" onClick={() => open(lastReply)}>
+              Zobraziť odpoveď
+            </button>
+          )}
+        </div>
+      )}
+      {(fwdFlag || fwds.length > 0) && (
+        <div className="replied-bar fwd">
+          <ForwardTinyIcon />
+          <span className="grow">
+            {lastFwd ? `Preposlané ${when(lastFwd.date)}${lastFwd.to ? ` · ${lastFwd.to}` : ''}` : 'Táto správa bola preposlaná'}
+            {fwds.length > 1 ? ` (${fwds.length}×)` : ''}
+          </span>
+          {lastFwd && (
+            <button type="button" className="linklike" onClick={() => open(lastFwd)}>
+              Zobraziť
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

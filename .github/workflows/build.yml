@@ -55,7 +55,9 @@ jobs:
         run: |
           tar --exclude='node_modules/electron/dist' -czf "$RUNNER_TEMP/node_modules.tgz" node_modules
           ls -la "$RUNNER_TEMP/node_modules.tgz"
-          gh release view dev-deps >/dev/null 2>&1 || gh release create dev-deps --prerelease --title "Závislosti pre vývoj (nie pre používateľa)" --notes "Pomocný balík pre kontrolu typov."
+          # značka dev-deps sa pri každom behu presunie na aktuálny commit (nedrží staré verzie histórie)
+          gh release delete dev-deps --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release create dev-deps --prerelease --target "$GITHUB_SHA" --title "Závislosti pre vývoj (nie pre používateľa)" --notes "Pomocný balík pre kontrolu typov."
           gh release upload dev-deps "$RUNNER_TEMP/node_modules.tgz" --clobber
 
       - name: Kontrola typov

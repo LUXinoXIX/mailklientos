@@ -93,6 +93,9 @@ export function AccountRail(props: {
             <MenuItem onClick={props.onToggleNotifications}>
               {props.notifications ? 'Vypnúť upozornenia na novú poštu' : 'Zapnúť upozornenia na novú poštu'}
             </MenuItem>
+            <MenuItem onClick={() => void window.mailApi?.newWindow()} secondaryContent="Ctrl+Shift+N">
+              Nové okno
+            </MenuItem>
             {props.onLockSettings && (
               <>
                 <MenuItem onClick={props.onLockSettings}>Zámok programu…</MenuItem>
