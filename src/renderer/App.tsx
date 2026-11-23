@@ -100,7 +100,7 @@ const SMOKE = SMOKE_MODE === 'm365';
 const POP = new URLSearchParams(window.location.search);
 const POP_COMPOSE =
   POP.get('compose') === '1'
-    ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')), mode: (POP.get('mode') ?? '') as '' | 'reply' | 'replyAll' | 'forward' }
+    ? { acc: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')), mode: (POP.get('mode') ?? '') as '' | 'reply' | 'replyAll' | 'forward' | 'forwardAttach' }
     : null;
 // samostatné okno so správou
 const POP_VIEW = POP.get('view') === '1' ? { accountId: POP.get('acc') ?? '', folder: POP.get('folder') ?? '', uid: Number(POP.get('uid')) } : null;
@@ -178,7 +178,7 @@ export function App() {
   const [status, setStatus] = useState('');
   const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
   const [lockDlg, setLockDlg] = useState(false);
-  const [redirect, setRedirect] = useState<MessageFull | null>(null);
+  const [redirect, setRedirect] = useState<MessageSummary | null>(null);
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
@@ -655,7 +655,14 @@ export function App() {
         { divider: true },
         { label: 'Odpovedať', hint: 'Ctrl+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'reply') },
         { label: 'Odpovedať všetkým', hint: 'Ctrl+Shift+R', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'replyAll') },
-        { label: 'Preposlať', hint: 'Ctrl+F', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forward') },
+        {
+          label: 'Poslať ďalej',
+          sub: [
+            { label: 'Poslať ďalej', hint: 'Ctrl+F', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forward') },
+            { label: 'Poslať ďalej ako prílohu…', onClick: () => void api?.replyWindow(one.accountId, one.folder, one.uid, 'forwardAttach') },
+            { label: 'Poslať ďalej ako originál…', onClick: () => setRedirect(one) },
+          ],
+        },
         { divider: true },
       );
     } else items.push({ label: `Označených správ: ${msgs.length}`, disabled: true }, { divider: true });
@@ -1458,7 +1465,9 @@ export function App() {
       void api.getMessage(POP_COMPOSE.acc, POP_COMPOSE.folder, POP_COMPOSE.uid).then((r) => {
         if (!r.ok) return setStatus(r.error);
         const me = accounts.find((a) => a.id === POP_COMPOSE.acc);
-        setPopInit(replyInit(r.data, POP_COMPOSE.mode as 'reply', POP_COMPOSE.acc, me && isImap(me) ? me.email : ''));
+        const att = POP_COMPOSE.mode === 'forwardAttach';
+        const init = replyInit(r.data, (att ? 'forward' : POP_COMPOSE.mode) as 'reply', POP_COMPOSE.acc, me && isImap(me) ? me.email : '');
+        setPopInit(att ? { ...init, forwardAsAttachment: true } : init);
       });
       return;
     }
@@ -2015,7 +2024,9 @@ export function App() {
                           }
                         } },
                         { divider: true },
-                        { label: 'Preposlať správu s prílohami', onClick: () => compose('forward') },
+                        { label: 'Poslať ďalej s prílohami', onClick: () => forwardAs('inline') },
+                        { label: 'Poslať ďalej ako prílohu…', onClick: () => forwardAs('attachment') },
+                        { label: 'Poslať ďalej ako originál…', onClick: () => forwardAs('redirect') },
                         { label: `Kopírovať názov „${a?.filename ?? ''}“`, onClick: () => void navigator.clipboard.writeText(a?.filename ?? '') },
                       ]);
                     }}

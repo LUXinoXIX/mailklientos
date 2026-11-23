@@ -1,9 +1,9 @@
 // Poslať ďalej ako originál (presmerovanie): pôvodná správa odíde bez zmeny, ako ju poslal pôvodný odosielateľ.
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar, MessageBarBody } from '@fluentui/react-components';
 import { useState } from 'react';
-import type { MessageFull } from '../../core/api';
+import type { MessageSummary } from '../../core/api';
 
-export function RedirectDialog(props: { msg: MessageFull; onClose: () => void; onDone: (text: string) => void }) {
+export function RedirectDialog(props: { msg: MessageSummary; onClose: () => void; onDone: (text: string) => void }) {
   const m = props.msg;
   const [to, setTo] = useState('');
   const [busy, setBusy] = useState(false);

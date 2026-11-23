@@ -205,7 +205,7 @@ export interface MailApi {
   /** správa v samostatnom okne */
   messageWindow(accountId: string, folder: string, uid: number): Promise<Result<true>>;
   /** odpoveď / preposlanie v samostatnom okne písania */
-  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
+  replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward' | 'forwardAttach'): Promise<Result<true>>;
   /** oznámiť ostatným oknám zmenu v priečinku */
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
   /** Poslať ďalej ako originál (presmerovanie): pôvodná správa bez zmeny, hlavičky Resent-* */
