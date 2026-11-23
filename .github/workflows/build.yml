@@ -243,7 +243,8 @@ jobs:
   release:
     name: Zverejnenie (latest-build)
     needs: [build, mac]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    # zverejniť len ak prešli Windows aj Mac – inak by vydanie prišlo o súbory pre Mac (staré vydanie ostane)
+    if: ${{ success() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
