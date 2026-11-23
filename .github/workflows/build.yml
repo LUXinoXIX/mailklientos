@@ -240,11 +240,57 @@ jobs:
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "logy ${GITHUB_SHA} (${{ job.status }})"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD || true
 
+  # Záloha, ak Mac runner GitHubu nie je k dispozícii (kapacita macOS arm64): zostavenie pre Mac na Linuxe
+  # (Electron Forge darwin/arm64 + ad-hoc podpis rcodesign), len ZIP so zachovanými odkazmi. Bez DMG a bez testu na Macu.
+  mac-fallback:
+    name: Zostavenie (macos – záloha na Linuxe)
+    needs: [mac]
+    if: ${{ always() && needs.mac.result != 'success' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Inštalácia závislostí
+        run: |
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+      - name: macOS (Apple Silicon) – zostavenie a ad-hoc podpis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+          npx electron-forge package --platform=darwin --arch=arm64
+          src=$(ls -d out/*-darwin-arm64/*.app | head -1)
+          app="$(dirname "$src")/Universum eMail.app"
+          mv "$src" "$app"
+          tag=$(gh release list -R indygreg/apple-platform-rs --limit 60 --json tagName --jq '[.[] | select(.tagName|startswith("apple-codesign/"))][0].tagName')
+          mkdir -p "$RUNNER_TEMP/rc"
+          gh release download "$tag" -R indygreg/apple-platform-rs -p '*x86_64-unknown-linux-musl.tar.gz' -D "$RUNNER_TEMP/rc"
+          tar -xzf "$RUNNER_TEMP"/rc/*.tar.gz -C "$RUNNER_TEMP/rc"
+          rc=$(find "$RUNNER_TEMP/rc" -name rcodesign -type f | head -1)
+          "$rc" sign "$app" 2>&1 | tail -5
+          test -e "$app/Contents/Frameworks/Electron Framework.framework/Electron Framework"
+          ver=$(node -p "require('./package.json').version")
+          mkdir -p out/mac
+          (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/out/mac/UniversumEmail-macOS-${ver}.zip" "$(basename "$app")")
+          ls -la out/mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mailklient-macos
+          retention-days: 3
+          path: out/mac/*
+          if-no-files-found: error
+
   release:
     name: Zverejnenie (latest-build)
-    needs: [build, mac]
-    # zverejniť len ak prešli Windows aj Mac – inak by vydanie prišlo o súbory pre Mac (staré vydanie ostane)
-    if: ${{ success() && github.ref == 'refs/heads/main' }}
+    needs: [build, mac, mac-fallback]
+    # zverejniť len ak prešli Windows a Mac (z Mac runnera alebo záloha z Linuxu) – inak ostane predchádzajúce vydanie celé
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && (needs.mac.result == 'success' || needs.mac-fallback.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
