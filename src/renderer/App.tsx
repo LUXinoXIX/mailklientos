@@ -1905,6 +1905,7 @@ export function App() {
                     onDeleteMany={(msgs) => void bulk(msgs, 'delete')}
                     onMulti={setMultiSel}
                     listKey={`${selection.accountId}/${selection.folder}/${mailTick}`}
+                    folderKey={`${selection.accountId}/${selection.folder}`}
                     onFlaggedServer={async () => {
                       if (!api || demo) return [];
                       const targets = selection.accountId === ALL ? imapAccounts.filter((a) => a.id !== DEMO_ID).map((a) => ({ id: a.id, folder: 'INBOX' })) : [{ id: selection.accountId, folder: selection.folder }];

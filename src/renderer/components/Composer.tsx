@@ -362,7 +362,8 @@ export const Composer = forwardRef<
     const picked = others
       .map((f) => ({ path: api?.pathForFile(f) ?? '', filename: f.name, size: f.size }))
       .filter((p) => p.path);
-    if (picked.length) setFiles((x) => [...x, ...picked]);
+    // ten istý súbor (rovnaká cesta) sa nepridá druhýkrát
+    if (picked.length) setFiles((x) => [...x, ...picked.filter((p, i) => !x.some((f) => f.path === p.path) && picked.findIndex((q) => q.path === p.path) === i)]);
   }
 
   const buildInput = useCallback((): SendInput | null => {
@@ -596,6 +597,8 @@ export const Composer = forwardRef<
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
         setDragOver(false);
+        // pustené do textu správy: súbory už spracoval editor (handleDrop) – inak by sa pridali dvakrát
+        if (e.defaultPrevented || e.nativeEvent.defaultPrevented) return;
         if (!e.dataTransfer.files.length) return;
         e.preventDefault();
         addDropped([...e.dataTransfer.files]);

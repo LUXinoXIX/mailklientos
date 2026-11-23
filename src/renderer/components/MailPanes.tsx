@@ -250,6 +250,8 @@ export function MessageList(props: {
   onFlaggedServer?: () => Promise<MessageSummary[]>;
   /** identifikácia zobrazeného priečinka (na obnovenie výsledku zo servera) */
   listKey?: string;
+  /** konto/priečinok – pri zmene sa karta vráti na „Všetky“ */
+  folderKey?: string;
   /** rýchle akcie priamo v riadku (pri prejdení myšou) */
   onQuick?: (m: MessageSummary, a: 'flag' | 'pin' | 'delete' | 'seen') => void;
   sort?: { by: SortBy; dir: 'desc' | 'asc' };
@@ -266,6 +268,10 @@ export function MessageList(props: {
   loadingMore?: boolean;
 }) {
   const [tab, setTab] = useState<'all' | 'unread' | 'flagged'>('all');
+  // prechod do iného priečinka alebo konta → karta Všetky
+  useEffect(() => {
+    setTab('all');
+  }, [props.folderKey]);
   // karta Označené: okrem načítaných správ aj staršie s vlajkou zo servera
   const [srvFlagged, setSrvFlagged] = useState<{ key: string; list: MessageSummary[]; loading: boolean } | null>(null);
   const listKey = props.listKey ?? '';
