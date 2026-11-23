@@ -52,6 +52,18 @@ export interface MessageSummary {
 }
 
 /** odpoveď alebo preposlanie nájdené v Odoslaných */
+export interface WeatherPlace {
+  name: string;
+  lat: number;
+  lon: number;
+  /** kraj, štát */
+  detail?: string;
+}
+export interface WeatherData {
+  current: { temp: number; feels: number; code: number; wind: number; humidity: number; day: boolean; time: string };
+  days: { date: string; code: number; max: number; min: number; rain: number | null }[];
+}
+
 export interface ReplyInfo {
   kind: 'reply' | 'forward';
   date: string | null;
@@ -210,6 +222,9 @@ export interface MailApi {
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
   /** Poslať ďalej ako originál (presmerovanie): pôvodná správa bez zmeny, hlavičky Resent-* */
   redirectMessage(accountId: string, folder: string, uid: number, to: string): Promise<Result<void>>;
+  /** počasie (Open-Meteo) pre dlaždicu Súhrnu */
+  weatherSearch(q: string): Promise<Result<WeatherPlace[]>>;
+  weatherForecast(lat: number, lon: number): Promise<Result<WeatherData>>;
   /** ďalšie okno s celým programom */
   newWindow(): Promise<Result<void>>;
   /** odpovede a preposlania správy (hľadá v Odoslaných podľa In-Reply-To / References) */

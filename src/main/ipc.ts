@@ -33,6 +33,7 @@ import * as meeting from './meeting';
 import * as localcal from './localcal';
 import * as backup from './backup';
 import * as applock from './applock';
+import * as weather from './weather';
 import * as google from './google';
 import type { CalEvent, Contact } from '../core/ical';
 
@@ -325,6 +326,8 @@ export function registerIpc() {
     void markOriginAfterSend(msg);
     return r;
   });
+  handle('weather:search', (q: string) => weather.searchPlace(q));
+  handle('weather:forecast', (lat: number, lon: number) => weather.forecast(lat, lon));
   handle('mail:redirect', (id: string, folder: string, uid: number, to: string) => mail.redirectMessage(store.getImap(id), folder, uid, to));
   handle('mail:replyInfo', (id: string, messageId: string) => mail.replyInfo(store.getImap(id), messageId));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {

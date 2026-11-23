@@ -291,7 +291,7 @@ export function normalizeUrl(input: string): string | null {
   }
 }
 
-export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds' | 'news';
+export type SummaryTile = 'accounts' | 'today' | 'tasks' | 'flagged' | 'notice' | 'feeds' | 'news' | 'weather';
 export interface SummarySettings {
   /** false = Súhrn úplne vypnutý (nie je v páse kont ani po spustení) */
   enabled?: boolean;
@@ -308,6 +308,8 @@ export interface SummarySettings {
   feeds?: { id: string; name: string; url: string; count: number }[];
   /** správy z RSS/Atom kanálov (dlaždica Správy) */
   news?: { id: string; name: string; url: string; count: number }[];
+  /** počasie – miesto (dlaždica Počasie) */
+  weather?: { name: string; lat: number; lon: number; detail?: string };
   /** kalendáre z odkazu na celú šírku (stĺpec pre každý), pod ostatnými dlaždicami */
   feedsWide?: boolean;
   /** nepriehľadnosť blokov 0.3–1 */

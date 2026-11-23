@@ -4,7 +4,7 @@
 import { Button, Checkbox, Radio, RadioGroup, Slider } from '@fluentui/react-components';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AccountPublic } from '../../core/account';
-import type { MessageSummary, OutboxItem } from '../../core/api';
+import type { MessageSummary, OutboxItem, WeatherData, WeatherPlace } from '../../core/api';
 import type { CalEvent } from '../../core/ical';
 import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { SummarySettings, SummaryTile, Task } from '../../core/settings';
@@ -20,8 +20,9 @@ const TILE_LABEL: Record<SummaryTile, string> = {
   notice: 'Treba si všimnúť',
   feeds: 'Kalendár z odkazu',
   news: 'Správy',
+  weather: 'Počasie',
 };
-const DEFAULT_TILES: { id: SummaryTile; on: boolean; title?: string }[] = (['accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds', 'news'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' && id !== 'news' }));
+const DEFAULT_TILES: { id: SummaryTile; on: boolean; title?: string }[] = (['weather', 'accounts', 'today', 'tasks', 'flagged', 'notice', 'feeds', 'news'] as SummaryTile[]).map((id) => ({ id, on: id !== 'feeds' && id !== 'news' && id !== 'weather' }));
 
 // Vstavané tapety – vlastné jednoduché kresby (vlny), žiadne cudzie obrázky.
 const WALLS: Record<string, { name: string; dark: boolean; bg: [string, string, string]; waves: [string, string, string] }> = {
@@ -126,6 +127,19 @@ export function SummaryPage(props: {
   const news = s.news ?? [];
   const [newsData, setNewsData] = useState<Record<string, { feed?: Feed; error?: string }>>({});
   const [newsForm, setNewsForm] = useState({ url: '', name: '', count: 5 });
+  // počasie (Open-Meteo)
+  const [wx, setWx] = useState<{ data?: WeatherData; error?: string } | null>(null);
+  const [wxQ, setWxQ] = useState('');
+  const [wxRes, setWxRes] = useState<WeatherPlace[] | null>(null);
+  const place = props.settings.weather;
+  const wxOn = (props.settings.tiles ?? []).some((t) => t.id === 'weather' && t.on);
+  useEffect(() => {
+    if (!place || !wxOn || !window.mailApi) return;
+    const load = () => void window.mailApi!.weatherForecast(place.lat, place.lon).then((r) => setWx(r.ok ? { data: r.data } : { error: r.error }));
+    load();
+    const t = window.setInterval(load, 30 * 60_000);
+    return () => window.clearInterval(t);
+  }, [place?.lat, place?.lon, wxOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const newsKey = news.map((n) => n.url).join(',');
   useEffect(() => {
     if (!news.length) return;
@@ -313,6 +327,36 @@ export function SummaryPage(props: {
             })}
           </>
         );
+      case 'weather': {
+        if (!place) return <div className="sum-dim">Nastav miesto v „Upraviť súhrn“ → Počasie.</div>;
+        if (!wx) return <div className="sum-dim">Načítavam…</div>;
+        if (wx.error || !wx.data) return <div className="sum-dim">⚠ {wx.error}</div>;
+        const c = wx.data.current;
+        return (
+          <div className="sum-wx">
+            <div className="sum-wx-now">
+              <span className="sum-wx-ico" aria-hidden="true">{wxIcon(c.code, c.day)}</span>
+              <span className="sum-wx-temp">{Math.round(c.temp)}°</span>
+              <span className="sum-wx-desc">
+                <b>{place.name}</b>
+                <span>{wxText(c.code)}</span>
+                <span className="sum-dim small">pocitovo {Math.round(c.feels)}° · vietor {Math.round(c.wind)} km/h · vlhkosť {Math.round(c.humidity)} %</span>
+              </span>
+            </div>
+            <div className="sum-wx-days">
+              {wx.data.days.map((d, i) => (
+                <div key={d.date} className="sum-wx-day" title={wxText(d.code)}>
+                  <span className="sum-dim small">{i === 0 ? 'dnes' : new Date(d.date + 'T12:00').toLocaleDateString('sk-SK', { weekday: 'short' })}</span>
+                  <span className="sum-wx-dico" aria-hidden="true">{wxIcon(d.code, true)}</span>
+                  <span><b>{Math.round(d.max)}°</b> <span className="sum-dim">{Math.round(d.min)}°</span></span>
+                  {d.rain !== null && d.rain >= 20 && <span className="sum-dim small">☂ {d.rain} %</span>}
+                </div>
+              ))}
+            </div>
+            <div className="sum-dim small sum-wx-src">Open-Meteo.com</div>
+          </div>
+        );
+      }
       case 'news':
         return (
           <>
@@ -525,6 +569,40 @@ export function SummaryPage(props: {
                 </div>
               </section>
               <section>
+                <div className="sum-h">Počasie</div>
+                <div className="sum-dim small">{place ? `Miesto: ${place.name}${place.detail ? ` (${place.detail})` : ''}` : 'Zadaj mesto alebo obec.'}</div>
+                <div className="row gap">
+                  <input
+                    className="sum-input grow"
+                    placeholder="napr. Bratislava"
+                    value={wxQ}
+                    onChange={(ev) => setWxQ(ev.target.value)}
+                    onKeyDown={(ev) => ev.key === 'Enter' && void window.mailApi?.weatherSearch(wxQ).then((r) => setWxRes(r.ok ? r.data : []))}
+                    aria-label="Miesto pre počasie"
+                  />
+                  <Button size="small" disabled={wxQ.trim().length < 2} onClick={() => void window.mailApi?.weatherSearch(wxQ).then((r) => setWxRes(r.ok ? r.data : []))}>
+                    Hľadať
+                  </Button>
+                </div>
+                {wxRes && !wxRes.length && <div className="sum-dim small">Nič sa nenašlo.</div>}
+                {wxRes?.map((p) => (
+                  <button
+                    key={`${p.lat},${p.lon}`}
+                    className="sum-row sum-click"
+                    onClick={() => {
+                      setWx(null);
+                      setWxRes(null);
+                      setWxQ('');
+                      props.onSettings({ ...s, weather: p, tiles: tiles.map((t) => (t.id === 'weather' ? { ...t, on: true } : t)) });
+                    }}
+                  >
+                    <span className="grow">
+                      {p.name} <span className="sum-dim small">{p.detail}</span>
+                    </span>
+                  </button>
+                ))}
+              </section>
+              <section>
                 <div className="sum-h">Čitateľnosť blokov</div>
                 <div className="sum-dim small">Nepriehľadnosť: {Math.round(opacity * 100)} %</div>
                 <Slider min={30} max={100} step={5} value={Math.round(opacity * 100)} onChange={(_, d) => props.onSettings({ ...s, opacity: d.value / 100 })} aria-label="Nepriehľadnosť blokov" />
@@ -592,4 +670,29 @@ export function SummaryPage(props: {
       {appVer && <div className="sum-appver">Universum eMail {appVer}</div>}
     </section>
   );
+}
+
+
+/** WMO kód počasia → symbol a text (Open-Meteo) */
+function wxIcon(code: number, day: boolean): string {
+  if (code === 0) return day ? '☀️' : '🌙';
+  if (code <= 2) return day ? '🌤️' : '☁️';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 67) return '🌧️';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '🌨️';
+  if (code >= 80 && code <= 82) return '🌦️';
+  if (code >= 95) return '⛈️';
+  return '🌡️';
+}
+function wxText(code: number): string {
+  const t: Record<number, string> = {
+    0: 'Jasno', 1: 'Prevažne jasno', 2: 'Polojasno', 3: 'Zamračené', 45: 'Hmla', 48: 'Hmla s námrazou',
+    51: 'Slabé mrholenie', 53: 'Mrholenie', 55: 'Silné mrholenie', 56: 'Mrznúce mrholenie', 57: 'Mrznúce mrholenie',
+    61: 'Slabý dážď', 63: 'Dážď', 65: 'Silný dážď', 66: 'Mrznúci dážď', 67: 'Mrznúci dážď',
+    71: 'Slabé sneženie', 73: 'Sneženie', 75: 'Silné sneženie', 77: 'Snehové zrná',
+    80: 'Prehánky', 81: 'Prehánky', 82: 'Silné prehánky', 85: 'Snehové prehánky', 86: 'Silné snehové prehánky',
+    95: 'Búrka', 96: 'Búrka s krúpami', 99: 'Silná búrka s krúpami',
+  };
+  return t[code] ?? 'Počasie';
 }
