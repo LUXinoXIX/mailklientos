@@ -146,6 +146,7 @@ const api: MailApi = {
   setGpuDisabled: (off) => inv('diag:setGpuDisabled', off),
   openLog: () => inv('diag:openLog'),
   logError: (msg) => inv('diag:log', msg),
+  newWindow: () => inv('app:newWindow'),
   replyInfo: (id, messageId) => inv('mail:replyInfo', id, messageId),
   lockStatus: () => inv('lock:status'),
   lockNow: () => inv('lock:now'),

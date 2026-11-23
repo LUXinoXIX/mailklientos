@@ -208,6 +208,8 @@ export interface MailApi {
   replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
   /** oznámiť ostatným oknám zmenu v priečinku */
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** ďalšie okno s celým programom */
+  newWindow(): Promise<Result<void>>;
   /** odpovede a preposlania správy (hľadá v Odoslaných podľa In-Reply-To / References) */
   replyInfo(accountId: string, messageId: string): Promise<Result<ReplyInfo[]>>;
   /** Odoslať a prijať: znovu pripojiť sledovanie pošty, odoslať správy čakajúce po chybe */
@@ -414,6 +416,7 @@ export interface LockStatus extends LockOptions {
 
 export type AppEvent =
   | { type: 'lock-changed'; locked: boolean }
+  | { type: 'settings-changed' }
   | { type: 'gpu-crash'; count: number }
   | { type: 'mail-changed'; accountId: string; folder: string; newCount: number }
   | { type: 'open-message'; accountId: string; folder: string; uid: number }

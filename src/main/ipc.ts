@@ -75,6 +75,7 @@ export function setComposeWindowFactory(f: (q: Record<string, string>) => void) 
 }
 
 export function registerIpc() {
+  handle('app:newWindow', () => openComposeWindow?.({ second: '1' }));
   // kontá
   handle('accounts:list', () => ({ accounts: store.publicAccounts(), canStoreSecrets: store.canStoreSecrets() }));
   handle('accounts:save', (acc: AnyAccount, password?: string) => {
@@ -366,7 +367,13 @@ export function registerIpc() {
 
   // nastavenia a spúšťače
   handle('settings:get', () => settings.loadSettings());
-  handle('settings:save', (s: AppSettings) => settings.saveSettings(s));
+  handle('settings:save', (s: AppSettings) => {
+    const r = settings.saveSettings(s);
+    // viac hlavných okien: ostatné si načítajú nové nastavenia (inak by ich pri ďalšom uložení prepísali starými)
+    const from = winOf();
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w !== from) w.webContents.send('app:event', { type: 'settings-changed' });
+    return r;
+  });
   handle('signatures:outlook', () => settings.outlookSignatures());
   handle('launcher:pick', () => settings.pickProgram(winOf()));
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
