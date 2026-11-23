@@ -51,6 +51,15 @@ export interface MessageSummary {
   threadId?: string;
 }
 
+/** odpoveď alebo preposlanie nájdené v Odoslaných */
+export interface ReplyInfo {
+  kind: 'reply' | 'forward';
+  date: string | null;
+  to: string;
+  folder: string;
+  uid: number;
+}
+
 export interface MessageFull extends MessageSummary {
 
   to: string;
@@ -97,6 +106,8 @@ export interface SendInput {
   draft?: DraftRef;
   /** Preposlanie: prílohy pôvodnej správy sa pripoja. */
   forward?: { folder: string; uid: number };
+  /** pôvodná správa, na ktorú sa odpovedá / ktorá sa preposiela – po odoslaní sa označí (\\Answered / $Forwarded) */
+  origin?: { accountId: string; folder: string; uid: number; messageId?: string; kind: 'reply' | 'forward' };
   /** Odosielateľ (identita/alias); prázdne = hlavná adresa konta */
   from?: { name: string; email: string };
   /** automatická odpoveď (hlavička Auto-Submitted, bez potvrdení) */
@@ -197,6 +208,8 @@ export interface MailApi {
   replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
   /** oznámiť ostatným oknám zmenu v priečinku */
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** odpovede a preposlania správy (hľadá v Odoslaných podľa In-Reply-To / References) */
+  replyInfo(accountId: string, messageId: string): Promise<Result<ReplyInfo[]>>;
   /** Odoslať a prijať: znovu pripojiť sledovanie pošty, odoslať správy čakajúce po chybe */
   sendReceive(): Promise<Result<{ retried: number }>>;
   /** priečinky: nový podpriečinok, premenovať, odstrániť, označiť všetko ako prečítané, vyprázdniť */

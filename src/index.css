@@ -992,3 +992,15 @@ body.app-locked webview, body.app-locked .m365-webs { visibility: hidden !import
 .lock-error { color: #ffb0b0; font-size: 13px; }
 .lock-code { font-family: ui-monospace, Consolas, monospace; font-size: 20px; letter-spacing: 2px; padding: 10px 14px; border-radius: 6px; background: #141b3d; border: 1px dashed #5aa0e8; user-select: all; }
 .lock-code-light { font-family: ui-monospace, Consolas, monospace; font-size: 20px; letter-spacing: 2px; padding: 10px 14px; border-radius: 6px; border: 1px dashed var(--colorBrandStroke1); align-self: flex-start; user-select: all; }
+
+/* odpovedané / preposlané */
+.msg-replied { display: inline-flex; gap: 2px; margin-right: 4px; vertical-align: -2px; }
+.msg-replied svg { width: 14px; height: 14px; }
+.msg-replied .rep { color: var(--colorBrandForeground1); }
+.msg-replied .fwd { color: var(--colorNeutralForeground3); }
+.replied-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.replied-bar { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px; font-size: 12px; }
+.replied-bar svg { width: 16px; height: 16px; flex: none; }
+.replied-bar.rep { background: var(--colorBrandBackground2); color: var(--colorBrandForeground2); }
+.replied-bar.fwd { background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); }
+.replied-bar .linklike { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }

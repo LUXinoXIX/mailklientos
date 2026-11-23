@@ -382,6 +382,10 @@ export const Composer = forwardRef<
       readReceipt: receipt,
       draft: draft.current ?? undefined,
       forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
+      origin:
+        init.original && (init.kind === 'forward' || init.kind === 'reply' || init.kind === 'replyAll')
+          ? { accountId: init.original.accountId, folder: init.original.folder, uid: init.original.uid, messageId: init.original.messageId, kind: init.kind === 'forward' ? 'forward' : 'reply' }
+          : undefined,
       from: fromIdentity(),
       security: security.sign || security.encrypt ? security : undefined,
       followUpDays: followUp || undefined,

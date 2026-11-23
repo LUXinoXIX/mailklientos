@@ -13,6 +13,7 @@ import * as mail from './mail';
 import * as settings from './settings';
 import * as web from './webviews';
 import * as diag from './diagnostics';
+import { markOriginAfterSend } from './replymark';
 import { reconnectWatchers, syncWatchers, testNotification } from './watch';
 import * as cache from './cache';
 import { applyActions, runRulesOnFolder } from './actions';
@@ -317,7 +318,12 @@ export function registerIpc() {
     return true as const;
   });
   handle('mail:get', (id: string, folder: string, uid: number) => mail.getMessage(store.getImap(id), folder, uid));
-  handle('mail:send', (id: string, msg: SendInput) => mail.sendMail(store.getImap(id), msg));
+  handle('mail:send', async (id: string, msg: SendInput) => {
+    const r = await mail.sendMail(store.getImap(id), msg);
+    void markOriginAfterSend(msg);
+    return r;
+  });
+  handle('mail:replyInfo', (id: string, messageId: string) => mail.replyInfo(store.getImap(id), messageId));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
     await mail.setFlags(store.getImap(id), folder, uids, flags);
     return true as const;
@@ -395,3 +401,4 @@ export function registerIpc() {
   on('web:clear', (partition: string) => web.clearPartition(partition));
   on('web:openOutside', (url: string) => web.openOutside(url));
 }
+
