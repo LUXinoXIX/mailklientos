@@ -1610,7 +1610,7 @@ export function App() {
           )}
           <TopBar
             kindTitle={activeImap && zimbraVer[activeImap.id] ? `Server Zimbra, verzia ${zimbraVer[activeImap.id]!.full}` : undefined}
-            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? (zimbraVer[activeImap.id] ? `ZIMBRA ${zimbraVer[activeImap.id]!.short}` : 'ZIMBRA') : 'IMAP') : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'Microsoft 365 – osobné' : 'Microsoft 365 – firemné') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? (zimbraVer[activeImap.id] ? `ZIMBRA ${zimbraVer[activeImap.id]!.short}` : 'ZIMBRA') : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}
