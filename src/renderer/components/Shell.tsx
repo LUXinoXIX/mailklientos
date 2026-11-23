@@ -233,7 +233,7 @@ export function Ribbon(props: {
   onCompose: () => void;
   onReply: () => void;
   onReplyAll: () => void;
-  onForward: () => void;
+  onForward: (mode?: 'inline' | 'attachment' | 'redirect') => void;
   onDelete: () => void;
   onArchive: () => void;
   onMove: (dest: string) => void;
@@ -401,7 +401,18 @@ export function Ribbon(props: {
             <ToolbarDivider />
             <ToolbarButton icon={<ReplyIcon />} disabled={!p.hasMessage} onClick={p.onReply}>Odpovedať</ToolbarButton>
             <ToolbarButton icon={<ReplyAllIcon />} disabled={!p.hasMessage} onClick={p.onReplyAll}>Všetkým</ToolbarButton>
-            <ToolbarButton icon={<ForwardIcon />} disabled={!p.hasMessage} onClick={p.onForward}>Preposlať</ToolbarButton>
+            <Menu positioning="below-start">
+              <MenuTrigger disableButtonEnhancement>
+                <ToolbarButton icon={<ForwardIcon />} disabled={!p.hasMessage}>Poslať ďalej ▾</ToolbarButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem icon={<ForwardIcon />} onClick={() => p.onForward('inline')}>Poslať ďalej</MenuItem>
+                  <MenuItem onClick={() => p.onForward('attachment')}>Poslať ďalej ako prílohu…</MenuItem>
+                  <MenuItem onClick={() => p.onForward('redirect')}>Poslať ďalej ako originál…</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             <ToolbarDivider />
             <ToolbarButton icon={<DeleteIcon />} disabled={!p.hasMessage} onClick={p.onDelete}>Odstrániť</ToolbarButton>
             <ToolbarButton icon={<ArchiveIcon />} disabled={!p.hasMessage} onClick={p.onArchive}>Archív</ToolbarButton>

@@ -147,6 +147,7 @@ const api: MailApi = {
   openLog: () => inv('diag:openLog'),
   logError: (msg) => inv('diag:log', msg),
   newWindow: () => inv('app:newWindow'),
+  redirectMessage: (id, folder, uid, to) => inv('mail:redirect', id, folder, uid, to),
   replyInfo: (id, messageId) => inv('mail:replyInfo', id, messageId),
   lockStatus: () => inv('lock:status'),
   lockNow: () => inv('lock:now'),

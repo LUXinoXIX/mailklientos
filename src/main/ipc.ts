@@ -324,6 +324,7 @@ export function registerIpc() {
     void markOriginAfterSend(msg);
     return r;
   });
+  handle('mail:redirect', (id: string, folder: string, uid: number, to: string) => mail.redirectMessage(store.getImap(id), folder, uid, to));
   handle('mail:replyInfo', (id: string, messageId: string) => mail.replyInfo(store.getImap(id), messageId));
   handle('mail:flags', async (id: string, folder: string, uids: number[], flags: { seen?: boolean; flagged?: boolean }) => {
     await mail.setFlags(store.getImap(id), folder, uids, flags);

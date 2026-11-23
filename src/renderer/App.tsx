@@ -32,6 +32,7 @@ import { CalendarView } from './components/CalendarView';
 import { AddressBook } from './components/AddressBook';
 import { SettingsTransfer } from './components/SettingsTransfer';
 import { LockSettings } from './components/LockSettings';
+import { RedirectDialog } from './components/RedirectDialog';
 import { SUMMARY, SummaryPage } from './components/SummaryPage';
 import { TasksView, dueLabel, todayIso } from './components/TasksView';
 import {
@@ -177,6 +178,7 @@ export function App() {
   const [status, setStatus] = useState('');
   const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
   const [lockDlg, setLockDlg] = useState(false);
+  const [redirect, setRedirect] = useState<MessageFull | null>(null);
   const [dialog, setDialog] = useState<Dialogs>({ kind: 'none' });
   const [dialogKey, setDialogKey] = useState(0);
   const [panelOverlay, setPanelOverlay] = useState(false);
@@ -1227,6 +1229,16 @@ export function App() {
   }
 
   /** Písanie v čítacom paneli (ako Outlook). */
+  /** Poslať ďalej: bežne (citácia + prílohy), ako prílohu (.eml) alebo ako originál (presmerovanie) */
+  function forwardAs(mode: 'inline' | 'attachment' | 'redirect' = 'inline') {
+    const m = full.msg;
+    if (mode === 'inline' || !m || m.accountId === DEMO_ID) return compose('forward');
+    if (mode === 'redirect') return setRedirect(m);
+    const me = imapAccounts.find((a) => a.id === m.accountId)?.email ?? '';
+    if (activeImap) setImapModule((x) => ({ ...x, [activeImap.id]: 'mail' }));
+    setRibbonTab('message');
+    setCompose({ init: { ...replyInit(m, 'forward', m.accountId, me), forwardAsAttachment: true }, key: Date.now() });
+  }
   function compose(kind: ComposeKind) {
     // už je otvorená rozpísaná správa: presunúť ju do samostatného okna (nič sa nestratí), potom otvoriť novú
     // predchádzajúca rozpísaná správa ostane ako karta dole
@@ -1511,6 +1523,7 @@ export function App() {
     <FluentProvider theme={getTheme(themeDef)}>
       <div className={`app theme-${theme} ${themeDef.dark ? 'dark' : ''}`} style={themeVars(themeDef)}>
         {lockDlg && <LockSettings onClose={() => setLockDlg(false)} />}
+        {redirect && <RedirectDialog msg={redirect} onClose={() => setRedirect(null)} onDone={(t) => setStatus(t)} />}
         {transfer && <SettingsTransfer mode={transfer} onClose={() => setTransfer(null)} onStatus={setStatus} />}
       <div className="shell">
         <AccountRail
@@ -1607,7 +1620,7 @@ export function App() {
               onCompose={() => compose('new')}
               onReply={() => compose('reply')}
               onReplyAll={() => compose('replyAll')}
-              onForward={() => compose('forward')}
+              onForward={(mode) => forwardAs(mode)}
               onDelete={() => void del()}
               onArchive={() => void archive()}
               onMove={(d) => void move(d)}
@@ -1955,7 +1968,7 @@ export function App() {
                     color={colorOf(full.msg?.accountId ?? '')}
                     onReply={() => compose('reply')}
                     onReplyAll={() => compose('replyAll')}
-                    onForward={() => compose('forward')}
+                    onForward={(mode) => forwardAs(mode)}
                     thread={thread}
                     onOpenThread={(t) => void open(t)}
                     categories={categoriesOf(settings)}

@@ -40,6 +40,8 @@ export interface ComposeInit {
   /** adresa odosielateľa (alias) */
   fromEmail?: string;
   security?: { sign?: 'pgp' | 'smime'; encrypt?: 'pgp' | 'smime' };
+  /** poslať ďalej ako prílohu (.eml) – bez citácie a bez jednotlivých príloh */
+  forwardAsAttachment?: boolean;
 }
 
 export interface ComposerHandle {
@@ -138,7 +140,7 @@ function quoteHtml(m: MessageFull) {
 function initialHtml(init: ComposeInit, sig: string) {
   if (init.html !== undefined) return init.html.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
   const top = `<p></p><p></p>${sig}`;
-  return init.original ? `${top}<p></p>${quoteHtml(init.original)}` : top;
+  return init.original && !init.forwardAsAttachment ? `${top}<p></p>${quoteHtml(init.original)}` : top;
 }
 
 /** HTML na odoslanie: predvolené písmo, prázdne odseky viditeľné aj v Outlooku. */
@@ -381,10 +383,10 @@ export const Composer = forwardRef<
       priority,
       readReceipt: receipt,
       draft: draft.current ?? undefined,
-      forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid } : undefined,
+      forward: init.kind === 'forward' && init.original ? { folder: init.original.folder, uid: init.original.uid, asAttachment: init.forwardAsAttachment || undefined } : undefined,
       // preposlaná pozvánka na stretnutie: ako pozvánka (text/calendar REQUEST), aby si ju príjemca mohol pridať do kalendára
       ical:
-        init.kind === 'forward' && init.original?.invite && init.original.invite.method !== 'CANCEL' && init.original.invite.method !== 'REPLY'
+        init.kind === 'forward' && !init.forwardAsAttachment && init.original?.invite && init.original.invite.method !== 'CANCEL' && init.original.invite.method !== 'REPLY'
           ? { method: 'REQUEST', content: init.original.invite.ics }
           : undefined,
       origin:
@@ -458,7 +460,7 @@ export const Composer = forwardRef<
 
   /** Text sľubuje prílohu, ale žiadna nie je (ako Outlook/Thunderbird). */
   function missingAttachment(input: SendInput) {
-    if (files.length || (init.kind === 'forward' && (init.original?.attachments.filter((a) => !a.inline).length ?? 0) > 0)) return false;
+    if (files.length || (init.kind === 'forward' && fwCount > 0)) return false;
     // len vlastný text, nie citovaná pôvodná správa
     const own = (input.text.split(/\n-{2,}|\nOd: |\nFrom: /)[0] ?? '') + ' ' + input.subject;
     return /(v\s+prílohe|v\s+prilohe|prikladám|prikladam|priložen|prilozen|príloh[ua]|prilohu|attach)/i.test(own);
@@ -586,7 +588,8 @@ export const Composer = forwardRef<
     toggleReceipt: () => setReceipt((v) => !v),
   }));
 
-  const title = init.kind === 'new' ? 'Nová správa' : init.kind === 'forward' ? 'Preposlať' : init.kind === 'replyAll' ? 'Odpovedať všetkým' : 'Odpovedať';
+  const fwCount = init.kind !== 'forward' ? 0 : init.forwardAsAttachment ? 1 : init.original?.attachments.filter((a) => !a.inline).length ?? 0;
+  const title = init.kind === 'new' ? 'Nová správa' : init.kind === 'forward' ? (init.forwardAsAttachment ? 'Poslať ďalej ako prílohu' : 'Preposlať') : init.kind === 'replyAll' ? 'Odpovedať všetkým' : 'Odpovedať';
 
   return (
     <section
@@ -702,9 +705,16 @@ export const Composer = forwardRef<
             <input className="subject-input" aria-label="Predmet" placeholder="Pridajte predmet" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
         </div>
-        {(files.length > 0 || (init.kind === 'forward' && (init.original?.attachments.filter((a) => !a.inline).length ?? 0) > 0)) && (
-          <div className={`composer-files ${files.length + (init.kind === 'forward' ? init.original?.attachments.filter((a) => !a.inline).length ?? 0 : 0) > 4 ? 'many' : ''}`} aria-label="Prílohy">
+        {(files.length > 0 || (init.kind === 'forward' && fwCount > 0)) && (
+          <div className={`composer-files ${files.length + fwCount > 4 ? 'many' : ''}`} aria-label="Prílohy">
+            {init.kind === 'forward' && init.forwardAsAttachment && init.original && (
+              <span className="att-card" title="Pôvodná správa ako príloha">
+                <span className="att-ext eml">EML</span>
+                <span className="att-meta"><span className="att-name">{(init.original.subject || 'sprava').slice(0, 80)}.eml</span><span className="att-size">pôvodná správa</span></span>
+              </span>
+            )}
             {init.kind === 'forward' &&
+              !init.forwardAsAttachment &&
               init.original?.attachments.filter((a) => !a.inline).map((a, i) => (
                 <span key={`fw-${i}`} className="att-card" title={`${a.filename} – príloha preposlanej správy`}>
                   <span className={`att-ext ${extClass(a.filename)}`}>{extLabel(a.filename)}</span>

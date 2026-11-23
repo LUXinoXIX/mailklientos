@@ -1,7 +1,7 @@
 // Panel kont, zoznam správ, čítací panel a 4. stĺpec (variant D).
 import { useAttachmentGuard } from './AttachmentGuard';
 import { GmailLabels } from './GmailLabels';
-import { Button, Menu, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
+import { Button, Menu, MenuItem, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList } from '@fluentui/react-components';
 import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findMeeting, MEETING_LABEL } from '../../core/meeting';
@@ -431,12 +431,6 @@ export function MessageList(props: {
               {m.fromName || m.fromAddress}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
-            {(m.answered || m.keywords?.includes('$Forwarded')) && (
-              <span className="msg-replied" aria-label={[m.answered && 'Odpovedané', m.keywords?.includes('$Forwarded') && 'Preposlané'].filter(Boolean).join(', ')}>
-                {m.answered && <ReplyTinyIcon className="rep" title="Odpovedané" />}
-                {m.keywords?.includes('$Forwarded') && <ForwardTinyIcon className="fwd" title="Preposlané" />}
-              </span>
-            )}
             <span className="msg-date">{fmtDate(m.date)}</span>
           </div>
           <div className="msg-row">
@@ -478,6 +472,13 @@ export function MessageList(props: {
         </div>
         {/* príloha: vlastný stĺpec vpravo, zvislo v strede (stĺpec je vždy, aby dátumy ostali pod sebou) */}
         <span className="msg-attcol">
+          {/* odpovedané / preposlané nad značkou prílohy */}
+          {(m.answered || m.keywords?.includes('$Forwarded')) && (
+            <span className="msg-replied" role="img" aria-label={[m.answered && 'Odpovedané', m.keywords?.includes('$Forwarded') && 'Preposlané'].filter(Boolean).join(', ')}>
+              {m.answered && <ReplyTinyIcon className="rep" title="Odpovedané" />}
+              {m.keywords?.includes('$Forwarded') && <ForwardTinyIcon className="fwd" title="Preposlané" />}
+            </span>
+          )}
           {m.hasAttachments && (
             <span className="msg-att-badge" role="img" aria-label="Má prílohu" title="Správa má prílohu">
               <AttachBadgeIcon />
@@ -693,7 +694,7 @@ export function ReadingPane(props: {
   color: string;
   onReply: () => void;
   onReplyAll: () => void;
-  onForward: () => void;
+  onForward: (mode?: 'inline' | 'attachment' | 'redirect') => void;
   thread?: MessageSummary[];
   onOpenThread?: (m: MessageSummary) => void;
   categories?: Category[];
@@ -732,7 +733,18 @@ export function ReadingPane(props: {
       <div className="read-actions" role="toolbar" aria-label="Akcie so správou">
         <Button size="small" icon={<ReplyIcon />} onClick={props.onReply}>Odpovedať</Button>
         <Button size="small" icon={<ReplyAllIcon />} onClick={props.onReplyAll} aria-label="Odpovedať všetkým" title="Odpovedať všetkým" />
-        <Button size="small" icon={<ForwardIcon />} onClick={props.onForward} aria-label="Preposlať" title="Preposlať" />
+        <Menu positioning="below-start">
+          <MenuTrigger disableButtonEnhancement>
+            <Button size="small" icon={<ForwardIcon />} aria-label="Poslať ďalej" title="Poslať ďalej (možnosti)">▾</Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem icon={<ForwardIcon />} onClick={() => props.onForward('inline')}>Poslať ďalej</MenuItem>
+              <MenuItem onClick={() => props.onForward('attachment')}>Poslať ďalej ako prílohu…</MenuItem>
+              <MenuItem onClick={() => props.onForward('redirect')}>Poslať ďalej ako originál…</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
         <span className="ra-sep" />
         {props.onDelete && <Button size="small" appearance="subtle" icon={<DeleteIcon />} onClick={props.onDelete} title="Odstrániť (Delete)" aria-label="Odstrániť" />}
         {props.onArchive && <Button size="small" appearance="subtle" icon={<ArchiveIcon />} onClick={props.onArchive} title="Archivovať" aria-label="Archivovať" />}

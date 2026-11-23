@@ -745,7 +745,7 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .prio-btn.prio-high { color: #c50f1f !important; font-weight: 600; background: #fde7e9 !important; }
 .prio-btn.prio-low { color: var(--colorBrandForeground1) !important; background: var(--colorBrandBackground2) !important; }
 /* spinka v zozname správ */
-.msg-attcol { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; align-self: center; }
+.msg-attcol { flex: none; width: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; align-self: center; }
 .msg-att-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 22px; border-radius: 11px; background: var(--colorBrandBackground2); color: var(--colorBrandForeground2); }
 .msg-att-badge svg { width: 16px; height: 16px; }
 .list.compact .msg-attcol { width: 24px; }
@@ -997,7 +997,7 @@ body.app-locked webview, body.app-locked .m365-webs { visibility: hidden !import
 .lock-code-light { font-family: ui-monospace, Consolas, monospace; font-size: 20px; letter-spacing: 2px; padding: 10px 14px; border-radius: 6px; border: 1px dashed var(--colorBrandStroke1); align-self: flex-start; user-select: all; }
 
 /* odpovedané / preposlané */
-.msg-replied { display: inline-flex; gap: 2px; margin-right: 4px; vertical-align: -2px; }
+.msg-replied { display: inline-flex; gap: 1px; }
 .msg-replied svg { width: 14px; height: 14px; }
 .msg-replied .rep { color: var(--colorBrandForeground1); }
 .msg-replied .fwd { color: var(--colorNeutralForeground3); }
@@ -1012,3 +1012,5 @@ body.app-locked webview, body.app-locked .m365-webs { visibility: hidden !import
 .invite-result.ok { background: var(--colorPaletteGreenBackground1); color: var(--colorPaletteGreenForeground1); }
 .invite-result.warn { background: var(--colorPaletteYellowBackground1); color: var(--colorPaletteYellowForeground2); }
 .invite-result.err { background: var(--colorPaletteRedBackground1); color: var(--colorPaletteRedForeground1); }
+
+.att-ext.eml { background: #5b5fc7; }

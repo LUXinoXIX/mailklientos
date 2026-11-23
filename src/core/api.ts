@@ -105,7 +105,7 @@ export interface SendInput {
   /** Koncept, ktorý sa po odoslaní zmaže. */
   draft?: DraftRef;
   /** Preposlanie: prílohy pôvodnej správy sa pripoja. */
-  forward?: { folder: string; uid: number };
+  forward?: { folder: string; uid: number; /** celá pôvodná správa ako príloha .eml */ asAttachment?: boolean };
   /** pôvodná správa, na ktorú sa odpovedá / ktorá sa preposiela – po odoslaní sa označí (\\Answered / $Forwarded) */
   origin?: { accountId: string; folder: string; uid: number; messageId?: string; kind: 'reply' | 'forward' };
   /** Odosielateľ (identita/alias); prázdne = hlavná adresa konta */
@@ -208,6 +208,8 @@ export interface MailApi {
   replyWindow(accountId: string, folder: string, uid: number, mode: 'reply' | 'replyAll' | 'forward'): Promise<Result<true>>;
   /** oznámiť ostatným oknám zmenu v priečinku */
   notifyChanged(accountId: string, folder: string): Promise<Result<true>>;
+  /** Poslať ďalej ako originál (presmerovanie): pôvodná správa bez zmeny, hlavičky Resent-* */
+  redirectMessage(accountId: string, folder: string, uid: number, to: string): Promise<Result<void>>;
   /** ďalšie okno s celým programom */
   newWindow(): Promise<Result<void>>;
   /** odpovede a preposlania správy (hľadá v Odoslaných podľa In-Reply-To / References) */

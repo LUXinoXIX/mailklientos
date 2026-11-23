@@ -745,13 +745,18 @@ export function isInlineImage(a: any, html: string | false | null | undefined): 
 }
 
 /** Prílohy pôvodnej správy pri preposlaní. */
-async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid: number }) {
+async function forwardedAttachments(acc: AccountConfig, f: { folder: string; uid: number; asAttachment?: boolean }) {
   return withImap(acc, async (c) => {
     const lock = await c.getMailboxLock(f.folder);
     try {
       const msg = await c.fetchOne(String(f.uid), { source: true }, { uid: true });
       if (!msg?.source) return [];
       const p = await simpleParser(msg.source);
+      if (f.asAttachment) {
+        // poslať ďalej ako prílohu: celá pôvodná správa (.eml)
+        const name = (p.subject || 'sprava').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 80) || 'sprava';
+        return [{ filename: `${name}.eml`, content: msg.source as Buffer, contentType: 'message/rfc822' }];
+      }
       return (p.attachments ?? [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((a: any) => !isInlineImage(a, p.html))
@@ -1152,4 +1157,40 @@ export async function replyInfo(acc: AccountConfig, messageId: string): Promise<
       lock.release();
     }
   });
+}
+
+
+/** Poslať ďalej ako originál (presmerovanie, „Redirect“): pôvodná správa sa odošle bez zmeny ďalším príjemcom,
+    navrch sa pridajú hlavičky Resent-From/To/Date/Message-ID (RFC 5322). Odosielateľ (From) ostáva pôvodný. */
+export async function redirectMessage(acc: AccountConfig, folder: string, uid: number, to: string): Promise<void> {
+  const rcpts = to.split(/[,;]/).map((x) => (/<([^>]+)>/.exec(x)?.[1] ?? x).trim()).filter((x) => /@/.test(x));
+  if (!rcpts.length) throw new UserError('Zadajte aspoň jednu adresu príjemcu.');
+  const source: Buffer = await withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const m = await c.fetchOne(String(uid), { source: true }, { uid: true });
+      if (!m?.source) throw new UserError('Správu sa nepodarilo načítať.');
+      return m.source as Buffer;
+    } finally {
+      lock.release();
+    }
+  });
+  const domain = acc.email.split('@')[1] ?? 'mailklient';
+  const resent = [
+    `Resent-From: ${acc.name ? `"${acc.name.replace(/"/g, '')}" ` : ''}<${acc.email}>`,
+    `Resent-To: ${rcpts.join(', ')}`,
+    `Resent-Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
+    `Resent-Message-ID: <${crypto.randomUUID()}@${domain}>`,
+  ].join('\r\n');
+  const raw = Buffer.concat([Buffer.from(resent + '\r\n'), source]);
+  const cred = await credFor(acc);
+  await ensureTrusted(acc.smtp, 'smtp');
+  const transport = nodemailer.createTransport({ ...nodemailerConnection(acc.smtp), auth: cred.smtp, connectionTimeout: 20000, greetingTimeout: 15000 });
+  try {
+    await transport.sendMail({ envelope: { from: acc.email, to: rcpts }, raw });
+  } catch (e) {
+    throw toUserError(e, acc.smtp);
+  } finally {
+    transport.close();
+  }
 }
