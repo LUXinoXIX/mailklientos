@@ -608,7 +608,7 @@ body.resizing webview, body.resizing iframe { pointer-events: none; }
 .sort-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; font: inherit; font-size: 12px; color: var(--colorNeutralForeground2); padding: 4px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
 .sort-btn:hover { background: var(--colorNeutralBackground3); }
 .sort-btn svg { width: 16px; height: 16px; }
-.msg-icons { display: inline-flex; align-items: center; gap: 1px; }
+.msg-icons { display: inline-flex; align-items: center; gap: 1px; min-height: 22px; } /* výška pre ikony pri prejdení myšou – inak riadok poskočí o 2 px („harmonika“) */
 .qa { border: 0; background: transparent; padding: 2px; width: 22px; height: 22px; border-radius: 4px; display: inline-grid; place-items: center; cursor: pointer; color: var(--colorNeutralForeground3); }
 .qa:hover { background: rgba(0,0,0,.07); color: var(--colorNeutralForeground1); }
 .qa.hover { display: none; }
