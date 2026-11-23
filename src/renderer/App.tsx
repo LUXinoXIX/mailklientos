@@ -1405,21 +1405,27 @@ export function App() {
   const m365Base = (acc: M365Account) => (acc.host === 'web' ? WEBMAIL_MODULES : acc.host === 'live' ? M365_PERSONAL_MODULES : M365_WORK_MODULES);
   const [railEdit, setRailEdit] = useState(false);
   const railOff = !!activeM365?.railOff;
-  function selectM365Module(acc: M365Account, mod: M365Module) {
+  /** Aplikácia z pásu: prepne na jej kartu, alebo (newTab – pravý klik, prostredné tlačidlo, Ctrl+klik) otvorí ďalšiu kartu. */
+  function selectM365Module(acc: M365Account, mod: M365Module, newTab = false) {
     const st = tabs[acc.id] ?? initialTabs(acc);
-    if (mod === 'mail') return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
-    const key = `${baseKey(acc.id)}:${mod}`;
+    if (mod === 'mail' && !newTab) return setTabs((t) => ({ ...t, [acc.id]: { ...st, active: baseKey(acc.id) } }));
+    const baseK = `${baseKey(acc.id)}:${mod}`;
+    // ďalšia karta tej istej aplikácie: vlastný kľúč a poradové číslo v názve
+    const n = newTab ? st.tabs.filter((x) => x.key === baseK || x.key.startsWith(`${baseK}#`)).length + (mod === 'mail' ? 1 : 0) : 0;
+    const key = newTab && n > 0 ? `${baseK}#${Date.now()}` : baseK;
+    const suffix = newTab && n > 0 ? ` (${n + 1})` : '';
     const exists = st.tabs.some((x) => x.key === key);
     // vlastný odkaz v páse aplikácií
     const cust = (mod as string).startsWith('custom:') ? acc.railCustom?.find((c) => c.key === mod) : undefined;
     if (cust) {
-      setTabs((t) => ({ ...t, [acc.id]: { tabs: exists ? st.tabs : [...st.tabs, { key, title: cust.label, url: cust.url }], active: key } }));
+      setTabs((t) => ({ ...t, [acc.id]: { ...st, tabs: exists ? st.tabs : [...st.tabs, { key, title: cust.label + suffix, url: cust.url }], active: key } }));
       return;
     }
     setTabs((t) => ({
       ...t,
       [acc.id]: {
-        tabs: exists ? st.tabs : [...st.tabs, { key, title: acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod], url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
+        ...st,
+        tabs: exists ? st.tabs : [...st.tabs, { key, title: (acc.host === 'web' ? 'Webmail' : MODULE_TITLES[mod]) + suffix, url: moduleUrl(mod, acc.host, acc.webUrl), module: mod }],
         active: key,
       },
     }));
@@ -1429,7 +1435,7 @@ export function App() {
       const st = t[acc.id];
       if (!st) return t;
       const rest = st.tabs.filter((x) => x.key !== key);
-      return { ...t, [acc.id]: { tabs: rest, active: st.active === key ? baseKey(acc.id) : st.active } };
+      return { ...t, [acc.id]: { ...st, tabs: rest, active: st.active === key ? baseKey(acc.id) : st.active } };
     });
   }
 
@@ -1744,6 +1750,7 @@ export function App() {
                   active={m365ActiveModule}
                   color={topColor}
                   onSelect={(k) => selectM365Module(activeM365, k as M365Module)}
+                  onSelectNew={(k) => selectM365Module(activeM365, k as M365Module, true)}
                   footer={
                     <Tooltip content="Upraviť pás aplikácií: poradie, skryť/pridať, vypnúť" relationship="label" positioning="after">
                       <button className="rail-btn rail-edit-btn" onClick={() => setRailEdit(true)} aria-label="Upraviť pás aplikácií">

@@ -623,7 +623,7 @@ export const M365_PERSONAL_MODULES: ModuleDef<M365Module>[] = [
   { key: 'forms', label: 'Forms', icon: <FormsIcon /> },
 ];
 
-export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void; footer?: React.ReactNode }) {
+export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; active: K | null; color: string; onSelect: (k: K) => void; /** otvoriť v novej karte (vložený Outlook) */ onSelectNew?: (k: K) => void; footer?: React.ReactNode }) {
   return (
     <nav className="rail" aria-label="Moduly konta">
       {props.modules.map((m) => {
@@ -632,17 +632,34 @@ export function ModuleRail<K extends string>(props: { modules: ModuleDef<K>[]; a
           <div key={m.key}>
             {m.sep && <div className="rail-sep" />}
             {m.section && <div className="rail-section">{m.section}</div>}
-            <Tooltip content={m.label} relationship="label" positioning="after">
-              <button
-                className={`rail-btn ${on ? 'active' : ''}`}
-                style={on ? { color: props.color, boxShadow: `inset 3px 0 0 ${props.color}` } : undefined}
-                onClick={() => props.onSelect(m.key)}
-                aria-pressed={on}
-              >
-                {m.icon}
-                <span className="rail-label">{m.label}</span>
-              </button>
-            </Tooltip>
+            {(() => {
+              const btn = (
+                <button
+                  className={`rail-btn ${on ? 'active' : ''}`}
+                  style={on ? { color: props.color, boxShadow: `inset 3px 0 0 ${props.color}` } : undefined}
+                  onClick={(e) => (props.onSelectNew && (e.ctrlKey || e.metaKey) ? props.onSelectNew(m.key) : props.onSelect(m.key))}
+                  // prostredné tlačidlo myši = nová karta (ako v prehliadači)
+                  onAuxClick={(e) => e.button === 1 && props.onSelectNew?.(m.key)}
+                  aria-pressed={on}
+                  title={props.onSelectNew ? `${m.label} – pravý klik alebo Ctrl+klik: otvoriť v novej karte` : undefined}
+                >
+                  {m.icon}
+                  <span className="rail-label">{m.label}</span>
+                </button>
+              );
+              if (!props.onSelectNew) return <Tooltip content={m.label} relationship="label" positioning="after">{btn}</Tooltip>;
+              return (
+                <Menu openOnContext positioning="after-top">
+                  <MenuTrigger disableButtonEnhancement>{btn}</MenuTrigger>
+                  <MenuPopover>
+                    <MenuList>
+                      <MenuItem onClick={() => props.onSelect(m.key)}>Otvoriť</MenuItem>
+                      <MenuItem onClick={() => props.onSelectNew!(m.key)} secondaryContent="Ctrl+klik">Otvoriť v novej karte</MenuItem>
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+              );
+            })()}
           </div>
         );
       })}
