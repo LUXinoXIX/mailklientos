@@ -27,6 +27,8 @@ export function TopBar(props: {
   onToggleRight: () => void;
   /** typ konta: ZIMBRA / IMAP / OUTLOOK WEB */
   kind?: string;
+  /** podrobnosti k typu konta (napr. celá verzia servera Zimbra) */
+  kindTitle?: string;
   searchOptions?: {
     field: SearchField;
     onField: (f: SearchField) => void;
@@ -44,7 +46,7 @@ export function TopBar(props: {
       <div className="topbar-title">
         <div className="topbar-name">
           {props.title}
-          {props.kind && <span className="kind-badge" title="Typ konta">{props.kind}</span>}
+          {props.kind && <span className="kind-badge" title={props.kindTitle ?? 'Typ konta'}>{props.kind}</span>}
         </div>
         <div className="topbar-sub">{props.subtitle}</div>
       </div>

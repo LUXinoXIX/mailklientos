@@ -28,6 +28,7 @@ const api: MailApi = {
   openInOffice: (url) => inv('web:openOffice', url),
   appInfo: () => inv('app:info'),
   zimbraCheck: (id) => inv('zimbra:check', id),
+  zimbraVersion: (id) => inv('zimbra:version', id),
   zimbraGal: (id, q) => inv('zimbra:gal', id, q),
   zimbraGalAuto: (id, q) => inv('zimbra:galAuto', id, q),
   zimbraFreeBusy: (id, emails, from, to) => inv('zimbra:freeBusy', id, emails, from, to),

@@ -239,6 +239,8 @@ export interface MailApi {
   openInOffice(url: string): Promise<Result<true>>;
   appInfo(): Promise<Result<{ version: string; electron: string; chrome: string; node: string; platform: string }>>;
   zimbraCheck(accountId: string): Promise<Result<boolean>>;
+  /** verzia servera Zimbra (z GetInfo), null ak nie je známa */
+  zimbraVersion(accountId: string): Promise<Result<{ full: string; short: string } | null>>;
   zimbraGal(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraGalAuto(accountId: string, q: string): Promise<Result<GalEntry[]>>;
   zimbraFreeBusy(accountId: string, emails: string[], from: number, to: number): Promise<Result<FreeBusy[]>>;

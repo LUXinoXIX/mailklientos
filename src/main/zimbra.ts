@@ -518,3 +518,21 @@ export async function blockSender(acc: AccountConfig, email: string) {
   if (cur.black.includes(email.toLowerCase())) return true as const;
   return setWhiteBlack(acc, cur.white.filter((x) => x !== email.toLowerCase()), [...cur.black, email.toLowerCase()]);
 }
+
+
+const versions = new Map<string, { full: string; short: string } | null>();
+/** Verzia servera Zimbra (GetInfo → version, napr. „8.8.15_GA_4508.FOSS …“ → „8.8.15“). Pamätá sa do reštartu. */
+export async function serverVersion(acc: AccountConfig): Promise<{ full: string; short: string } | null> {
+  if (versions.has(acc.id)) return versions.get(acc.id)!;
+  let v: { full: string; short: string } | null = null;
+  try {
+    const r = await soap(acc, 'GetInfo', 'urn:zimbraAccount', { sections: 'mbox' });
+    const raw = r?.version;
+    const full = String(typeof raw === 'object' && raw ? raw._content ?? '' : raw ?? '').trim();
+    if (full) v = { full, short: /^(\d+(?:\.\d+){0,2})/.exec(full)?.[1] ?? full.split(/[_ ]/)[0]! };
+  } catch (e) {
+    log(`Zimbra: ${acc.name} – verzia nedostupná`, String((e as Error).message));
+  }
+  versions.set(acc.id, v);
+  return v;
+}

@@ -1277,9 +1277,14 @@ export function App() {
   // kontakty na dopĺňanie: odosielatelia načítaných správ + adresy, na ktoré si písal
   // ktoré kontá sú na serveri Zimbra (rozšírené funkcie cez jej rozhranie)
   const [zimbraOk, setZimbraOk] = useState<Record<string, boolean>>({});
+  const [zimbraVer, setZimbraVer] = useState<Record<string, { full: string; short: string }>>({});
   useEffect(() => {
     if (!api || demo) return;
-    for (const a of accounts.filter(isImap)) void api.zimbraCheck(a.id).then((r) => setZimbraOk((z) => ({ ...z, [a.id]: r.ok && r.data })));
+    for (const a of accounts.filter(isImap))
+      void api.zimbraCheck(a.id).then((r) => {
+        setZimbraOk((z) => ({ ...z, [a.id]: r.ok && r.data }));
+        if (r.ok && r.data) void api.zimbraVersion(a.id).then((v) => v.ok && v.data && setZimbraVer((x) => ({ ...x, [a.id]: v.data! })));
+      });
   }, [api, accounts, demo]);
   // obsadenosť schránky (Zimbra alebo IMAP QUOTA)
   const [quota, setQuota] = useState<Record<string, { used: number; limit: number } | null>>({});
@@ -1604,7 +1609,8 @@ export function App() {
             />
           )}
           <TopBar
-            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? 'ZIMBRA' : 'IMAP') : undefined}
+            kindTitle={activeImap && zimbraVer[activeImap.id] ? `Server Zimbra, verzia ${zimbraVer[activeImap.id]!.full}` : undefined}
+            kind={activeM365 ? (activeM365.host === 'web' ? 'WEBMAIL' : activeM365.host === 'live' ? 'OUTLOOK · OSOBNÉ' : 'OUTLOOK · FIREMNÉ') : activeImap && activeImap.id !== DEMO_ID ? (isGmail(activeImap) ? 'GMAIL' : zimbraOk[activeImap.id] ? (zimbraVer[activeImap.id] ? `ZIMBRA ${zimbraVer[activeImap.id]!.short}` : 'ZIMBRA') : 'IMAP') : undefined}
             title={topTitle}
             subtitle={topSub}
             color={topColor}

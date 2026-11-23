@@ -260,6 +260,7 @@ export function registerIpc() {
   // Zimbra
   const zacc = (id: string) => store.getImap(id);
   handle('zimbra:check', (id: string) => zimbra.isZimbra(zacc(id)));
+  handle('zimbra:version', (id: string) => zimbra.serverVersion(zacc(id)));
   handle('zimbra:gal', (id: string, q: string) => zimbra.galSearch(zacc(id), q));
   handle('zimbra:galAuto', (id: string, q: string) => zimbra.galAutocomplete(zacc(id), q));
   handle('zimbra:freeBusy', (id: string, emails: string[], from: number, to: number) => zimbra.freeBusy(zacc(id), emails, from, to));
