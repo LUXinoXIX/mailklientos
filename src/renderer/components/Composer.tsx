@@ -175,7 +175,7 @@ function Tb(props: { label: string; active?: boolean; onClick: () => void; child
   );
 }
 
-export function FormatBar({ editor, onImage, table = true }: { editor: Editor; onImage: () => void; table?: boolean }) {
+export function FormatBar({ editor, onImage, table = true }: { editor: Editor; onImage?: () => void; table?: boolean }) {
   const [link, setLink] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const ts = editor.getAttributes('textStyle') as { fontFamily?: string; fontSize?: string };
@@ -252,7 +252,7 @@ export function FormatBar({ editor, onImage, table = true }: { editor: Editor; o
           <span className="muted small">Enter = vložiť, prázdne = odstrániť odkaz</span>
         </PopoverSurface>
       </Popover>
-      <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={onImage}>Obrázok</button>
+      {onImage && <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={onImage}>Obrázok</button>}
       {table && <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run()}>Tabuľka</button>}
       <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().unsetAllMarks().clearNodes().run()}>Vymazať formát</button>
     </div>
