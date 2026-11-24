@@ -688,7 +688,7 @@ function HtmlBody({ html, showImages }: { html: string; showImages: boolean }) {
     const csp = showImages
       ? "default-src 'none'; img-src data: cid: https: http:; style-src 'unsafe-inline'; font-src data: https:"
       : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'";
-    const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#242424;margin:0;padding:0 4px;word-wrap:break-word}img{max-width:100%;height:auto}</style>`;
+    const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#242424;margin:0;padding:0 4px;word-wrap:break-word}img{max-width:100%!important;object-fit:contain}img:not([height]):not([style*=height]),img[width],img[style*=width]{height:auto!important}</style>`;
     return /<head[^>]*>/i.test(clean)
       ? `<!doctype html>${clean.replace(/<head[^>]*>/i, (m) => m + head)}`
       : `<!doctype html><html><head>${head}</head><body>${clean}</body></html>`;

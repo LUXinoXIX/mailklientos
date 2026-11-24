@@ -38,7 +38,7 @@ function printable(m: MessageFull) {
 body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;color:#111;margin:24px}
 h1{font-size:16pt;margin:0 0 8px}table.h{border-collapse:collapse;margin-bottom:14px;font-size:10pt}
 table.h td{padding:2px 10px 2px 0;vertical-align:top}table.h td:first-child{font-weight:600;color:#444}
-hr{border:0;border-top:1px solid #bbb;margin:10px 0 16px}img{max-width:100%}
+hr{border:0;border-top:1px solid #bbb;margin:10px 0 16px}img{max-width:100%!important;object-fit:contain}img:not([height]):not([style*=height]),img[width],img[style*=width]{height:auto!important}
 </style></head><body><h1>${esc(m.subject)}</h1><table class="h">${head.map(([k, v]) => `<tr><td>${k}:</td><td>${esc(v ?? '')}</td></tr>`).join('')}</table><hr>${body}</body></html>`;
 }
 
