@@ -54,7 +54,8 @@ body { overflow: hidden; }
 
 /* ribbon */
 .ribbon { background: var(--colorNeutralBackground1); border-bottom: 1px solid var(--colorNeutralStroke2); padding: 0 8px; flex: none; }
-.ribbon-bar { min-height: 52px; gap: 2px; flex-wrap: wrap; }
+.ribbon-tabs { border-bottom: 1px solid var(--colorNeutralStroke2); margin: 0 -8px; padding: 0 8px; }
+.ribbon-bar { min-height: 52px; gap: 2px; flex-wrap: wrap; padding-top: 6px; }
 .ribbon-compact .ribbon-bar { min-height: 36px; }
 .ribbon-label { color: var(--colorNeutralForeground3); margin: 0 6px; }
 

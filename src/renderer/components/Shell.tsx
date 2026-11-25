@@ -293,7 +293,7 @@ export function Ribbon(props: {
   const sz = p.compact ? 'small' : 'medium';
   return (
     <div className={`ribbon ${p.compact ? 'ribbon-compact' : ''}`}>
-      <TabList size="small" selectedValue={p.tab} onTabSelect={(_, d) => p.onTab(d.value as RibbonTab)}>
+      <TabList className="ribbon-tabs" size="small" selectedValue={p.tab} onTabSelect={(_, d) => p.onTab(d.value as RibbonTab)}>
         <Tab value="home">Domov</Tab>
         {c && <Tab value="message">Správa</Tab>}
         {c && <Tab value="insert">Vložiť</Tab>}
