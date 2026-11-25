@@ -248,6 +248,13 @@ export function closeAllConnections(id?: string) {
   for (const k of [...pool.keys()]) if (!id || k === id) drop(k);
 }
 
+/** Komu na zobrazenie v zozname: mená (ak chýba meno, adresa); prázdne pole = bez príjemcu */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toDisplay(list: any[] | undefined): string[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (list ?? []).map((x: any) => String(x.name || x.address || '').trim()).filter(Boolean);
+}
+
 const SPECIAL_ORDER = ['\\Inbox', '\\Drafts', '\\Sent', '\\Archive', '\\Junk', '\\Trash'];
 
 /** Gmail: slovenské názvy systémových priečinkov (štítkov). */
@@ -409,6 +416,7 @@ export async function listMessages(acc: AccountConfig, folder: string, limit = 5
           subject: m.envelope?.subject || '(bez predmetu)',
           fromName: f.name,
           fromAddress: f.address,
+          toNames: toDisplay(m.envelope?.to),
           date: safeIso(m.envelope?.date, m.internalDate),
           seen: flags.has('\\Seen'),
           flagged: flags.has('\\Flagged'),
@@ -481,7 +489,7 @@ export async function searchServer(acc: AccountConfig, folder: string, q: string
         const flags: Set<string> = m.flags ?? new Set();
         out.push({
           accountId: acc.id, folder, uid: m.uid, subject: m.envelope?.subject || '(bez predmetu)',
-          fromName: f.name, fromAddress: f.address, date: safeIso(m.envelope?.date, m.internalDate),
+          fromName: f.name, fromAddress: f.address, toNames: toDisplay(m.envelope?.to), date: safeIso(m.envelope?.date, m.internalDate),
           seen: flags.has('\\Seen'), flagged: flags.has('\\Flagged'), answered: flags.has('\\Answered'),
           messageId: m.envelope?.messageId || undefined, inReplyTo: m.envelope?.inReplyTo || undefined,
           keywords: [...flags].filter((x) => !SYSTEM_FLAGS.has(x)),

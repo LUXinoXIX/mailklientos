@@ -37,7 +37,7 @@ export function AboutDialog(props: { onClose: () => void }) {
               </div>
             </div>
             <div className="about-sec">Autori</div>
-            <div>Martin – zadanie, návrh a testovanie</div>
+            <div>LUKY.EU – zadanie, návrh a testovanie</div>
             <div>Claude (Anthropic) – návrh architektúry a vývoj</div>
             <div className="about-sec">Použité technológie (open source)</div>
             <div className="about-tech">

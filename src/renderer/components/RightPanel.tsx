@@ -190,7 +190,7 @@ export function RightPanel(props: {
   const api = window.mailApi;
   const { settings } = props;
   const [editing, setEditing] = useState(false);
-  const [addWeb, setAddWeb] = useState<{ name: string; url: string; error?: string } | null>(null);
+  const [addWeb, setAddWeb] = useState<{ name: string; url: string; error?: string; /** úprava existujúcej karty */ editId?: string } | null>(null);
   // karta Kalendáre (ICS) – po pridaní cez + sa zobrazí aj kým ešte nemá žiadny kalendár
   const [icsAdded, setIcsAdded] = useState(false);
   const showIcs = !!settings.icsFeeds || icsAdded;
@@ -207,11 +207,26 @@ export function RightPanel(props: {
     props.onOverlay(open);
   };
 
+  const editWeb = (w: { id: string; name: string; url: string }) => {
+    setAddWeb({ name: w.name, url: w.url, editId: w.id });
+    props.onOverlay(true);
+  };
+  const moveWeb = (i: number, d: number) => {
+    const l = [...settings.webs];
+    const [x] = l.splice(i, 1);
+    l.splice(i + d, 0, x!);
+    props.onSettings({ ...settings, webs: l });
+  };
+
   function saveWeb() {
     if (!addWeb) return;
     const url = normalizeUrl(addWeb.url);
     if (!url) return setAddWeb({ ...addWeb, error: 'Zadaj platnú webovú adresu (napr. chatgpt.com).' });
     const name = addWeb.name.trim() || new URL(url).hostname.replace(/^www\./, '');
+    if (addWeb.editId) {
+      props.onSettings({ ...settings, webs: settings.webs.map((x) => (x.id === addWeb.editId ? { ...x, name, url } : x)) });
+      return openAdd(false);
+    }
     const item = { id: newId(), name, url };
     props.onSettings({ ...settings, webs: [...settings.webs, item] });
     props.onActive(item.id);
@@ -251,9 +266,22 @@ export function RightPanel(props: {
             )}
           </div>
         )}
-        {settings.webs.map((w) => (
+        {settings.webs.map((w, wi) => (
           <div key={w.id} className={`right-tab ${web?.id === w.id ? 'on' : ''}`}>
-            <button onClick={() => props.onActive(w.id)} title={w.url}>{w.name}</button>
+            {/* pravý klik: upraviť (názov, adresa), presunúť, odstrániť */}
+            <Menu openOnContext>
+              <MenuTrigger disableButtonEnhancement>
+                <button onClick={() => props.onActive(w.id)} onDoubleClick={() => editWeb(w)} title={`${w.url}\nPravý klik: upraviť, presunúť, odstrániť`}>{w.name}</button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem onClick={() => editWeb(w)}>Upraviť názov a adresu…</MenuItem>
+                  <MenuItem disabled={wi === 0} onClick={() => moveWeb(wi, -1)}>Presunúť vľavo</MenuItem>
+                  <MenuItem disabled={wi === settings.webs.length - 1} onClick={() => moveWeb(wi, 1)}>Presunúť vpravo</MenuItem>
+                  <MenuItem onClick={() => props.onSettings({ ...settings, webs: settings.webs.filter((x) => x.id !== w.id) })}>Odstrániť kartu</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             {editing && (
               <button
                 className="right-tab-x"
@@ -287,7 +315,13 @@ export function RightPanel(props: {
         </Tooltip>
       </div>
       {icsOn ? (
-        <IcsPane feeds={settings.icsFeeds ?? []} onFeeds={(f) => props.onSettings({ ...settings, icsFeeds: f })} onStatus={props.onStatus} />
+        <IcsPane
+          feeds={settings.icsFeeds ?? []}
+          onFeeds={(f) => props.onSettings({ ...settings, icsFeeds: f })}
+          onStatus={props.onStatus}
+          refreshMin={settings.icsRefreshMin ?? 5}
+          onRefreshMin={(m) => props.onSettings({ ...settings, icsRefreshMin: m })}
+        />
       ) : agendaOn && props.agenda ? (
         <Agenda data={props.agenda} />
       ) : null}
@@ -340,7 +374,7 @@ export function RightPanel(props: {
         <Dialog open onOpenChange={(_, d) => !d.open && openAdd(false)}>
           <DialogSurface>
             <DialogBody>
-              <DialogTitle>Pridať web do pravého panela</DialogTitle>
+              <DialogTitle>{addWeb.editId ? 'Upraviť kartu' : 'Pridať web do pravého panela'}</DialogTitle>
               <DialogContent className="dialog-content">
                 <Field label="Adresa">
                   <Input autoFocus placeholder="napr. chatgpt.com" value={addWeb.url} onChange={(_, d) => setAddWeb({ ...addWeb, url: d.value, error: undefined })} />
@@ -352,7 +386,7 @@ export function RightPanel(props: {
                 {addWeb.error && <MessageBar intent="error"><MessageBarBody>{addWeb.error}</MessageBarBody></MessageBar>}
               </DialogContent>
               <DialogActions>
-                <Button appearance="primary" onClick={saveWeb}>Pridať</Button>
+                <Button appearance="primary" onClick={saveWeb}>{addWeb.editId ? 'Uložiť' : 'Pridať'}</Button>
                 <Button onClick={() => openAdd(false)}>Zrušiť</Button>
               </DialogActions>
             </DialogBody>

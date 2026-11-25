@@ -1,11 +1,12 @@
 // Nová / upravená udalosť kalendára: čas, celodenná, miesto, účastníci (pozvánky e-mailom), opakovanie, popis.
 import {
-  Button, Checkbox, Spinner, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Textarea,
+  Button, Checkbox, Spinner, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select,
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import type { DavCollection, FreeBusy, ZResource } from '../../core/api';
 import type { ImapAccountPublic } from '../../core/account';
 import type { CalAttendee, CalEvent } from '../../core/ical';
+import { RichTextField } from './RichTextField';
 import { applyMeeting, findMeeting, stripMeetingBlock, type MeetingSettings } from '../../core/meeting';
 import { MeetingPicker, type MeetOutlook } from './MeetingPicker';
 
@@ -132,6 +133,11 @@ export function EventDialog(props: {
     if (Date.parse(e.end) < Date.parse(e.start)) return setError('Koniec je pred začiatkom.');
     setBusy(true);
     const withMeet = applyMeeting({ ...e, onlineUrl: findMeeting(props.event, meetSettings.jitsiServer)?.url }, meetUrl, meetSettings.jitsiServer);
+    // formátovaný popis: odkaz na online stretnutie pridať aj do HTML (čistý text ho už má z applyMeeting)
+    if (withMeet.descriptionHtml && withMeet.onlineUrl && !withMeet.descriptionHtml.includes(withMeet.onlineUrl)) {
+      const u = withMeet.onlineUrl.replace(/"/g, '%22');
+      withMeet.descriptionHtml += `<p>${withMeet.location ? `${withMeet.location} – ` : ''}pripojiť sa: <a href="${u}">${u}</a></p>`;
+    }
     const err = await props.onSave({ ...withMeet, attendees: attendees() }, calId, invite);
     setBusy(false);
     if (err) setError(err);
@@ -273,7 +279,12 @@ export function EventDialog(props: {
             )}
             {people.trim() && <Checkbox label="Poslať účastníkom pozvánku e-mailom" checked={invite} onChange={(_, d) => setInvite(!!d.checked)} />}
             <Field label="Popis">
-              <Textarea resize="vertical" value={e.description ?? ''} onChange={(_, d) => setE({ ...e, description: d.value || undefined })} />
+              {/* formátovaný popis: ide ako X-ALT-DESC (HTML) a zároveň čistý text do DESCRIPTION – Zimbra aj Outlook ho zobrazia formátovaný */}
+              <RichTextField
+                html={e.descriptionHtml ?? (e.description ? e.description.split('\n').map((l) => `<p>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`).join('') : '')}
+                placeholder="Program stretnutia, poznámky…"
+                onChange={(html, text) => setE({ ...e, description: text || undefined, descriptionHtml: html || undefined })}
+              />
             </Field>
             {e.rrule && !isNew && <div className="muted small">Zmena opakovanej udalosti sa uloží pre celú sériu.</div>}
             {error && <div className="pane-error">⚠ {error}</div>}

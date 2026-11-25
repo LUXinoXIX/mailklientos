@@ -218,7 +218,7 @@ export interface DragMessages {
   folder: string;
   uids: number[];
   /** pri ťahaní viacerých vybraných správ (môžu byť z rôznych priečinkov v zobrazení Všetky) */
-  items?: { accountId: string; folder: string; uid: number }[];
+  items?: { accountId: string; folder: string; uid: number; subject?: string }[];
 }
 
 export type SortBy = 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category';
@@ -238,6 +238,8 @@ export function MessageList(props: {
   error?: string;
   selected?: MessageSummary;
   colorOf: (accountId: string) => string;
+  /** priečinky, kde sa namiesto odosielateľa ukazuje príjemca (Odoslané, Koncepty) */
+  showsRecipient?: (m: MessageSummary) => boolean;
   onOpen: (m: MessageSummary) => void;
   onDeleteKey?: () => void;
   /** pravý klik: označené správy (alebo tá pod kurzorom) */
@@ -286,6 +288,16 @@ export function MessageList(props: {
     };
   }, [tab, listKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [open, setOpen] = useState<string | null>(null);
+  /** kto sa ukáže v riadku: v Odoslaných/Konceptoch príjemca („Komu: …“), inak odosielateľ */
+  const who = (m: MessageSummary): { label: string; avatar: string } => {
+    if (props.showsRecipient?.(m)) {
+      const names = m.toNames ?? [];
+      if (names.length) return { label: names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2}` : names.join(', '), avatar: names[0]! };
+      if (m.toNames === undefined) return { label: m.fromName || m.fromAddress, avatar: m.fromName || m.fromAddress };
+      return { label: '(bez príjemcu)', avatar: '?' };
+    }
+    return { label: m.fromName || m.fromAddress, avatar: m.fromName || m.fromAddress };
+  };
   const base = useMemo(() => {
     if (tab === 'unread') return props.messages.filter((m) => !m.seen);
     if (tab !== 'flagged') return props.messages;
@@ -308,7 +320,7 @@ export function MessageList(props: {
     const cmp = (a: MessageSummary, b: MessageSummary): number => {
       const byDate = (b.date ?? '').localeCompare(a.date ?? '');
       switch (by) {
-        case 'from': return (a.fromName || a.fromAddress).localeCompare(b.fromName || b.fromAddress, 'sk') * dir || byDate;
+        case 'from': return who(a).label.localeCompare(who(b).label, 'sk') * dir || byDate;
         case 'subject': return a.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, '').localeCompare(b.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, ''), 'sk') * dir || byDate;
         case 'flag': return (Number(b.flagged) - Number(a.flagged)) * dir || byDate;
         case 'unread': return (Number(!b.seen) - Number(!a.seen)) * dir || byDate;
@@ -391,9 +403,10 @@ export function MessageList(props: {
         onDragStart={(e) => {
           // ťahá sa celý výber, ak je správa jeho súčasťou
           const many = multi.length > 1 && multi.includes(keyOf(m)) ? multiMsgs : [m];
-          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid })) };
+          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid, subject: x.subject })) };
           e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
-          e.dataTransfer.effectAllowed = 'move';
+          // presun do priečinka aj kópia (priloženie do písanej správy)
+          e.dataTransfer.effectAllowed = 'copyMove';
         }}
         onClick={(e) => {
           if (clickRow(m, e)) return;
@@ -411,7 +424,7 @@ export function MessageList(props: {
         onDoubleClick={(e) => props.onOpenFull?.(m, e.shiftKey)}
         onAuxClick={(e) => e.button === 1 && props.onOpenFull?.(m, true)}
       >
-        {!opts.child && <Avatar name={m.fromName || m.fromAddress} color={props.colorOf(m.accountId)} />}
+        {!opts.child && <Avatar name={who(m).avatar} color={props.colorOf(m.accountId)} />}
         <div className="msg-main">
           <div className="msg-row">
             <span className="msg-from">
@@ -428,7 +441,7 @@ export function MessageList(props: {
                   {open === opts.gk ? '▾' : '▸'}
                 </span>
               )}
-              {m.fromName || m.fromAddress}
+              {who(m).label}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
             <span className="msg-date">{fmtDate(m.date)}</span>
@@ -688,7 +701,7 @@ function HtmlBody({ html, showImages }: { html: string; showImages: boolean }) {
     const csp = showImages
       ? "default-src 'none'; img-src data: cid: https: http:; style-src 'unsafe-inline'; font-src data: https:"
       : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'";
-    const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#242424;margin:0;padding:0 4px;word-wrap:break-word}img{max-width:100%;height:auto}</style>`;
+    const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#242424;margin:0;padding:0 4px;word-wrap:break-word}img{max-width:100%!important;object-fit:contain}img:not([height]):not([style*=height]),img[width],img[style*=width]{height:auto!important}</style>`;
     return /<head[^>]*>/i.test(clean)
       ? `<!doctype html>${clean.replace(/<head[^>]*>/i, (m) => m + head)}`
       : `<!doctype html><html><head>${head}</head><body>${clean}</body></html>`;
@@ -728,6 +741,8 @@ export function ReadingPane(props: {
   const [showImages, setShowImages] = useState(false);
   const [showInline, setShowInline] = useState(false);
   const [attErr, setAttErr] = useState<string | null>(null);
+  const [savedAll, setSavedAll] = useState<{ dir: string; count: number } | null>(null);
+  useEffect(() => setSavedAll(null), [props.message?.uid, props.message?.folder]);
   const { guard, dialog: attGuard } = useAttachmentGuard();
   const m = props.message;
   const api = window.mailApi;
@@ -897,6 +912,32 @@ export function ReadingPane(props: {
         const word = inl.length === 1 ? 'obrázok' : inl.length < 5 ? 'obrázky' : 'obrázkov';
         return (
           <>
+            {real.length > 1 && (
+              <div className="att-all">
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<SaveSmallIcon />}
+                  disabled={demo}
+                  onClick={async () => {
+                    setSavedAll(null);
+                    const r = await api?.saveAllAttachments(m.accountId, m.folder, m.uid, real.map((x) => x.i));
+                    if (r?.ok && r.data) setSavedAll(r.data);
+                    else if (r && !r.ok) setAttErr(r.error);
+                  }}
+                >
+                  Uložiť všetky ({real.length})
+                </Button>
+                {savedAll && (
+                  <span className="muted small">
+                    Uložené: {savedAll.count} do {savedAll.dir}{' '}
+                    <button className="link" onClick={() => void api?.openFolder(savedAll.dir)}>
+                      Otvoriť priečinok
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
             {real.length > 0 && <div className={`attachments ${real.length > 4 ? 'many' : ''}`} aria-label="Prílohy">{real.map(chip)}</div>}
             {inl.length > 0 && (
               <div className={`inline-imgs ${showInline ? 'open' : ''}`}>

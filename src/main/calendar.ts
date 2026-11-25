@@ -61,6 +61,10 @@ export async function save(acc: AccountConfig, calendarId: string, e: CalEvent, 
       to: others.map((a) => (a.name ? `"${a.name}" <${a.email}>` : a.email)).join(', '),
       subject: ev.summary,
       text: `${ev.summary}\n${new Date(ev.start).toLocaleString('sk-SK')}${ev.location ? `\n${ev.location}` : ''}${ev.description ? `\n\n${ev.description}` : ''}`,
+      // formátovaný popis aj v tele pozvánky
+      html: ev.descriptionHtml
+        ? `<p><b>${esc(ev.summary)}</b><br>${esc(new Date(ev.start).toLocaleString('sk-SK'))}${ev.location ? `<br>${esc(ev.location)}` : ''}</p>${ev.descriptionHtml}`
+        : undefined,
       ical: { method: 'REQUEST', content: buildInvite(ev, 'REQUEST') },
     });
   }
@@ -163,3 +167,5 @@ export async function importIcs(acc: AccountConfig, calendarId: string, text: st
   }
   return { ok, failed };
 }
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -175,7 +175,7 @@ function Tb(props: { label: string; active?: boolean; onClick: () => void; child
   );
 }
 
-export function FormatBar({ editor, onImage, table = true }: { editor: Editor; onImage: () => void; table?: boolean }) {
+export function FormatBar({ editor, onImage, table = true }: { editor: Editor; onImage?: () => void; table?: boolean }) {
   const [link, setLink] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const ts = editor.getAttributes('textStyle') as { fontFamily?: string; fontSize?: string };
@@ -252,7 +252,7 @@ export function FormatBar({ editor, onImage, table = true }: { editor: Editor; o
           <span className="muted small">Enter = vložiť, prázdne = odstrániť odkaz</span>
         </PopoverSurface>
       </Popover>
-      <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={onImage}>Obrázok</button>
+      {onImage && <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={onImage}>Obrázok</button>}
       {table && <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run()}>Tabuľka</button>}
       <button type="button" className="tb wide" onMouseDown={(e) => e.preventDefault()} onClick={() => chain().unsetAllMarks().clearNodes().run()}>Vymazať formát</button>
     </div>
@@ -318,6 +318,21 @@ export const Composer = forwardRef<
   const sig = useRef(init.html !== undefined ? '' : signatureHtml(props.settings, accountId, init.kind));
   const imageInput = useRef<HTMLInputElement>(null);
 
+  /** Správy pretiahnuté zo zoznamu sa priložia ako .eml (celé, s prílohami). */
+  const attachDroppedMessages = (json: string) => {
+    let items: { accountId: string; folder: string; uid: number; subject?: string }[] = [];
+    try {
+      const d = JSON.parse(json) as { accountId: string; folder: string; uids: number[]; items?: typeof items };
+      items = d.items?.length ? d.items : d.uids.map((uid) => ({ accountId: d.accountId, folder: d.folder, uid }));
+    } catch {
+      return;
+    }
+    for (const it of items.slice(0, 20))
+      void api?.messageAsFile(it.accountId, it.folder, it.uid, it.subject || 'sprava').then((r) => {
+        if (r.ok) setFiles((x) => (x.some((f) => f.path === r.data.path) ? x : [...x, r.data]));
+        else setError(r.error);
+      });
+  };
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false, autolink: true, defaultProtocol: 'https' } }),
@@ -343,6 +358,11 @@ export const Composer = forwardRef<
         return true;
       },
       handleDrop: (_view, event) => {
+        const dt = (event as DragEvent).dataTransfer;
+        if (dt?.types.includes('application/x-mailklient')) {
+          attachDroppedMessages(dt.getData('application/x-mailklient'));
+          return true;
+        }
         const fs = [...((event as DragEvent).dataTransfer?.files ?? [])];
         if (!fs.length) return false;
         addDropped(fs);
@@ -601,8 +621,9 @@ export const Composer = forwardRef<
         }
       }}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('Files')) {
+        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('application/x-mailklient')) {
           e.preventDefault();
+          if (e.dataTransfer.types.includes('application/x-mailklient')) e.dataTransfer.dropEffect = 'copy';
           setDragOver(true);
         }
       }}
@@ -611,6 +632,12 @@ export const Composer = forwardRef<
         setDragOver(false);
         // pustené do textu správy: súbory už spracoval editor (handleDrop) – inak by sa pridali dvakrát
         if (e.defaultPrevented || e.nativeEvent.defaultPrevented) return;
+        // správa pretiahnutá zo zoznamu → príloha .eml
+        if (e.dataTransfer.types.includes('application/x-mailklient')) {
+          e.preventDefault();
+          attachDroppedMessages(e.dataTransfer.getData('application/x-mailklient'));
+          return;
+        }
         if (!e.dataTransfer.files.length) return;
         e.preventDefault();
         addDropped([...e.dataTransfer.files]);

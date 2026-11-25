@@ -34,6 +34,8 @@ export interface MessageSummary {
   subject: string;
   fromName: string;
   fromAddress: string;
+  /** príjemcovia (Komu) na zobrazenie v zozname Odoslaných – meno, ak chýba, adresa */
+  toNames?: string[];
   date: string | null;
   seen: boolean;
   flagged: boolean;
@@ -306,7 +308,7 @@ export interface MailApi {
   calRemove(calendarId: string): Promise<Result<true>>;
   calSubInfo(calendarId: string): Promise<Result<{ url?: string; refreshedAt?: string; error?: string; kind: 'local' | 'sub' } | null>>;
   /** najbližšie udalosti z kalendára na adrese (ICS/webcal) – dlaždica v Súhrne */
-  icsUpcoming(url: string, count: number): Promise<Result<CalEvent[]>>;
+  icsUpcoming(url: string, count: number, maxAgeMin?: number): Promise<Result<CalEvent[]>>;
   /** text RSS/Atom kanála alebo webovej stránky (na nájdenie kanála) – dlaždica Správy v Súhrne */
   rssFetch(url: string): Promise<Result<{ text: string; url: string }>>;
   /** import súboru .ics do kalendára; null = zrušené */
@@ -366,6 +368,11 @@ export interface MailApi {
   archiveMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string }>>;
   openAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<true>>;
   saveAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<string | null>>;
+  /** všetky prílohy do zvoleného priečinka; null = zrušené */
+  saveAllAttachments(accountId: string, folder: string, uid: number, indexes: number[]): Promise<Result<{ dir: string; count: number } | null>>;
+  openFolder(dir: string): Promise<Result<string>>;
+  /** správa ako dočasný .eml súbor (na priloženie) */
+  messageAsFile(accountId: string, folder: string, uid: number, subject: string): Promise<Result<PickedFile>>;
   pickFiles(): Promise<Result<PickedFile[]>>;
   openExternal(url: string): Promise<void>;
   // nastavenia a spúšťače
