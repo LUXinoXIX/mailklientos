@@ -362,6 +362,28 @@ export function registerIpc() {
     fs.writeFileSync(r.filePath, a.content);
     return r.filePath;
   });
+  // Uložiť všetky prílohy správy do zvoleného priečinka (rovnaké názvy → „názov (2).ext“)
+  handle('mail:attachments-save-all', async (id: string, folder: string, uid: number, indexes: number[]) => {
+    const w = winOf();
+    const opts: Electron.OpenDialogOptions = { title: 'Uložiť všetky prílohy do priečinka', defaultPath: path.join(os.homedir(), 'Downloads'), properties: ['openDirectory', 'createDirectory'] };
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts);
+    if (r.canceled || !r.filePaths[0]) return null;
+    const dir = r.filePaths[0];
+    const acc = store.getImap(id);
+    let count = 0;
+    for (const i of indexes) {
+      const a = await mail.getAttachment(acc, folder, uid, i);
+      const name = safeName(a.filename);
+      const ext = path.extname(name);
+      const base = name.slice(0, name.length - ext.length);
+      let file = path.join(dir, name);
+      for (let n = 2; fs.existsSync(file); n++) file = path.join(dir, `${base} (${n})${ext}`);
+      fs.writeFileSync(file, a.content);
+      count++;
+    }
+    return { dir, count };
+  });
+  handle('files:openFolder', (dir: string) => shell.openPath(dir));
   handle('files:pick', async (): Promise<PickedFile[]> => {
     const w = winOf();
     const opts: Electron.OpenDialogOptions = { title: 'Priložiť súbory', properties: ['openFile', 'multiSelections'] };

@@ -366,6 +366,9 @@ export interface MailApi {
   archiveMessages(accountId: string, folder: string, uids: number[]): Promise<Result<{ movedTo: string }>>;
   openAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<true>>;
   saveAttachment(accountId: string, folder: string, uid: number, index: number): Promise<Result<string | null>>;
+  /** všetky prílohy do zvoleného priečinka; null = zrušené */
+  saveAllAttachments(accountId: string, folder: string, uid: number, indexes: number[]): Promise<Result<{ dir: string; count: number } | null>>;
+  openFolder(dir: string): Promise<Result<string>>;
   pickFiles(): Promise<Result<PickedFile[]>>;
   openExternal(url: string): Promise<void>;
   // nastavenia a spúšťače

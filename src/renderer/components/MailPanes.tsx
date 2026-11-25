@@ -728,6 +728,8 @@ export function ReadingPane(props: {
   const [showImages, setShowImages] = useState(false);
   const [showInline, setShowInline] = useState(false);
   const [attErr, setAttErr] = useState<string | null>(null);
+  const [savedAll, setSavedAll] = useState<{ dir: string; count: number } | null>(null);
+  useEffect(() => setSavedAll(null), [props.message?.uid, props.message?.folder]);
   const { guard, dialog: attGuard } = useAttachmentGuard();
   const m = props.message;
   const api = window.mailApi;
@@ -897,6 +899,32 @@ export function ReadingPane(props: {
         const word = inl.length === 1 ? 'obrázok' : inl.length < 5 ? 'obrázky' : 'obrázkov';
         return (
           <>
+            {real.length > 1 && (
+              <div className="att-all">
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<SaveSmallIcon />}
+                  disabled={demo}
+                  onClick={async () => {
+                    setSavedAll(null);
+                    const r = await api?.saveAllAttachments(m.accountId, m.folder, m.uid, real.map((x) => x.i));
+                    if (r?.ok && r.data) setSavedAll(r.data);
+                    else if (r && !r.ok) setAttErr(r.error);
+                  }}
+                >
+                  Uložiť všetky ({real.length})
+                </Button>
+                {savedAll && (
+                  <span className="muted small">
+                    Uložené: {savedAll.count} do {savedAll.dir}{' '}
+                    <button className="link" onClick={() => void api?.openFolder(savedAll.dir)}>
+                      Otvoriť priečinok
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
             {real.length > 0 && <div className={`attachments ${real.length > 4 ? 'many' : ''}`} aria-label="Prílohy">{real.map(chip)}</div>}
             {inl.length > 0 && (
               <div className={`inline-imgs ${showInline ? 'open' : ''}`}>
