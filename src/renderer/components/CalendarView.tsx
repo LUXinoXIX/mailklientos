@@ -124,18 +124,32 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
     return events.filter((x) => Date.parse(x.start) < e && Date.parse(x.end) > s);
   };
 
-  /** Rozloženie prekrývajúcich sa udalostí do stĺpcov. */
+  /** Rozloženie prekrývajúcich sa udalostí do stĺpcov – počet stĺpcov sa počíta len v skupine udalostí, ktoré sa
+      naozaj prekrývajú (predtým pre celý deň, takže aj samostatná udalosť bola úzka a zvyšok bol prázdny). */
   const layout = (list: CalEvent[]) => {
-    const sorted = [...list].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-    const cols: number[] = [];
-    const out = sorted.map((ev) => {
+    const sorted = [...list].sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || Date.parse(b.end) - Date.parse(a.end));
+    const out: { ev: CalEvent; col: number; cols: number }[] = [];
+    let group: { ev: CalEvent; col: number; cols: number }[] = [];
+    let cols: number[] = [];
+    let groupEnd = -Infinity;
+    const flush = () => {
+      for (const g of group) g.cols = Math.max(1, cols.length);
+      out.push(...group);
+      group = [];
+      cols = [];
+    };
+    for (const ev of sorted) {
       const s = Date.parse(ev.start);
+      const e = Math.max(Date.parse(ev.end), s + 15 * 60_000); // krátka udalosť zaberá aspoň 15 min (aj vizuálne)
+      if (s >= groupEnd) flush();
       let c = cols.findIndex((end) => end <= s);
       if (c < 0) c = cols.length;
-      cols[c] = Date.parse(ev.end);
-      return { ev, col: c };
-    });
-    return out.map((x) => ({ ...x, cols: Math.max(1, cols.length) }));
+      cols[c] = e;
+      groupEnd = Math.max(groupEnd === -Infinity ? e : groupEnd, e);
+      group.push({ ev, col: c, cols: 1 });
+    }
+    flush();
+    return out;
   };
 
   const now = new Date();
@@ -329,8 +343,8 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
                         return (
                           <button
                             key={`${ev.uid}-${ev.start}`}
-                            className="cal-event"
-                            style={{ top, height: h - 2, left: `${(col / cols) * 100}%`, width: `${100 / cols}%`, borderLeftColor: colorOf(ev), background: `${colorOf(ev)}1f` }}
+                            className={`cal-event ${h < 38 ? 'short' : ''}`}
+                            style={{ top, height: h - 2, left: `${(col / cols) * 100}%`, width: `calc(${100 / cols}% - 2px)`, borderLeftColor: colorOf(ev), background: `${colorOf(ev)}1f` }}
                             onClick={() => setEdit(ev)}
                             title={`${ev.summary}${ev.location ? ` · ${ev.location}` : ''}`}
                           >
