@@ -34,6 +34,8 @@ export interface MessageSummary {
   subject: string;
   fromName: string;
   fromAddress: string;
+  /** príjemcovia (Komu) na zobrazenie v zozname Odoslaných – meno, ak chýba, adresa */
+  toNames?: string[];
   date: string | null;
   seen: boolean;
   flagged: boolean;

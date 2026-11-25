@@ -969,6 +969,13 @@ export function App() {
     const f = Array.isArray(fs) ? fs.find((x) => x.path === m.folder) : undefined;
     return f?.specialUse === '\\Drafts' || /^(drafts|koncept)/i.test(m.folder);
   };
+  /** v Odoslaných a Konceptoch zoznam ukazuje príjemcu (Komu) namiesto odosielateľa – ako Outlook */
+  const showsRecipient = (m: MessageSummary) => {
+    if (isDrafts(m)) return true;
+    const fs = folders[m.accountId];
+    const f = Array.isArray(fs) ? fs.find((x) => x.path === m.folder) : undefined;
+    return f?.specialUse === '\\Sent' || /^(sent|odoslan|\[gmail\]\/sent|\[google mail\]\/sent|outbox|na odoslanie)/i.test(m.folder);
+  };
 
   function saveTemplate(t: { name: string; subject: string; html: string }) {
     const tpl = { id: Math.random().toString(36).slice(2, 10), ...t };
@@ -1936,6 +1943,7 @@ export function App() {
                     error={listState.error}
                     selected={current}
                     colorOf={colorOf}
+                    showsRecipient={showsRecipient}
                     onOpen={(m) => void (isDrafts(m) ? editDraft(m) : open(m))}
                     onOpenFull={(m, alt) => openFull(m, alt)}
                     onContext={(msgs, x, y) => messageMenu(msgs, x, y)}

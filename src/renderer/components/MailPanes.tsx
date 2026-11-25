@@ -238,6 +238,8 @@ export function MessageList(props: {
   error?: string;
   selected?: MessageSummary;
   colorOf: (accountId: string) => string;
+  /** priečinky, kde sa namiesto odosielateľa ukazuje príjemca (Odoslané, Koncepty) */
+  showsRecipient?: (m: MessageSummary) => boolean;
   onOpen: (m: MessageSummary) => void;
   onDeleteKey?: () => void;
   /** pravý klik: označené správy (alebo tá pod kurzorom) */
@@ -286,6 +288,16 @@ export function MessageList(props: {
     };
   }, [tab, listKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [open, setOpen] = useState<string | null>(null);
+  /** kto sa ukáže v riadku: v Odoslaných/Konceptoch príjemca („Komu: …“), inak odosielateľ */
+  const who = (m: MessageSummary): { label: string; avatar: string } => {
+    if (props.showsRecipient?.(m)) {
+      const names = m.toNames ?? [];
+      if (names.length) return { label: names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2}` : names.join(', '), avatar: names[0]! };
+      if (m.toNames === undefined) return { label: m.fromName || m.fromAddress, avatar: m.fromName || m.fromAddress };
+      return { label: '(bez príjemcu)', avatar: '?' };
+    }
+    return { label: m.fromName || m.fromAddress, avatar: m.fromName || m.fromAddress };
+  };
   const base = useMemo(() => {
     if (tab === 'unread') return props.messages.filter((m) => !m.seen);
     if (tab !== 'flagged') return props.messages;
@@ -308,7 +320,7 @@ export function MessageList(props: {
     const cmp = (a: MessageSummary, b: MessageSummary): number => {
       const byDate = (b.date ?? '').localeCompare(a.date ?? '');
       switch (by) {
-        case 'from': return (a.fromName || a.fromAddress).localeCompare(b.fromName || b.fromAddress, 'sk') * dir || byDate;
+        case 'from': return who(a).label.localeCompare(who(b).label, 'sk') * dir || byDate;
         case 'subject': return a.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, '').localeCompare(b.subject.replace(/^((re|fw|fwd|pd|odp):\s*)+/i, ''), 'sk') * dir || byDate;
         case 'flag': return (Number(b.flagged) - Number(a.flagged)) * dir || byDate;
         case 'unread': return (Number(!b.seen) - Number(!a.seen)) * dir || byDate;
@@ -412,7 +424,7 @@ export function MessageList(props: {
         onDoubleClick={(e) => props.onOpenFull?.(m, e.shiftKey)}
         onAuxClick={(e) => e.button === 1 && props.onOpenFull?.(m, true)}
       >
-        {!opts.child && <Avatar name={m.fromName || m.fromAddress} color={props.colorOf(m.accountId)} />}
+        {!opts.child && <Avatar name={who(m).avatar} color={props.colorOf(m.accountId)} />}
         <div className="msg-main">
           <div className="msg-row">
             <span className="msg-from">
@@ -429,7 +441,7 @@ export function MessageList(props: {
                   {open === opts.gk ? '▾' : '▸'}
                 </span>
               )}
-              {m.fromName || m.fromAddress}
+              {who(m).label}
               {opts.count && opts.count > 1 ? <span className="thread-count">{opts.count}</span> : null}
             </span>
             <span className="msg-date">{fmtDate(m.date)}</span>
