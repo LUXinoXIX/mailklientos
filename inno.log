@@ -1,0 +1,158 @@
+Inno Setup 6 Command-Line Compiler
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 6.7.1
+Non-commercial use only
+
+Preprocessing
+   Reading file: C:\Program Files (x86)\Inno Setup 6\ISPPBuiltins.iss
+Parsing [Setup] section, line 19
+Parsing [Setup] section, line 20
+Parsing [Setup] section, line 21
+Parsing [Setup] section, line 22
+Parsing [Setup] section, line 23
+Parsing [Setup] section, line 24
+Parsing [Setup] section, line 25
+Parsing [Setup] section, line 26
+Parsing [Setup] section, line 27
+Parsing [Setup] section, line 29
+Parsing [Setup] section, line 30
+Parsing [Setup] section, line 31
+Parsing [Setup] section, line 33
+Parsing [Setup] section, line 34
+Parsing [Setup] section, line 35
+Parsing [Setup] section, line 36
+Parsing [Setup] section, line 37
+Parsing [Setup] section, line 38
+Parsing [Setup] section, line 39
+Parsing [Setup] section, line 40
+Parsing [Setup] section, line 41
+Parsing [Setup] section, line 42
+Parsing [Setup] section, line 43
+Parsing [Setup] section, line 44
+Parsing [Setup] section, line 46
+Parsing [Setup] section, line 47
+Parsing [Setup] section, line 48
+Parsing [Setup] section, line 49
+Parsing [Setup] section, line 50
+Reading file (WizardImageFile)
+Reading file (WizardSmallImageFile)
+Preparing Setup program executable
+   Verification successful
+   Updating icons (Setup.e32)
+   Updating version info (Setup.e32)
+Determining language code pages
+Parsing [Languages] section, line 54
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Slovak.isl
+Parsing [Languages] section, line 56
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [Languages] section, line 54
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Slovak.isl
+Parsing [Languages] section, line 56
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Messages in script file
+Reading [Code] section
+Parsing [Tasks] section, line 59
+Parsing [Icons] section, line 66
+Parsing [Icons] section, line 67
+Parsing [Run] section, line 70
+Parsing [Run] section, line 72
+Parsing [UninstallRun] section, line 75
+Parsing [Files] section, line 62
+Creating setup files
+   Verification successful
+   Updating icons (Setup.exe)
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\chrome_100_percent.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\chrome_200_percent.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\d3dcompiler_47.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\dxcompiler.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\electron_wer.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\ffmpeg.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\icudtl.dat
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\LICENSE
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\LICENSES.chromium.html
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\MailKlient.exe
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\resources.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\snapshot_blob.bin
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\v8_context_snapshot.bin
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\version
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\vk_swiftshader.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\vk_swiftshader_icd.json
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\vulkan-1.dll
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\af.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\am.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ar.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\bg.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\bn.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ca.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\cs.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\da.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\de.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\el.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\en-GB.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\en-US.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\es-419.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\es.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\et.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\fa.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\fi.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\fil.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\fr.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\gu.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\he.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\hi.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\hr.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\hu.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\id.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\it.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ja.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\kn.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ko.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\lt.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\lv.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ml.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\mr.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ms.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\nb.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\nl.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\pl.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\pt-BR.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\pt-PT.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ro.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ru.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\sk.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\sl.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\sr.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\sv.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\sw.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ta.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\te.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\th.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\tr.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\uk.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\ur.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\vi.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\zh-CN.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\locales\zh-TW.pak
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\resources\app.asar
+   Compressing: D:\a\mailklientos\mailklientos\out\MailKlient-win32-x64\resources\tray.png
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (76.532 sec). Resulting Setup program filename is:
+D:\a\mailklientos\mailklientos\out\make\inno\UniversumEmail-Setup.exe
+
+    Directory: D:\a\mailklientos\mailklientos\out\make\inno
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          11/25/2026  8:53 PM      116946074 UniversumEmail-Setup.exe
+
