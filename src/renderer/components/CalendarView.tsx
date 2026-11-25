@@ -8,7 +8,9 @@ import { accountColor } from '../theme';
 import { EventDialog } from './EventDialog';
 
 type View = 'day' | 'workweek' | 'week' | 'month';
-const HOUR = 44; // výška hodiny v px
+/** časová mierka ako v Outlooku: jedno políčko mriežky = SCALE minút */
+const SCALES = [60, 30, 15, 10, 5] as const;
+const SLOT_PX = 22; // výška jedného políčka pri priblížení 100 %
 const DAY_MS = 86400000;
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -33,6 +35,19 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
   const [edit, setEdit] = useState<CalEvent | null>(null);
   const [tick, setTick] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number>(() => Number(localStorage.getItem('calScale')) || 30);
+  const [zoom, setZoom] = useState<number>(() => Number(localStorage.getItem('calZoom')) || 100);
+  useEffect(() => localStorage.setItem('calScale', String(scale)), [scale]);
+  useEffect(() => localStorage.setItem('calZoom', String(zoom)), [zoom]);
+  const slot = Math.round((SLOT_PX * zoom) / 100);
+  const HOUR = (slot * 60) / scale; // výška hodiny v px
+  // ťahanie udalosti (presun / zmena dĺžky); náhľad počas ťahania
+  const [drag, setDrag] = useState<{ key: string; start: number; end: number } | null>(null);
+  const dragRef = useRef<{ ev: CalEvent; mode: 'move' | 'resize'; x0: number; y0: number; s0: number; e0: number; moved: boolean } | null>(null);
+  const justDragged = useRef(false);
+  const dragNow = useRef<{ key: string; start: number; end: number } | null>(null);
+  const [pending, setPending] = useState<{ ev: CalEvent; busy?: boolean; err?: string } | null>(null);
 
   useEffect(() => localStorage.setItem('calView', view), [view]);
   useEffect(() => localStorage.setItem(`calHidden:${props.account.id}`, JSON.stringify(hidden)), [hidden, props.account.id]);
@@ -82,7 +97,99 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
   // ráno na začiatok pracovného dňa
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 7 * HOUR;
+  }, [view, cals]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl + koliesko = priblíženie (ako v Outlooku), hodina pod kurzorom ostáva na mieste
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom((z) => {
+        const nz = Math.min(200, Math.max(60, z + (e.deltaY < 0 ? 10 : -10)));
+        const y = e.clientY - el.getBoundingClientRect().top;
+        const ratio = Math.round((SLOT_PX * nz) / 100) / Math.round((SLOT_PX * z) / 100);
+        requestAnimationFrame(() => (el.scrollTop = (el.scrollTop + y) * ratio - y));
+        return nz;
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, [view, cals]);
+  // zmena mierky: ostať na tej istej hodine
+  const setScaleKeep = (n: number) => {
+    const el = scroller.current;
+    const hourAtTop = el ? el.scrollTop / HOUR : 7;
+    setScale(n);
+    requestAnimationFrame(() => el && (el.scrollTop = hourAtTop * ((slot * 60) / n)));
+  };
+
+  const isReadOnly = (e: CalEvent) => !!e.calendarId?.startsWith('sub:') || !!cals?.find((c) => c.id === e.calendarId)?.readOnly;
+  const canDrag = (e: CalEvent) => !e.rrule && !e.recurrenceId && !isReadOnly(e);
+  const evKey = (e: CalEvent) => `${e.uid}-${e.start}`;
+  function startDrag(ev: CalEvent, mode: 'move' | 'resize', pe: React.PointerEvent) {
+    if (pe.button !== 0) return;
+    pe.stopPropagation();
+    if (!canDrag(ev)) return;
+    dragRef.current = { ev, mode, x0: pe.clientX, y0: pe.clientY, s0: Date.parse(ev.start), e0: Date.parse(ev.end), moved: false };
+    const onMove = (m: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      if (!d.moved && Math.abs(m.clientY - d.y0) < 4 && Math.abs(m.clientX - d.x0) < 4) return;
+      d.moved = true;
+      const step = scale * 60_000;
+      const dMin = Math.round(((m.clientY - d.y0) / HOUR) * 60 / scale) * step;
+      let dDay = 0;
+      const g = gridRef.current;
+      if (d.mode === 'move' && g) {
+        const r = g.getBoundingClientRect();
+        const colW = (r.width - 56) / days.length;
+        const c0 = Math.floor((d.x0 - r.left - 56) / colW);
+        const c1 = Math.min(days.length - 1, Math.max(0, Math.floor((m.clientX - r.left - 56) / colW)));
+        dDay = c1 - c0;
+      }
+      const shift = (t: number) => { const x = new Date(t); x.setDate(x.getDate() + dDay); return x.getTime() + dMin; };
+      dragNow.current = d.mode === 'move'
+        ? { key: evKey(d.ev), start: shift(d.s0), end: shift(d.e0) }
+        : { key: evKey(d.ev), start: d.s0, end: Math.max(d.s0 + step, d.e0 + dMin) };
+      setDrag(dragNow.current);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (!d?.moved) {
+        dragNow.current = null;
+        return setDrag(null);
+      }
+      justDragged.current = true;
+      setTimeout(() => (justDragged.current = false), 0);
+      const cur = dragNow.current;
+      dragNow.current = null;
+      setDrag(null);
+      if (cur && (cur.start !== d.s0 || cur.end !== d.e0)) {
+        const moved: CalEvent = { ...d.ev, start: new Date(cur.start).toISOString(), end: new Date(cur.end).toISOString() };
+        setEvents((list) => list.map((x) => (evKey(x) === evKey(d.ev) ? moved : x)));
+        if (moved.attendees?.length) setPending({ ev: moved });
+        else void commitMove(moved, false);
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+  async function commitMove(e: CalEvent, notify: boolean) {
+    const r = await api!.calSave(props.account.id, e.calendarId ?? cals?.[0]?.id ?? '', e, notify);
+    if (!r.ok) {
+      props.onStatus(`Udalosť sa nepodarilo presunúť: ${r.error}`);
+      setTick((t) => t + 1);
+      return false;
+    }
+    props.onStatus(notify ? 'Udalosť presunutá, účastníkom odoslaná aktualizácia.' : 'Udalosť presunutá.');
+    setTick((t) => t + 1);
+    return true;
+  }
 
   const colorOf = (e: CalEvent) => e.color ?? cals?.find((c) => c.id === e.calendarId)?.color ?? accountColor(props.account.color);
   const move = (dir: number) => {
@@ -96,9 +203,9 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
         ? anchor.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
         : `${days[0]!.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' })} – ${days[days.length - 1]!.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric', year: 'numeric' })}`;
 
-  const newAt = (d: Date, allDay = false) => {
+  const newAt = (d: Date, allDay = false, minutes = 60) => {
     const start = allDay ? startOfDay(d) : d;
-    setEdit({ uid: '', summary: '', start: start.toISOString(), end: new Date(start.getTime() + (allDay ? DAY_MS : 3600000)).toISOString(), allDay });
+    setEdit({ uid: '', summary: '', start: start.toISOString(), end: new Date(start.getTime() + (allDay ? DAY_MS : minutes * 60_000)).toISOString(), allDay });
   };
 
   async function saveEvent(e: CalEvent, calendarId: string, invite: boolean) {
@@ -261,6 +368,17 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
           <span className="cal-title">{title}</span>
           {loading && <Spinner size="extra-tiny" />}
           <span className="grow" />
+          {view !== 'month' && (
+            <span className="cal-scale">
+              <label className="muted small" htmlFor="cal-scale">Mierka</label>
+              <Select id="cal-scale" size="small" value={String(scale)} onChange={(_, d) => setScaleKeep(Number(d.value))}>
+                {SCALES.map((m) => <option key={m} value={m}>{m} min</option>)}
+              </Select>
+              <Button size="small" appearance="subtle" aria-label="Oddialiť" title="Oddialiť (Ctrl + koliesko)" onClick={() => setZoom((z) => Math.max(60, z - 10))}>−</Button>
+              <button className="link small cal-zoom" title="Pôvodná veľkosť" onClick={() => setZoom(100)}>{zoom} %</button>
+              <Button size="small" appearance="subtle" aria-label="Priblížiť" title="Priblížiť (Ctrl + koliesko)" onClick={() => setZoom((z) => Math.min(200, z + 10))}>+</Button>
+            </span>
+          )}
           <TabList size="small" selectedValue={view} onTabSelect={(_, d) => setView(d.value as View)}>
             <Tab value="day">Deň</Tab>
             <Tab value="workweek">Pracovný týždeň</Tab>
@@ -271,6 +389,15 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
         {error && (
           <div className="pane-error pad">
             ⚠ {error} <button className="link" onClick={props.onSettings}>Nastavenia konta</button>
+          </div>
+        )}
+        {pending && (
+          <div className="cal-pending">
+            <span>Udalosť „{pending.ev.summary || '(bez názvu)'}“ má účastníkov. Poslať im aktualizáciu s novým časom?</span>
+            {pending.err && <span className="pane-error">{pending.err}</span>}
+            <Button size="small" appearance="primary" disabled={pending.busy} onClick={async () => { setPending({ ...pending, busy: true }); if (await commitMove(pending.ev, true)) setPending(null); else setPending(null); }}>Poslať</Button>
+            <Button size="small" disabled={pending.busy} onClick={async () => { setPending({ ...pending, busy: true }); await commitMove(pending.ev, false); setPending(null); }}>Uložiť bez poslania</Button>
+            <Button size="small" appearance="subtle" disabled={pending.busy} onClick={() => { setPending(null); setTick((t) => t + 1); }}>Zrušiť</Button>
           </div>
         )}
         {view === 'month' ? (
@@ -318,7 +445,7 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
               ))}
             </div>
             <div className="cal-scroll" ref={scroller}>
-              <div className="cal-grid" style={{ height: 24 * HOUR }}>
+              <div className="cal-grid" ref={gridRef} style={{ height: 24 * HOUR, ['--hour' as string]: `${HOUR}px`, ['--slot' as string]: `${slot}px` }}>
                 <div className="cal-gutter">
                   {Array.from({ length: 24 }, (_, h) => <div key={h} className="cal-hour-label" style={{ top: h * HOUR }}>{h}:00</div>)}
                 </div>
@@ -331,28 +458,49 @@ export function CalendarView(props: { account: ImapAccountPublic; zimbra?: boole
                       onClick={(ev) => {
                         if (ev.target !== ev.currentTarget) return;
                         const y = ev.nativeEvent.offsetY;
-                        const mins = Math.floor((y / HOUR) * 2) * 30;
-                        newAt(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, mins));
+                        const mins = Math.floor((y / HOUR) * (60 / scale)) * scale;
+                        newAt(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, mins), false, Math.max(scale, 30));
                       }}
                     >
                       {layout(list).map(({ ev, col, cols }) => {
+                        const dr = drag?.key === evKey(ev) ? drag : null;
                         const s = Math.max(Date.parse(ev.start), d.getTime());
                         const e = Math.min(Date.parse(ev.end), d.getTime() + DAY_MS);
+                        if (dr) return null;
                         const top = ((s - d.getTime()) / 3600000) * HOUR;
                         const h = Math.max(((e - s) / 3600000) * HOUR, 20);
                         return (
                           <button
                             key={`${ev.uid}-${ev.start}`}
-                            className={`cal-event ${h < 38 ? 'short' : ''}`}
+                            className={`cal-event ${h < 38 ? 'short' : ''} ${canDrag(ev) ? 'draggable' : ''}`}
                             style={{ top, height: h - 2, left: `${(col / cols) * 100}%`, width: `calc(${100 / cols}% - 2px)`, borderLeftColor: colorOf(ev), background: `${colorOf(ev)}1f` }}
-                            onClick={() => setEdit(ev)}
-                            title={`${ev.summary}${ev.location ? ` · ${ev.location}` : ''}`}
+                            onPointerDown={(pe) => startDrag(ev, 'move', pe)}
+                            onClick={() => !justDragged.current && setEdit(ev)}
+                            title={`${ev.summary}${ev.location ? ` · ${ev.location}` : ''}${canDrag(ev) ? '\nPresuň ťahaním, dĺžku zmeň ťahaním za spodný okraj' : ev.rrule || ev.recurrenceId ? '\nOpakovanú udalosť zmeň v detaile' : ''}`}
                           >
                             <b>{ev.summary}</b>
                             <span className="muted">{fmtTime(ev.start)}–{fmtTime(ev.end)}{ev.location ? ` · ${ev.location}` : ''}</span>
+                            {canDrag(ev) && <span className="cal-resize" onPointerDown={(pe) => startDrag(ev, 'resize', pe)} />}
                           </button>
                         );
                       })}
+                      {(() => {
+                        // náhľad ťahanej udalosti v tomto dni
+                        if (!drag) return null;
+                        const ev = events.find((x) => evKey(x) === drag.key);
+                        if (!ev || drag.start >= d.getTime() + DAY_MS || drag.end <= d.getTime()) return null;
+                        const s = Math.max(drag.start, d.getTime());
+                        const e = Math.min(drag.end, d.getTime() + DAY_MS);
+                        const top = ((s - d.getTime()) / 3600000) * HOUR;
+                        const h = Math.max(((e - s) / 3600000) * HOUR, 20);
+                        const t = (x: number) => new Date(x).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
+                        return (
+                          <div className={`cal-event dragging ${h < 38 ? 'short' : ''}`} style={{ top, height: h - 2, left: 0, width: 'calc(100% - 2px)', borderLeftColor: colorOf(ev), background: `${colorOf(ev)}40` }}>
+                            <b>{ev.summary || '(bez názvu)'}</b>
+                            <span className="muted">{t(drag.start)}–{t(drag.end)}</span>
+                          </div>
+                        );
+                      })()}
                       {sameDay(d, now) && <div className="cal-now" style={{ top: ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR }} />}
                     </div>
                   );

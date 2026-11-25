@@ -355,8 +355,9 @@ body { overflow: hidden; }
 .cal-side { width: 230px; flex: none; border-right: 1px solid var(--colorNeutralStroke2); padding: 10px 6px; overflow: auto; }
 .cal-check { padding: 0 6px; }
 .cal-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cal-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--colorNeutralStroke2); }
-.cal-title { font-size: 16px; font-weight: 600; margin-left: 6px; text-transform: capitalize; }
+.cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.cal-toolbar > button { white-space: nowrap; flex: none; }
+.cal-title { white-space: nowrap; font-size: 16px; font-weight: 600; margin-left: 6px; text-transform: capitalize; }
 .cal-week { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .cal-head, .cal-allday { display: grid; grid-template-columns: 56px repeat(var(--days), minmax(0, 1fr)); border-bottom: 1px solid var(--colorNeutralStroke2); }
 .cal-dayhead { padding: 6px 8px; display: flex; align-items: baseline; gap: 6px; border-left: 1px solid var(--colorNeutralStroke3); }
@@ -367,7 +368,18 @@ body { overflow: hidden; }
 .cal-allday .cal-gutter { display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
 .cal-allday-cell { border-left: 1px solid var(--colorNeutralStroke3); padding: 2px; display: flex; flex-direction: column; gap: 2px; }
 .cal-scroll { flex: 1; overflow: auto; }
-.cal-grid { display: grid; grid-template-columns: 56px repeat(var(--days), minmax(0, 1fr)); position: relative; background: repeating-linear-gradient(to bottom, transparent 0, transparent 43px, var(--colorNeutralStroke3) 43px, var(--colorNeutralStroke3) 44px); }
+.cal-grid { --hour: 44px; --slot: 22px; display: grid; grid-template-columns: 56px repeat(var(--days), minmax(0, 1fr)); position: relative;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--hour) - 1px), var(--colorNeutralStroke2) calc(var(--hour) - 1px), var(--colorNeutralStroke2) var(--hour)),
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--slot) - 1px), var(--colorNeutralStroke3) calc(var(--slot) - 1px), var(--colorNeutralStroke3) var(--slot));
+  background-position: 0 -1px; }
+.cal-scale { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.cal-scale select { min-width: 84px; }
+.cal-zoom { min-width: 44px; text-align: center; }
+.cal-event.draggable { cursor: grab; touch-action: none; }
+.cal-event.dragging { pointer-events: none; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.18); opacity: 0.95; }
+.cal-event.short .cal-resize, .cal-resize { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; }
+.cal-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; background: var(--colorPaletteYellowBackground1, #fff7d1); border-bottom: 1px solid var(--colorNeutralStroke2); font-size: 13px; }
 .cal-gutter { position: relative; }
 .cal-hour-label { position: absolute; right: 6px; font-size: 11px; color: var(--colorNeutralForeground3); transform: translateY(-6px); }
 .cal-col { position: relative; border-left: 1px solid var(--colorNeutralStroke3); cursor: cell; }
