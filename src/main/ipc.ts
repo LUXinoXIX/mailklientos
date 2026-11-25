@@ -195,7 +195,7 @@ export function registerIpc() {
   handle('cal:rename', (calId: string, name: string, color?: string) => localcal.rename(calId, name, color));
   handle('cal:removeCal', (calId: string) => localcal.removeCal(calId));
   handle('rss:fetch', (url: string) => localcal.fetchFeedText(url));
-  handle('ics:upcoming', (url: string, count: number) => localcal.upcoming(url, count));
+  handle('ics:upcoming', (url: string, count: number, maxAgeMin?: number) => localcal.upcoming(url, count, maxAgeMin));
   handle('cal:subInfo', (calId: string) => localcal.subInfo(calId));
   handle('cal:import', async (id: string, calendarId: string) => {
     const text = await localcal.pickIcs(winOf());

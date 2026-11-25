@@ -315,7 +315,13 @@ export function RightPanel(props: {
         </Tooltip>
       </div>
       {icsOn ? (
-        <IcsPane feeds={settings.icsFeeds ?? []} onFeeds={(f) => props.onSettings({ ...settings, icsFeeds: f })} onStatus={props.onStatus} />
+        <IcsPane
+          feeds={settings.icsFeeds ?? []}
+          onFeeds={(f) => props.onSettings({ ...settings, icsFeeds: f })}
+          onStatus={props.onStatus}
+          refreshMin={settings.icsRefreshMin ?? 5}
+          onRefreshMin={(m) => props.onSettings({ ...settings, icsRefreshMin: m })}
+        />
       ) : agendaOn && props.agenda ? (
         <Agenda data={props.agenda} />
       ) : null}

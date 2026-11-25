@@ -1041,12 +1041,12 @@ export function App() {
   const rPanels = settings.rightPanels ?? [];
   const rPanelId = settings.rightPanelOf?.[activeKey] ?? 'shared';
   const rPanel = rPanels.find((p) => p.id === rPanelId);
-  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers, icsFeeds: rPanel.icsFeeds } : settings;
+  const panelView: AppSettings = rPanel ? { ...settings, webs: rPanel.webs, launchers: rPanel.launchers, icsFeeds: rPanel.icsFeeds, icsRefreshMin: rPanel.icsRefreshMin } : settings;
   const savePanelView = (v: AppSettings) =>
     saveSettings(
       rPanel
-        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds } : p)) }
-        : { ...settings, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds },
+        ? { ...settings, rightPanels: rPanels.map((p) => (p.id === rPanel.id ? { ...p, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds, icsRefreshMin: v.icsRefreshMin } : p)) }
+        : { ...settings, webs: v.webs, launchers: v.launchers, icsFeeds: v.icsFeeds, icsRefreshMin: v.icsRefreshMin },
     );
   const allPanelWebs = [...settings.webs, ...rPanels.flatMap((p) => p.webs)];
   const panelKeyName = (k: string) => (k === ALL ? 'Všetky kontá' : railAccounts.find((a) => a.id === k)?.name ?? '');

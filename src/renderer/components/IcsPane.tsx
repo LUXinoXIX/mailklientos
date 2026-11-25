@@ -1,7 +1,7 @@
 // Karta „Kalendáre (ICS)“ v pravom paneli: viac kalendárov z odkazu (iCal/webcal) pod sebou,
 // poradie a počet zobrazených udalostí pre každý kalendár nastaviteľné.
 import { Button, Input, Spinner } from '@fluentui/react-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CalEvent } from '../../core/ical';
 import { findMeeting, MEETING_LABEL } from '../../core/meeting';
 import type { IcsFeed } from '../../core/settings';
@@ -37,12 +37,16 @@ function when(e: CalEvent, now: Date) {
   return e.allDay ? `${day} · celý deň` : `${day} ${st.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => void; onStatus: (s: string) => void }) {
+const REFRESH = [1, 5, 15, 30, 60];
+
+export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => void; onStatus: (s: string) => void; refreshMin?: number; onRefreshMin?: (m: number) => void }) {
+  const refreshMin = props.refreshMin ?? 5;
   const api = window.mailApi;
   const [data, setData] = useState<Record<string, { list?: CalEvent[]; error?: string }>>({});
   const [edit, setEdit] = useState(props.feeds.length === 0);
   const [form, setForm] = useState({ url: '', name: '', count: 5 });
   const [tick, setTick] = useState(0);
+  const manual = useRef(false);
   const [open, setOpen] = useState<string | null>(null);
   const now = new Date();
   const key = props.feeds.map((f) => `${f.url}|${f.count}`).join(',');
@@ -52,12 +56,19 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
     let alive = true;
     for (const f of props.feeds) {
       setData((d) => ({ ...d, [f.id]: d[f.id]?.list ? d[f.id]! : {} }));
-      void api.icsUpcoming(f.url, f.count).then((r) => alive && setData((d) => ({ ...d, [f.id]: r.ok ? { list: r.data } : { error: r.error } })));
+      // ručné obnovenie (↻) načíta hneď, inak podľa intervalu
+      void api.icsUpcoming(f.url, f.count, manual.current ? 0 : refreshMin).then((r) => alive && setData((d) => ({ ...d, [f.id]: r.ok ? { list: r.data } : { error: r.error } })));
     }
+    manual.current = false;
     return () => {
       alive = false;
     };
   }, [api, key, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // automatické obnovovanie podľa nastavenia (predvolene každých 5 minút)
+  useEffect(() => {
+    const t = window.setInterval(() => setTick((x) => x + 1), refreshMin * 60_000);
+    return () => window.clearInterval(t);
+  }, [refreshMin]);
 
   const move = (i: number, d: number) => {
     const f = [...props.feeds];
@@ -83,7 +94,7 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
     <div className="ics-pane">
       <div className="ics-tools">
         <span className="muted small grow">{props.feeds.length ? `${props.feeds.length} ${props.feeds.length === 1 ? 'kalendár' : props.feeds.length < 5 ? 'kalendáre' : 'kalendárov'}` : 'Kalendáre z odkazu'}</span>
-        <Button size="small" appearance="subtle" onClick={() => setTick((t) => t + 1)} disabled={!props.feeds.length} title="Obnoviť">↻</Button>
+        <Button size="small" appearance="subtle" onClick={() => ((manual.current = true), setTick((t) => t + 1))} disabled={!props.feeds.length} title="Obnoviť teraz">↻</Button>
         <Button size="small" appearance={edit ? 'primary' : 'subtle'} onClick={() => setEdit((x) => !x)}>{edit ? 'Hotovo' : 'Upraviť'}</Button>
       </div>
 
@@ -110,7 +121,15 @@ export function IcsPane(props: { feeds: IcsFeed[]; onFeeds: (f: IcsFeed[]) => vo
               </select>
               <Button size="small" appearance="primary" onClick={add} disabled={!form.url.trim()}>Pridať</Button>
             </div>
-            <span className="muted small">Verejná adresa kalendára vo formáte iCal (Google, iCloud, Outlook, Zimbra, sviatky, rozvrh). Obnovuje sa každú hodinu.</span>
+            <span className="muted small">Verejná adresa kalendára vo formáte iCal (Google, iCloud, Outlook, Zimbra, sviatky, rozvrh).</span>
+            {props.onRefreshMin && (
+              <label className="ics-edit-row small">
+                Obnovovať každých
+                <select value={refreshMin} onChange={(ev) => props.onRefreshMin!(Number(ev.target.value))} aria-label="Interval obnovovania">
+                  {REFRESH.map((m) => <option key={m} value={m}>{m === 60 ? '60 min (1 h)' : `${m} min`}</option>)}
+                </select>
+              </label>
+            )}
           </div>
         </div>
       )}

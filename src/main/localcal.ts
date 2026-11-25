@@ -203,11 +203,12 @@ export function subInfo(id: string) {
 
 /** Najbližšie udalosti z kalendára na adrese (dlaždica v Súhrne); výsledok sa drží 1 hodinu. */
 const feedCache = new Map<string, { at: number; list: Stored[] }>();
-export async function upcoming(url: string, count: number): Promise<CalEvent[]> {
+export async function upcoming(url: string, count: number, maxAgeMin = 5): Promise<CalEvent[]> {
   const u = url.trim().replace(/^webcals?:\/\//i, 'https://');
   if (!/^https?:\/\/\S+$/i.test(u)) throw new UserError('Neplatná adresa kalendára.');
   let c = feedCache.get(u);
-  if (!c || Date.now() - c.at > 3600_000) {
+  // načítať znova, ak je uložená kópia staršia ako zvolený interval obnovovania (min. 1 minúta)
+  if (!c || Date.now() - c.at > Math.max(1, maxAgeMin) * 60_000 - 5_000) {
     const r = await net.fetch(u, { headers: { Accept: 'text/calendar, */*' } });
     if (!r.ok) throw new UserError(`Kalendár na adrese vrátil chybu ${r.status}.`);
     const text = await r.text();

@@ -58,6 +58,8 @@ export interface RightPanelDef {
   launchers: LauncherItem[];
   /** karta „Kalendáre (ICS)“ v tomto paneli */
   icsFeeds?: IcsFeed[];
+  /** obnovovanie kalendárov z odkazu v minútach (predvolene 5) */
+  icsRefreshMin?: number;
 }
 
 export interface AppSettings {
@@ -107,6 +109,8 @@ export interface AppSettings {
   meetings?: import('./meeting').MeetingSettings;
   /** karta „Kalendáre (ICS)“ v spoločnom pravom paneli */
   icsFeeds?: IcsFeed[];
+  /** obnovovanie kalendárov z odkazu (ICS) v minútach, predvolene 5 */
+  icsRefreshMin?: number;
   /** úvodná stránka Súhrn */
   summary?: SummarySettings;
   /** ikona „Všetky doručené“ v páse kont (predvolene zapnutá) */

@@ -306,7 +306,7 @@ export interface MailApi {
   calRemove(calendarId: string): Promise<Result<true>>;
   calSubInfo(calendarId: string): Promise<Result<{ url?: string; refreshedAt?: string; error?: string; kind: 'local' | 'sub' } | null>>;
   /** najbližšie udalosti z kalendára na adrese (ICS/webcal) – dlaždica v Súhrne */
-  icsUpcoming(url: string, count: number): Promise<Result<CalEvent[]>>;
+  icsUpcoming(url: string, count: number, maxAgeMin?: number): Promise<Result<CalEvent[]>>;
   /** text RSS/Atom kanála alebo webovej stránky (na nájdenie kanála) – dlaždica Správy v Súhrne */
   rssFetch(url: string): Promise<Result<{ text: string; url: string }>>;
   /** import súboru .ics do kalendára; null = zrušené */
