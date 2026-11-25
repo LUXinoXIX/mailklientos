@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import { BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import type { AccountConfig } from '../core/account';
 import { log } from './diagnostics';
 import { UserError, withImap } from './mail';
@@ -148,4 +148,25 @@ export async function importThunderbird(acc: AccountConfig) {
   for (const b of boxes) messages += await appendAll(acc, `Thunderbird/${b.name}`, readMbox(b.file));
   log(`import Thunderbird: ${boxes.length} priečinkov, ${messages} správ`);
   return { folders: boxes.length, messages };
+}
+
+
+/** Správa ako dočasný súbor .eml – na priloženie do písanej správy (pretiahnutím zo zoznamu). */
+export async function messageAsFile(acc: AccountConfig, folder: string, uid: number, subject: string) {
+  const src: Buffer = await withImap(acc, async (c) => {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      const m = await c.fetchOne(String(uid), { source: true }, { uid: true });
+      if (!m?.source) throw new UserError('Správa sa nenašla.');
+      return m.source as Buffer;
+    } finally {
+      lock.release();
+    }
+  });
+  const dir = path.join(app.getPath('temp'), 'universum-eml', String(Date.now()) + '-' + uid);
+  fs.mkdirSync(dir, { recursive: true });
+  const filename = `${safe(subject) || 'sprava'}.eml`;
+  const file = path.join(dir, filename);
+  fs.writeFileSync(file, src);
+  return { path: file, filename, size: src.length };
 }

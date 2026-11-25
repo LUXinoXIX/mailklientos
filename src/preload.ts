@@ -130,6 +130,7 @@ const api: MailApi = {
   saveAttachment: (id, folder, uid, index) => inv('mail:attachment-save', id, folder, uid, index),
   saveAllAttachments: (id, folder, uid, indexes) => inv('mail:attachments-save-all', id, folder, uid, indexes),
   openFolder: (dir) => inv('files:openFolder', dir),
+  messageAsFile: (id, folder, uid, subject) => inv('io:messageAsFile', id, folder, uid, subject),
   pickFiles: () => inv('files:pick'),
   openExternal: (url) => inv('app:openExternal', url),
   getSettings: () => inv('settings:get'),

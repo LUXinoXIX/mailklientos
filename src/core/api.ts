@@ -369,6 +369,8 @@ export interface MailApi {
   /** všetky prílohy do zvoleného priečinka; null = zrušené */
   saveAllAttachments(accountId: string, folder: string, uid: number, indexes: number[]): Promise<Result<{ dir: string; count: number } | null>>;
   openFolder(dir: string): Promise<Result<string>>;
+  /** správa ako dočasný .eml súbor (na priloženie) */
+  messageAsFile(accountId: string, folder: string, uid: number, subject: string): Promise<Result<PickedFile>>;
   pickFiles(): Promise<Result<PickedFile[]>>;
   openExternal(url: string): Promise<void>;
   // nastavenia a spúšťače

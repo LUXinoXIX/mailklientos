@@ -218,7 +218,7 @@ export interface DragMessages {
   folder: string;
   uids: number[];
   /** pri ťahaní viacerých vybraných správ (môžu byť z rôznych priečinkov v zobrazení Všetky) */
-  items?: { accountId: string; folder: string; uid: number }[];
+  items?: { accountId: string; folder: string; uid: number; subject?: string }[];
 }
 
 export type SortBy = 'date' | 'from' | 'subject' | 'flag' | 'unread' | 'category';
@@ -391,9 +391,10 @@ export function MessageList(props: {
         onDragStart={(e) => {
           // ťahá sa celý výber, ak je správa jeho súčasťou
           const many = multi.length > 1 && multi.includes(keyOf(m)) ? multiMsgs : [m];
-          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid })) };
+          const d: DragMessages = { accountId: m.accountId, folder: m.folder, uids: [m.uid], items: many.map((x) => ({ accountId: x.accountId, folder: x.folder, uid: x.uid, subject: x.subject })) };
           e.dataTransfer.setData('application/x-mailklient', JSON.stringify(d));
-          e.dataTransfer.effectAllowed = 'move';
+          // presun do priečinka aj kópia (priloženie do písanej správy)
+          e.dataTransfer.effectAllowed = 'copyMove';
         }}
         onClick={(e) => {
           if (clickRow(m, e)) return;

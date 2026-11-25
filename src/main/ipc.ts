@@ -220,6 +220,7 @@ export function registerIpc() {
     await dav.deleteContact(store.getImap(id), href);
     return true as const;
   });
+  handle('io:messageAsFile', (id: string, folder: string, uid: number, subject: string) => io.messageAsFile(store.getImap(id), folder, uid, subject));
   handle('io:exportEml', (id: string, folder: string, uid: number, subject: string) => io.exportEml(store.getImap(id), folder, uid, subject));
   handle('io:exportMbox', (id: string, folder: string) => io.exportMbox(store.getImap(id), folder));
   handle('io:importFiles', (id: string, folder: string) => io.importFiles(store.getImap(id), folder));
