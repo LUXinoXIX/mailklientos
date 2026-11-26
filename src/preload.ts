@@ -137,6 +137,7 @@ const api: MailApi = {
   saveSettings: (s) => inv('settings:save', s),
   outlookSignatures: () => inv('signatures:outlook'),
   pickProgram: () => inv('launcher:pick'),
+  pickHtmlFile: () => inv('web:pickHtml'),
   runLauncher: (item) => inv('launcher:run', item),
   programIcon: (target) => inv('launcher:icon', target),
   settingsExport: (parts) => inv('backup:export', parts),

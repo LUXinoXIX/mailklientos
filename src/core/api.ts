@@ -381,6 +381,8 @@ export interface MailApi {
   /** Podpisy klasického Outlooku na tomto počítači (len Windows). */
   outlookSignatures(): Promise<Result<Array<{ name: string; text: string; html?: string }>>>;
   pickProgram(): Promise<Result<{ target: string; name: string } | null>>;
+  /** výber lokálnej stránky .html pre pravý panel → file:// adresa */
+  pickHtmlFile(): Promise<Result<{ url: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
   /** Záloha/prenos nastavení (bez hesiel). */

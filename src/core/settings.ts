@@ -283,9 +283,33 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const webPartition = (id: string) => `persist:web-${id}`;
 
 /** Doplní https:// a overí, že ide o webovú adresu. */
+/** je adresa lokálny súbor (file://) */
+export const isFileUrl = (url: string) => /^file:/i.test(url);
+/** krátky popis adresy na zobrazenie: pri súbore jeho názov, inak adresa bez https:// */
+export function urlLabel(url: string): string {
+  if (!isFileUrl(url)) return url.replace(/^https?:\/\//, '');
+  try {
+    return decodeURIComponent(new URL(url).pathname.split('/').pop() || url);
+  } catch {
+    return url;
+  }
+}
+
 export function normalizeUrl(input: string): string | null {
-  const t = input.trim();
+  let t = input.trim().replace(/^"(.*)"$/, '$1');
   if (!t) return null;
+  // lokálny súbor: cesta Windows (C:\…\x.html, \\server\…) alebo macOS/Linux (/Users/…/x.html) → file:// adresa
+  if (/^[a-z]:[\\/]/i.test(t)) t = 'file:///' + encodeURI(t.replace(/\\/g, '/')).replace(/#/g, '%23').replace(/\?/g, '%3F');
+  else if (/^\\\\[^\\]/.test(t)) t = 'file:' + encodeURI(t.replace(/\\/g, '/')).replace(/#/g, '%23').replace(/\?/g, '%3F');
+  else if (t.startsWith('/')) t = 'file://' + encodeURI(t).replace(/#/g, '%23').replace(/\?/g, '%3F');
+  if (/^file:/i.test(t)) {
+    try {
+      const u = new URL(t);
+      return /\.(html?|xhtml|svg|pdf|txt)$/i.test(decodeURIComponent(u.pathname)) ? u.toString() : null;
+    } catch {
+      return null;
+    }
+  }
   const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `https://${t}`;
   try {
     const u = new URL(withScheme);

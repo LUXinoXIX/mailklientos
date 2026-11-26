@@ -202,7 +202,10 @@ export function attachWindow(w: BrowserWindow) {
   });
   w.webContents.on('will-attach-webview', (e, prefs, params) => {
     // len webové adresy, bez Node a bez vlastného preloadu
-    if (!/^https?:/i.test(params.src ?? '') || !/^persist:(acc|web)-/.test(params.partition ?? '')) {
+    // lokálne stránky (file://) len v pravom paneli (persist:web-…), nie vo vložených kontách
+    const src = params.src ?? '';
+    const okSrc = /^https?:/i.test(src) || (/^file:/i.test(src) && /^persist:web-/.test(params.partition ?? ''));
+    if (!okSrc || !/^persist:(acc|web)-/.test(params.partition ?? '')) {
       log('webview odmietnutý', { src: (params.src ?? '').slice(0, 80), partition: params.partition });
       e.preventDefault();
       return;
@@ -222,6 +225,10 @@ export function attachWindow(w: BrowserWindow) {
 
 /** Otvorí stránku v Edge (Windows) alebo v predvolenom prehliadači. */
 export async function openOutside(url: string) {
+  if (/^file:/i.test(url)) {
+    await shell.openExternal(url);
+    return;
+  }
   if (!/^https?:/i.test(url)) return;
   if (process.platform === 'win32') {
     try {

@@ -5,7 +5,7 @@ import {
   MessageBarBody, Tooltip,
 } from '@fluentui/react-components';
 import { useEffect, useRef, useState } from 'react';
-import { normalizeUrl, webPartition, type AppSettings, type LauncherItem, type Task, type WebItem } from '../../core/settings';
+import { isFileUrl, normalizeUrl, urlLabel, webPartition, type AppSettings, type LauncherItem, type Task, type WebItem } from '../../core/settings';
 import type { CalEvent } from '../../core/ical';
 import { IcsPane } from './IcsPane';
 import { AddIcon, AppsIcon, ChevronDownIcon, PanelIcon, CloseSmallIcon, EditSmallIcon, GlobeIcon, OpenOutsideIcon, ReloadIcon } from '../icons';
@@ -221,8 +221,14 @@ export function RightPanel(props: {
   function saveWeb() {
     if (!addWeb) return;
     const url = normalizeUrl(addWeb.url);
-    if (!url) return setAddWeb({ ...addWeb, error: 'Zadaj platnú webovú adresu (napr. chatgpt.com).' });
-    const name = addWeb.name.trim() || new URL(url).hostname.replace(/^www\./, '');
+    if (!url)
+      return setAddWeb({
+        ...addWeb,
+        error: /^(file:|[a-z]:[\\/]|\\\\|\/)/i.test(addWeb.url.trim())
+          ? 'Lokálny súbor musí byť stránka .html / .htm (alebo .pdf, .svg, .txt).'
+          : 'Zadaj platnú webovú adresu (napr. chatgpt.com) alebo vyber súbor .html.',
+      });
+    const name = addWeb.name.trim() || (isFileUrl(url) ? urlLabel(url).replace(/\.[^.]+$/, '') : new URL(url).hostname.replace(/^www\./, ''));
     if (addWeb.editId) {
       props.onSettings({ ...settings, webs: settings.webs.map((x) => (x.id === addWeb.editId ? { ...x, name, url } : x)) });
       return openAdd(false);
@@ -329,7 +335,7 @@ export function RightPanel(props: {
       {web && !agendaOn && (
         <div className="right-url">
           <GlobeIcon />
-          <span className="grow ellipsis" title={web.url}>{web.url.replace(/^https?:\/\//, '')}</span>
+          <span className="grow ellipsis" title={web.url}>{urlLabel(web.url)}</span>
           <Button size="small" appearance="subtle" icon={<ReloadIcon />} onClick={() => cur()?.reload()} aria-label="Obnoviť" />
           <Button size="small" appearance="subtle" icon={<OpenOutsideIcon />} onClick={() => api?.webOpenOutside(cur()?.url() ?? web.url)} aria-label="Otvoriť v prehliadači" />
         </div>
@@ -376,13 +382,25 @@ export function RightPanel(props: {
             <DialogBody>
               <DialogTitle>{addWeb.editId ? 'Upraviť kartu' : 'Pridať web do pravého panela'}</DialogTitle>
               <DialogContent className="dialog-content">
-                <Field label="Adresa">
-                  <Input autoFocus placeholder="napr. chatgpt.com" value={addWeb.url} onChange={(_, d) => setAddWeb({ ...addWeb, url: d.value, error: undefined })} />
+                <Field label="Adresa alebo lokálny súbor" hint="Web (napr. chatgpt.com) alebo stránka .html z počítača.">
+                  <div className="row-input">
+                    <Input className="grow" autoFocus placeholder="napr. chatgpt.com" value={addWeb.url} onChange={(_, d) => setAddWeb({ ...addWeb, url: d.value, error: undefined })} />
+                    <Button
+                      onClick={async () => {
+                        const r = await api?.pickHtmlFile();
+                        if (!r?.ok) return r && setAddWeb({ ...addWeb, error: r.error });
+                        if (!r.data) return;
+                        setAddWeb({ ...addWeb, url: r.data.url, name: addWeb.name || r.data.name, error: undefined });
+                      }}
+                    >
+                      Vybrať súbor…
+                    </Button>
+                  </div>
                 </Field>
                 <Field label="Názov (nepovinné)">
                   <Input value={addWeb.name} onChange={(_, d) => setAddWeb({ ...addWeb, name: d.value })} />
                 </Field>
-                <div className="muted small">Každý web má vlastné prihlásenie, oddelené od ostatných.</div>
+                <div className="muted small">Každý web má vlastné prihlásenie, oddelené od ostatných. Lokálna stránka beží oddelene od programu (bez prístupu k pošte a súborom); zmeny v súbore uvidíš po ↻.</div>
                 {addWeb.error && <MessageBar intent="error"><MessageBarBody>{addWeb.error}</MessageBarBody></MessageBar>}
               </DialogContent>
               <DialogActions>

@@ -2,6 +2,7 @@ import { attachmentRisk } from '../core/attrisk';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { accountPartition, type AccountConfig, type AnyAccount, type ServerConfig } from '../core/account';
 import type { DraftRef, PickedFile, Result, SendInput } from '../core/api';
@@ -404,6 +405,18 @@ export function registerIpc() {
   });
   handle('signatures:outlook', () => settings.outlookSignatures());
   handle('launcher:pick', () => settings.pickProgram(winOf()));
+  handle('web:pickHtml', async () => {
+    const opts: Electron.OpenDialogOptions = {
+      title: 'Vyber lokálnu stránku',
+      properties: ['openFile'],
+      filters: [{ name: 'Stránky HTML', extensions: ['html', 'htm', 'xhtml'] }, { name: 'Ďalšie (PDF, SVG, text)', extensions: ['pdf', 'svg', 'txt'] }],
+    };
+    const w = winOf();
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts);
+    const f = r.canceled ? undefined : r.filePaths[0];
+    if (!f) return null;
+    return { url: pathToFileURL(f).toString(), name: path.basename(f).replace(/\.[^.]+$/, '') };
+  });
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
   handle('launcher:icon', (target: string) => settings.programIcon(target));
   handle('lock:status', () => applock.status());
