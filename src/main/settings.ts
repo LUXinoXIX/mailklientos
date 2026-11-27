@@ -131,6 +131,76 @@ function macAppIcon(appPath: string): string | null {
 const iconGuard = () => path.join(app.getPath('userData'), 'icon-guard');
 let iconsOff: boolean | null = null;
 
+/** Windows: ikona programu; pri odkaze .lnk z ikony odkazu alebo z cieľového programu, pri .url z IconFile */
+async function winIcon(target: string): Promise<string | null> {
+  const cands: string[] = [];
+  if (/\.lnk$/i.test(target) && process.platform === 'win32') {
+    try {
+      const l = shell.readShortcutLink(target);
+      if (l.icon) cands.push(l.icon.replace(/%([^%]+)%/g, (_, v: string) => process.env[v] ?? `%${v}%`));
+      if (l.target) cands.push(l.target);
+    } catch {
+      /* poškodený odkaz */
+    }
+  } else if (/\.url$/i.test(target)) {
+    try {
+      const m = /^IconFile=(.+)$/im.exec(fs.readFileSync(target, 'utf8'));
+      if (m) cands.push(m[1]!.trim());
+    } catch {
+      /* */
+    }
+  }
+  cands.push(target);
+  for (const c of cands) {
+    if (!fs.existsSync(c)) continue;
+    if (/\.(png|jpe?g|gif|bmp|ico)$/i.test(c)) {
+      const img = nativeImage.createFromPath(c);
+      if (!img.isEmpty()) return img.resize({ width: 64, height: 64, quality: 'best' }).toDataURL();
+      continue;
+    }
+    for (const size of ['large', 'normal'] as const) {
+      try {
+        const img = await app.getFileIcon(c, { size });
+        if (!img.isEmpty()) return img.toDataURL();
+      } catch {
+        /* skúsiť ďalšiu */
+      }
+    }
+  }
+  return null;
+}
+
+/** Vlastná ikona programu: obrázok (png, jpg, ico, svg…) alebo ikona z iného programu (.exe, .lnk) → data URL */
+export async function pickLauncherIcon(win: BrowserWindow | null): Promise<string | null> {
+  const opts: Electron.OpenDialogOptions = {
+    title: 'Vyber ikonu',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Obrázky a ikony', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'svg', 'webp', ...(process.platform === 'win32' ? ['exe', 'lnk', 'dll'] : [])] },
+      { name: 'Všetky súbory', extensions: ['*'] },
+    ],
+  };
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  const f = r.canceled ? undefined : r.filePaths[0];
+  if (!f) return null;
+  if (/\.svg$/i.test(f)) {
+    const buf = fs.readFileSync(f);
+    if (buf.length > 200_000) throw new Error('Obrázok SVG je príliš veľký (max. 200 kB).');
+    return `data:image/svg+xml;base64,${buf.toString('base64')}`;
+  }
+  if (/\.(png|jpe?g|gif|bmp|ico|webp)$/i.test(f)) {
+    const img = nativeImage.createFromPath(f);
+    if (img.isEmpty()) throw new Error('Obrázok sa nepodarilo načítať.');
+    const sz = img.getSize();
+    return (sz.width > 64 || sz.height > 64 ? img.resize({ width: 64, height: 64, quality: 'best' }) : img).toDataURL();
+  }
+  if (process.platform === 'win32') {
+    const d = await winIcon(f);
+    if (d) return d;
+  }
+  throw new Error('Z tohto súboru sa ikona nedá získať – vyber obrázok (png, ico, svg…).');
+}
+
 export async function programIcon(target: string): Promise<string | null> {
   if (isUrlScheme(target) || !fs.existsSync(target)) return null;
   if (iconsOff === null) iconsOff = fs.existsSync(iconGuard());
@@ -143,8 +213,7 @@ export async function programIcon(target: string): Promise<string | null> {
   }
   try {
     if (process.platform === 'darwin') return macAppIcon(target);
-    const img = await app.getFileIcon(target, { size: 'large' });
-    return img.isEmpty() ? null : img.toDataURL();
+    return await winIcon(target);
   } catch {
     return null;
   } finally {

@@ -419,6 +419,7 @@ export function registerIpc() {
   });
   handle('launcher:run', (l: LauncherItem) => settings.runLauncher(l));
   handle('launcher:icon', (target: string) => settings.programIcon(target));
+  handle('launcher:pickIcon', () => settings.pickLauncherIcon(winOf()));
   handle('lock:status', () => applock.status());
   handle('lock:now', () => applock.lockNow());
   handle('lock:unlock', (s: string) => applock.unlock(s));

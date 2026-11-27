@@ -13,22 +13,60 @@ import { WebSlot, type WebSlotHandle } from './WebSlot';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
-function LauncherButton(props: { item: LauncherItem; editing: boolean; onRun: () => void; onRemove: () => void }) {
+function LauncherButton(props: { item: LauncherItem; editing: boolean; onRun: () => void; onRemove: () => void; onChange: (l: LauncherItem) => void; onError: (t: string) => void }) {
   const [icon, setIcon] = useState<string | null>(null);
+  const [rename, setRename] = useState<string | null>(null);
   useEffect(() => {
+    if (props.item.icon) return;
     let alive = true;
     void window.mailApi?.programIcon(props.item.target).then((r) => alive && r.ok && setIcon(r.data));
     return () => {
       alive = false;
     };
-  }, [props.item.target]);
+  }, [props.item.target, props.item.icon]);
+  const shown = props.item.icon ?? icon;
+  const pickIcon = async () => {
+    const r = await window.mailApi?.pickLauncherIcon();
+    if (!r) return;
+    if (!r.ok) return props.onError(r.error);
+    if (r.data) props.onChange({ ...props.item, icon: r.data });
+  };
   return (
     <div className="launcher">
-      <Tooltip content={props.item.name} relationship="label">
-        <button className="launcher-btn" onClick={props.onRun} aria-label={props.item.name}>
-          {icon ? <img src={icon} alt="" width={22} height={22} /> : <AppsIcon />}
-        </button>
-      </Tooltip>
+      <Menu openOnContext>
+        <MenuTrigger disableButtonEnhancement>
+          <Tooltip content={props.item.name} relationship="label">
+            <button className="launcher-btn" onClick={props.onRun} aria-label={props.item.name}>
+              {shown ? <img src={shown} alt="" width={22} height={22} /> : <AppsIcon />}
+            </button>
+          </Tooltip>
+        </MenuTrigger>
+        <MenuPopover>
+          <MenuList>
+            <MenuItem onClick={props.onRun}>Spustiť</MenuItem>
+            <MenuItem onClick={() => void pickIcon()}>Zmeniť ikonu…</MenuItem>
+            {props.item.icon && <MenuItem onClick={() => { const { icon: _i, ...rest } = props.item; props.onChange(rest); }}>Pôvodná ikona</MenuItem>}
+            <MenuItem onClick={() => setRename(props.item.name)}>Premenovať…</MenuItem>
+            <MenuItem onClick={props.onRemove}>Odstrániť z panela</MenuItem>
+          </MenuList>
+        </MenuPopover>
+      </Menu>
+      {rename !== null && (
+        <Dialog open onOpenChange={(_, d) => !d.open && setRename(null)}>
+          <DialogSurface style={{ maxWidth: 380 }}>
+            <DialogBody>
+              <DialogTitle>Premenovať program</DialogTitle>
+              <DialogContent>
+                <Input autoFocus style={{ width: '100%' }} value={rename} onChange={(_, d) => setRename(d.value)} onKeyDown={(e) => e.key === 'Enter' && rename.trim() && (props.onChange({ ...props.item, name: rename.trim() }), setRename(null))} />
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="primary" disabled={!rename.trim()} onClick={() => { props.onChange({ ...props.item, name: rename.trim() }); setRename(null); }}>Uložiť</Button>
+                <Button onClick={() => setRename(null)}>Zrušiť</Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
       {props.editing && (
         <button className="launcher-x" onClick={props.onRemove} aria-label={`Odstrániť ${props.item.name}`}>
           <CloseSmallIcon />
@@ -366,6 +404,8 @@ export function RightPanel(props: {
               editing={editing}
               onRun={() => void run(l)}
               onRemove={() => props.onSettings({ ...settings, launchers: settings.launchers.filter((x) => x.id !== l.id) })}
+              onChange={(nl) => props.onSettings({ ...settings, launchers: settings.launchers.map((x) => (x.id === l.id ? nl : x)) })}
+              onError={props.onStatus}
             />
           ))}
           <Tooltip content="Pridať program (otvára sa vo vlastnom okne)" relationship="label">

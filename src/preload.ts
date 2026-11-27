@@ -140,6 +140,7 @@ const api: MailApi = {
   pickHtmlFile: () => inv('web:pickHtml'),
   runLauncher: (item) => inv('launcher:run', item),
   programIcon: (target) => inv('launcher:icon', target),
+  pickLauncherIcon: () => inv('launcher:pickIcon'),
   settingsExport: (parts) => inv('backup:export', parts),
   settingsPick: () => inv('backup:pick'),
   settingsApply: (token, parts) => inv('backup:apply', token, parts),

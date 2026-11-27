@@ -385,6 +385,8 @@ export interface MailApi {
   pickHtmlFile(): Promise<Result<{ url: string; name: string } | null>>;
   runLauncher(item: LauncherItem): Promise<Result<string>>;
   programIcon(target: string): Promise<Result<string | null>>;
+  /** vybrať vlastnú ikonu programu (obrázok alebo .exe/.lnk) → data URL */
+  pickLauncherIcon(): Promise<Result<string | null>>;
   /** Záloha/prenos nastavení (bez hesiel). */
   settingsExport(parts: { accounts: boolean; contacts: boolean; calendars: boolean }): Promise<Result<string | null>>;
   settingsPick(): Promise<Result<BackupInfo | null>>;

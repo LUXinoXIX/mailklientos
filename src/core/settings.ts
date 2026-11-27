@@ -12,6 +12,8 @@ export interface LauncherItem {
   /** Cesta k programu (.exe, .app, skript) alebo URL schéma (ms-word:, teams:, https://…). */
   target: string;
   args?: string[];
+  /** vlastná ikona (data URL, max. 64 px); bez nej sa berie ikona programu */
+  icon?: string;
 }
 
 export interface Signature {
